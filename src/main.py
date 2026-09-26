@@ -452,8 +452,10 @@ async def cmd_plan(message: Message):
             )
             await message.answer(text, parse_mode="HTML", reply_markup=kb_paywall())
         else:
+            # plan хранится в БД строкой ("starter"/"pro"), а не PlanType —
+            # раньше здесь был user.plan.value, и /plan у платного падал.
             await message.answer(
-                f"📊 Ваш план: <b>{user.plan.value.title()}</b>\n"
+                f"📊 Ваш план: <b>{str(user.plan).title()}</b>\n"
                 f"Всего сгенерировано: {user.presentations_count} презентаций",
                 parse_mode="HTML",
             )
@@ -886,9 +888,11 @@ async def on_pay(call: CallbackQuery):
         await call.answer("Неизвестный тариф")
         return
 
+    # Только то, что реально работает. AI-изображения и приоритетная очередь
+    # не реализованы — не обещаем их, пока не появятся (ТЗ, раздел 8, п. 3).
     plan_descriptions = {
-        "starter": "15 презентаций · Все шаблоны · Без водяного знака",
-        "pro": "50 презентаций · Всё из Starter · AI-изображения · Приоритетная очередь",
+        "starter": "15 презентаций · Все цветовые схемы · Без водяного знака",
+        "pro": "50 презентаций · Все цветовые схемы · Без водяного знака",
     }
 
     await bot.send_invoice(
