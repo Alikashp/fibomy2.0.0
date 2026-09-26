@@ -1,0 +1,19 @@
+# Конфиг сервиса worker в Railway (ARQ-воркер генерации).
+#
+# Бот использует railway.toml (команда запуска — CMD из Dockerfile).
+# Воркер собирается из того же образа, но запускается другой командой.
+# Чтобы Railway взял команду отсюда, а не из интерфейса: сервис worker →
+# Settings → Config-as-code → путь к файлу: /railway.worker.toml.
+#
+# startCommand намеренно НЕ добавлен в railway.toml: config-as-code имеет
+# приоритет над интерфейсом, и воркер, читающий railway.toml по умолчанию,
+# запустил бы бота.
+
+[build]
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "sh -c \"cd src && arq worker.WorkerSettings\""
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
