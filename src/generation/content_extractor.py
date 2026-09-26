@@ -56,12 +56,44 @@ def _extract_pdf(file_bytes: bytes) -> str:
     return "\n\n".join(chunks)
 
 
+def _docx_table_to_text(table, number: int) -> str:
+    """Таблица → строки «ячейка | ячейка». Объединённая ячейка python-docx
+    отдаёт несколько раз подряд — повторы в строке схлопываем."""
+    rows: list[str] = []
+    for row in table.rows:
+        cells: list[str] = []
+        prev = None
+        for cell in row.cells:
+            if cell._tc is prev:
+                continue
+            prev = cell._tc
+            cells.append(" ".join(cell.text.split()))
+        if any(cells):
+            rows.append(" | ".join(cells))
+    if not rows:
+        return ""
+    return f"[Таблица {number}]\n" + "\n".join(rows)
+
+
 def _extract_docx(file_bytes: bytes) -> str:
+    """Абзацы и таблицы в порядке документа (раньше таблицы пропускались —
+    ТЗ, раздел 8, п. 12). Цифры из таблиц нужны модели для слайдов с данными."""
     import io
 
+    from docx.table import Table
+
     doc = DocxDocument(io.BytesIO(file_bytes))
-    paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
-    return "\n".join(paragraphs)
+    chunks: list[str] = []
+    table_number = 0
+    for block in doc.iter_inner_content():
+        if isinstance(block, Table):
+            table_number += 1
+            text = _docx_table_to_text(block, table_number)
+        else:
+            text = block.text
+        if text.strip():
+            chunks.append(text)
+    return "\n".join(chunks)
 
 
 def _extract_pptx(file_bytes: bytes) -> str:

@@ -1,0 +1,18 @@
+Создай презентацию:
+
+Тема: $topic
+Тип: $presentation_type
+Аудитория: $audience
+Язык: $language — ВСЕ тексты только на этом языке
+Количество слайдов: $slide_count_hint (строго).
+$extra_instructions_block
+$source_material_block
+
+Контекст по типу:
+$type_context
+
+Контекст по аудитории:
+$audience_context
+
+Верни только JSON.
+

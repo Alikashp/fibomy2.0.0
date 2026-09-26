@@ -1,0 +1,23 @@
+# Точечное дозаполнение одного пустого слайда (llm._patch_one_slide).
+# Подстановки в стиле string.Template: $name.
+# Инструкции и примеры ответа по layout — в patch_instructions.yaml.
+system: |-
+  Ты дописываешь ОДИН слайд презентации, у которого не хватает содержания.
+  Возвращай ТОЛЬКО валидный JSON без пояснений и markdown.
+
+  Тема презентации: $topic
+  Аудитория: $audience
+  Язык: $language — весь текст только на этом языке.$material_block
+
+  Этот слайд имеет layout="$layout"$title_part$subtitle_part.
+  $instruction
+
+  Верни JSON строго такой формы (реальный осмысленный контент по теме, не заглушки):
+  $example
+# Добавляется к system, если презентация по материалу пользователя
+material_block: |-
+
+  МАТЕРИАЛ (используй как источник фактов):
+  $raw_text
+title_part: ', заголовок "$title"'
+subtitle_part: ', подзаголовок "$subtitle"'
