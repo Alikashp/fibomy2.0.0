@@ -12,17 +12,18 @@ Image fetcher: Unsplash API → URL изображения.
 import hashlib
 import json
 import logging
-import os
 import asyncio
 from typing import Optional
 
 import aiohttp
 
+from config import settings
+
 logger = logging.getLogger(__name__)
 
-UNSPLASH_ACCESS_KEY = os.getenv("UNSPLASH_ACCESS_KEY", "")
-PEXELS_API_KEY = os.getenv("PEXELS_API_KEY", "")
-REDIS_URL = os.getenv("REDIS_URL", "")
+UNSPLASH_ACCESS_KEY = settings.unsplash_access_key
+PEXELS_API_KEY = settings.pexels_api_key
+REDIS_URL = settings.redis_url
 
 if not UNSPLASH_ACCESS_KEY and not PEXELS_API_KEY:
     logger.error("Ни UNSPLASH_ACCESS_KEY, ни PEXELS_API_KEY не заданы — картинки к слайдам не будут подбираться")
@@ -33,20 +34,24 @@ CACHE_TTL = 60 * 60 * 24  # 24 часа
 # ── Redis клиент (опциональный) ────────────────────────────────────────────────
 
 _redis = None
+_redis_unavailable = False  # не пингуем мёртвый Redis на каждую картинку
+
 
 async def _get_redis():
     """Возвращает Redis клиент или None если Redis не настроен."""
-    global _redis
+    global _redis, _redis_unavailable
     if _redis is not None:
         return _redis
-    if not REDIS_URL:
+    if not REDIS_URL or _redis_unavailable:
         return None
     try:
         import redis.asyncio as aioredis
-        _redis = aioredis.from_url(REDIS_URL, decode_responses=True)
-        await _redis.ping()
+        client = aioredis.from_url(REDIS_URL, decode_responses=True)
+        await client.ping()
+        _redis = client
         return _redis
     except Exception as e:
+        _redis_unavailable = True
         logger.warning(f"Redis недоступен, работаем без кеша: {e}")
         return None
 

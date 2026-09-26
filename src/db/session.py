@@ -3,18 +3,18 @@ Async SQLAlchemy session factory + репозиторий пользовател
 """
 
 import logging
-import os
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from config import settings
 from db.models import Base, User, Presentation, PlanType
 
 logger = logging.getLogger(__name__)
 
-DATABASE_URL = os.getenv("DATABASE_URL", "")
+DATABASE_URL = settings.database_url
 
 # Railway даёт postgres://, SQLAlchemy нужен postgresql+asyncpg://
 if DATABASE_URL.startswith("postgres://"):

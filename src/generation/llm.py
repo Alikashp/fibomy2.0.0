@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 client = AsyncOpenAI(
     api_key=settings.openai_api_key,
     base_url=settings.openai_base_url,
+    timeout=settings.openai_timeout_seconds,
 )
 
 SYSTEM_PROMPT = """\

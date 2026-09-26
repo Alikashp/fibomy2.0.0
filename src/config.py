@@ -2,14 +2,27 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
+    """Все настройки — только отсюда. os.getenv в обход Settings не используем.
+    Полный список переменных окружения — в .env.example в корне репозитория."""
+
     telegram_bot_token: str
     openai_api_key: str
     openai_base_url: str = "https://api.proxyapi.ru/openai/v1"
     openai_model: str = "gpt-4o"
+    # Явный таймаут одного запроса к LLM (ТЗ 4.6). Без него зависший запрос
+    # ограничивал только job_timeout воркера.
+    openai_timeout_seconds: float = 45.0
     watermark_free_tier: bool = True
 
-    # ── ARQ / очередь генерации ──────────────────────────────────────────────
+    # ── БД ───────────────────────────────────────────────────────────────────
+    database_url: str = ""          # пусто = бот и воркер работают без БД
+
+    # ── ARQ / очередь генерации, FSM, кэш картинок ───────────────────────────
     redis_url: str = "redis://localhost:6379/0"
+
+    # ── Картинки ─────────────────────────────────────────────────────────────
+    unsplash_access_key: str = ""
+    pexels_api_key: str = ""
 
     # ── S3 / MinIO — хранилище готовых PDF ──────────────────────────────────
     s3_endpoint_url: str = ""       # пусто = MinIO/S3 не настроен, worker пропустит загрузку

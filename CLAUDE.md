@@ -30,5 +30,5 @@ Fibonacci AI — Telegram-бот, который по теме, тексту и�
 ## Быстрые факты
 
 - Код: `src/`. Бот — `src/main.py`, воркер — `src/worker.py` (ARQ), генерация — `src/generation/`, схемы — `src/schemas/`, шаблоны — `src/templates/<тип>/template.html`.
-- Бот и воркер — два отдельных сервиса Railway из одного Docker-образа. Команда воркера (`sh -c "cd src && arq worker.WorkerSettings"`) задана в интерфейсе Railway, в репозитории её нет.
+- Бот и воркер — два отдельных сервиса Railway из одного Docker-образа. Бот — `railway.toml` (CMD из `Dockerfile`), воркер — `railway.worker.toml` (`sh -c "cd src && arq worker.WorkerSettings"`). Все переменные окружения — в `.env.example`, читаются только через `src/config.py`.
 - Автотестов в репозитории нет.
