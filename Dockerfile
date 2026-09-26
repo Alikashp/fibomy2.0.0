@@ -9,8 +9,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Playwright браузеры уже в образе — не скачиваем
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
-# Исходники
+# Исходники и промпты (prompts/ читается из src/generation/prompts.py)
 COPY src/ ./src/
+COPY prompts/ ./prompts/
 
 # Запуск
 CMD ["python", "src/main.py"]

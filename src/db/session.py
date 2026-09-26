@@ -3,18 +3,19 @@ Async SQLAlchemy session factory + репозиторий пользовател
 """
 
 import logging
-import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import AsyncGenerator
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from config import settings
 from db.models import Base, User, Presentation, PlanType
 
 logger = logging.getLogger(__name__)
 
-DATABASE_URL = os.getenv("DATABASE_URL", "")
+DATABASE_URL = settings.database_url
 
 # Railway даёт postgres://, SQLAlchemy нужен postgresql+asyncpg://
 if DATABASE_URL.startswith("postgres://"):
@@ -48,15 +49,46 @@ async def init_db() -> None:
     )
 
     async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-        # create_all не добавляет колонки в уже существующие таблицы —
-        # на Railway база уже развёрнута, поэтому новые nullable-колонки
-        # добавляем сами. Без Alembic (см. models.py) это самый простой
-        # безопасный вариант: IF NOT EXISTS делает операцию идемпотентной.
-        await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS author_name VARCHAR(150)"))
-        await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS author_group VARCHAR(150)"))
+        # Бот и воркер стартуют одновременно и оба зовут init_db — advisory
+        # lock не даёт им применять миграции параллельно. Снимается на commit.
+        if conn.dialect.name == "postgresql":
+            await conn.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": _MIGRATION_LOCK_KEY})
+        await conn.run_sync(_run_migrations)
 
     logger.info("Database initialized")
+
+
+# ── Миграции (Alembic) ───────────────────────────────────────────────────────
+
+_MIGRATION_LOCK_KEY = 7_140_512_001  # произвольная константа проекта
+_BASELINE_REVISION = "0001"
+_ALEMBIC_INI = Path(__file__).resolve().parent.parent / "alembic.ini"
+
+
+def _run_migrations(sync_conn) -> None:
+    """alembic upgrade head на переданном соединении.
+
+    База на проде создана до Alembic (create_all + ALTER TABLE). Если таблицы
+    есть, а alembic_version нет — это та самая база: догоняем её до baseline
+    (те же идемпотентные ALTER, что были раньше) и помечаем baseline
+    применённым, не выполняя его.
+    """
+    from alembic import command
+    from alembic.config import Config
+    from sqlalchemy import inspect
+
+    cfg = Config(str(_ALEMBIC_INI))
+    cfg.set_main_option("script_location", str(_ALEMBIC_INI.parent / "db" / "migrations"))
+    cfg.attributes["connection"] = sync_conn
+
+    tables = set(inspect(sync_conn).get_table_names())
+    if "users" in tables and "alembic_version" not in tables:
+        logger.info("Legacy database without Alembic — stamping baseline", extra={"revision": _BASELINE_REVISION})
+        sync_conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS author_name VARCHAR(150)"))
+        sync_conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS author_group VARCHAR(150)"))
+        command.stamp(cfg, _BASELINE_REVISION)
+
+    command.upgrade(cfg, "head")
 
 
 async def close_db() -> None:
@@ -130,8 +162,11 @@ async def record_presentation(
     slide_count: int | None = None,
     has_brief: bool = False,
     watermark: bool = True,
+    job_id: str | None = None,
+    spec: dict | None = None,
+    durations_ms: dict | None = None,
 ) -> Presentation:
-    """Записывает презентацию и увеличивает счётчик пользователя."""
+    """Записывает презентацию (вместе с её JSON) и увеличивает счётчик пользователя."""
     presentation = Presentation(
         user_id=user.user_id,
         topic=topic,
@@ -141,6 +176,9 @@ async def record_presentation(
         slide_count=slide_count,
         has_brief=has_brief,
         watermark=watermark,
+        job_id=job_id,
+        spec=spec,
+        durations_ms=durations_ms,
     )
     session.add(presentation)
     user.presentations_count += 1

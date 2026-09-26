@@ -9,7 +9,7 @@ from aiogram import Bot, Dispatcher, F
 from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.fsm.storage.redis import RedisStorage
 from aiogram.types import (
     Message, CallbackQuery,
     InlineKeyboardMarkup, InlineKeyboardButton,
@@ -22,11 +22,14 @@ from arq.connections import ArqRedis, RedisSettings
 sys.path.insert(0, str(Path(__file__).parent))
 
 from config import settings
+from generation.prompts import load_template
 from schemas.presentation import PresentationType
 from db.session import init_db, close_db, get_session, get_or_create_user, upgrade_user_plan, update_user_profile
 from db.models import PlanType
+from generation.uploads import close_uploads, put_upload
+from logging_setup import setup_logging
 
-logging.basicConfig(level=logging.INFO)
+setup_logging()
 logger = logging.getLogger(__name__)
 
 bot = Bot(token=settings.telegram_bot_token)
@@ -36,7 +39,14 @@ bot = Bot(token=settings.telegram_bot_token)
 # только кладёт job в очередь и сразу отвечает пользователю. Реальная работа —
 # в worker.py (запускается отдельным процессом: `arq worker.WorkerSettings`).
 arq_pool: ArqRedis | None = None
-dp = Dispatcher(storage=MemoryStorage())
+# FSM в Redis, а не в памяти процесса: диалог переживает рестарт бота, и бота
+# можно масштабировать (ТЗ 4.4). Данные FSM сериализуются в JSON — поэтому в
+# них больше нет байтов документа, только ссылка document_ref (см. on_material).
+# TTL — чтобы брошенные диалоги не копились в Redis вечно.
+FSM_TTL_SECONDS = 7 * 24 * 60 * 60
+dp = Dispatcher(storage=RedisStorage.from_url(
+    settings.redis_url, state_ttl=FSM_TTL_SECONDS, data_ttl=FSM_TTL_SECONDS,
+))
 
 # ── Цены в Telegram Stars ─────────────────────────────────────────────────────
 PLANS = {
@@ -452,8 +462,10 @@ async def cmd_plan(message: Message):
             )
             await message.answer(text, parse_mode="HTML", reply_markup=kb_paywall())
         else:
+            # plan хранится в БД строкой ("starter"/"pro"), а не PlanType —
+            # раньше здесь был user.plan.value, и /plan у платного падал.
             await message.answer(
-                f"📊 Ваш план: <b>{user.plan.value.title()}</b>\n"
+                f"📊 Ваш план: <b>{str(user.plan).title()}</b>\n"
                 f"Всего сгенерировано: {user.presentations_count} презентаций",
                 parse_mode="HTML",
             )
@@ -788,11 +800,16 @@ async def on_material(message: Message, state: FSMContext):
 
         file = await bot.get_file(doc.file_id)
         buf = await bot.download_file(file.file_path)
-        document_bytes = buf.read()
+        try:
+            document_ref = await put_upload(buf.read(), mime)
+        except Exception:
+            logger.exception("Failed to store uploaded document")
+            await message.answer("Не удалось сохранить файл. Попробуйте прислать его ещё раз.")
+            return
 
         await state.update_data(
             source_type="document",
-            document_bytes=document_bytes,
+            document_ref=document_ref,
             document_mime_type=mime,
             raw_text=None,
             last_short_text_error_msg_id=None,
@@ -805,7 +822,7 @@ async def on_material(message: Message, state: FSMContext):
         await state.update_data(
             source_type="text",
             raw_text=text[:15000],
-            document_bytes=None,
+            document_ref=None,
             document_mime_type=None,
             last_short_text_error_msg_id=None,
         )
@@ -886,9 +903,11 @@ async def on_pay(call: CallbackQuery):
         await call.answer("Неизвестный тариф")
         return
 
+    # Только то, что реально работает. AI-изображения и приоритетная очередь
+    # не реализованы — не обещаем их, пока не появятся (ТЗ, раздел 8, п. 3).
     plan_descriptions = {
-        "starter": "15 презентаций · Все шаблоны · Без водяного знака",
-        "pro": "50 презентаций · Всё из Starter · AI-изображения · Приоритетная очередь",
+        "starter": "15 презентаций · Все цветовые схемы · Без водяного знака",
+        "pro": "50 презентаций · Все цветовые схемы · Без водяного знака",
     }
 
     await bot.send_invoice(
@@ -989,18 +1008,18 @@ async def _confirm_and_generate(message: Message, data: dict, state: FSMContext)
 # /start, /plan и прочие команды других пользователей, пока одна презентация
 # ещё готовится.
 
+BRIEF_TEMPLATE = load_template("brief.txt")
+
+
 async def generate_and_send(message: Message, data: dict, watermark: bool = True):
     brief = data.get("brief")
     extra = None
     if brief:
-        extra = (
-            f"ВАЖНО — используй эти реальные данные:\n\n{brief}\n\n"
-            f"Вставляй точно: имена, цифры, контакты."
-        )
+        extra = BRIEF_TEMPLATE.substitute(brief=brief)
 
     # Собираем request_data как обычный dict, а не через UserRequest(...) —
     # для DOKLAD+document source_type != "topic", а raw_text ещё не заполнен
-    # (текст извлечёт content_extractor внутри воркера из document_bytes).
+    # (текст извлечёт content_extractor внутри воркера из документа по document_ref).
     # UserRequest-валидатор требует raw_text сразу, как только source_type
     # != topic, так что собирать полноценный Pydantic-объект здесь, до
     # экстракции, нельзя — тот же капкан, что уже чинили в worker.py.
@@ -1036,7 +1055,7 @@ async def generate_and_send(message: Message, data: dict, watermark: bool = True
         user_id=message.chat.id,
         status_message_id=status_msg.message_id,
         request_data=request_data,
-        document_bytes=data.get("document_bytes"),
+        document_ref=data.get("document_ref"),
         document_mime_type=data.get("document_mime_type"),
         urls=None,
         watermark=watermark,
@@ -1066,6 +1085,8 @@ async def main():
         )
     finally:
         await arq_pool.aclose()
+        await dp.storage.close()
+        await close_uploads()
         await close_db()
         await bot.session.close()
 

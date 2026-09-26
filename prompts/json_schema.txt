@@ -1,0 +1,27 @@
+{
+  "meta": {
+    "title": "string", "subtitle": "string|null", "author": "string|null",
+    "company": "string|null", "date": "string|null", "language": "ru|en|uz|kk|es|ar|zh|de",
+    "presentation_type": "pitch_deck|diploma|corp_report|educational|sales|conference|roadmap|doklad",
+    "audience": "investors|clients|students|colleagues|management|general|schoolkids|friends",
+    "color_scheme": "default"
+  },
+  "slides": [{
+    "index": 1,
+    "layout": "title|problem|solution|bullets|market|metrics|two_column|competition|team|timeline|diagram|quote|image_full|image_hero|closing",
+    "title": "string|null", "subtitle": "string|null", "body_text": "string|null",
+    "bullets": [{"text": "string", "subtitle": "string|null", "icon": "string|null (из списка допустимых иконок)", "emphasis": false}],
+    "metrics": [{"value": "string", "label": "string", "trend": "string|null", "source": "string|null"}],
+    "team_members": [{"name": "string", "role": "string", "bio": "string|null", "gender": "male|female"}],
+    "timeline_items": [{"date": "string", "title": "string", "description": "string|null"}],
+    "two_column": {"left_title": "string|null", "left_text": "string|null", "left_bullets": [{"text": "string", "emphasis": false}], "right_title": "string|null", "right_text": "string|null", "right_bullets": [{"text": "string", "emphasis": false}], "right_preferred": false},
+    "competition_table": {
+      "our_name": "string",
+      "competitors": [{"name": "string"}],
+      "features": [{"name": "string", "values": {"CompetitorName": "yes|no|partial text"}}]
+    },
+    "image_query": "string|null (ВСЕГДА на английском)",
+    "mermaid_code": "string|null",
+    "speaker_notes": "string|null"
+  }]
+}

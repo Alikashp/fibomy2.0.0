@@ -7,22 +7,29 @@
 - payments    — платежи через Telegram Stars
 
 Решения:
-- Без Alembic на старте — create_all при запуске. Добавим миграции когда схема устаканится.
+- Схема меняется только миграциями Alembic (src/db/migrations). После правки
+  моделей: cd src && alembic revision --autogenerate -m "..." — и проверить файл.
 - user_id = Telegram user id (int64) — естественный PK, не суррогатный
-- presentations хранят тему и тип — для статистики и анализа
+- presentations хранят тему и тип — для статистики и анализа, плюс JSON самой
+  презентации (spec) и длительности этапов — для разбора жалоб и переэкспорта
 """
 
 from datetime import datetime
 from sqlalchemy import (
-    BigInteger, Boolean, DateTime, Integer,
+    JSON, BigInteger, Boolean, DateTime, Integer,
     String, Text, ForeignKey, func,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 import enum
 
 
 class Base(DeclarativeBase):
     pass
+
+
+# JSONB на Postgres, обычный JSON на остальных диалектах (удобно для тестов)
+JsonColumn = JSON().with_variant(JSONB(), "postgresql")
 
 
 class PlanType(str, enum.Enum):
@@ -87,6 +94,12 @@ class Presentation(Base):
     slide_count: Mapped[int | None] = mapped_column(Integer)
     has_brief: Mapped[bool] = mapped_column(Boolean, default=False)
     watermark: Mapped[bool] = mapped_column(Boolean, default=True)
+    # job_id ARQ-задачи — тот же, что в логах (deck_id) и в статус-сообщении
+    job_id: Mapped[str | None] = mapped_column(String(32), index=True)
+    # PresentationSchema.model_dump(mode="json") — сама презентация
+    spec: Mapped[dict | None] = mapped_column(JsonColumn)
+    # {"ingest": 120, "llm": 18234, ...} — миллисекунды по этапам
+    durations_ms: Mapped[dict | None] = mapped_column(JsonColumn)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

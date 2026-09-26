@@ -25,6 +25,7 @@ aiogram-хендлера в main.py и блокировала бота на 60-9
 """
 
 import logging
+import time
 
 from aiogram import Bot
 from aiogram.types import BufferedInputFile, InlineKeyboardButton, InlineKeyboardMarkup
@@ -38,9 +39,11 @@ from generation.image_fetcher import fetch_images_for_slides
 from generation.template_engine import render_presentation
 from generation.pdf_renderer import html_to_pdf, get_renderer, shutdown_renderer
 from generation.storage import upload_pdf
+from generation.uploads import UploadNotFound, close_uploads, delete_upload, get_upload
 from db.session import init_db, close_db, get_session, get_or_create_user, record_presentation
+from logging_setup import deck_id_var, setup_logging, stage
 
-logging.basicConfig(level=logging.INFO)
+setup_logging()
 logger = logging.getLogger(__name__)
 
 JOB_TIMEOUT_SECONDS = 180  # LLM + картинки + PDF с запасом; см. WorkerSettings.job_timeout
@@ -74,13 +77,20 @@ async def generate_presentation_job(
     user_id: int,
     status_message_id: int | None,
     request_data: dict,
-    document_bytes: bytes | None = None,
+    document_ref: str | None = None,
     document_mime_type: str | None = None,
+    # Старый контракт: байты прямо в аргументах. Оставлен, чтобы задачи,
+    # поставленные в очередь до деплоя, не упали. Удалить в следующем релизе.
+    document_bytes: bytes | None = None,
     urls: list[str] | None = None,
     watermark: bool = True,
     color_scheme: str = "light",
 ) -> dict:
     bot: Bot = ctx["bot"]
+    # deck_id попадает во все строки лога этой задачи (logging_setup.JsonFormatter)
+    deck_id_var.set(job_id)
+    timings: dict[str, int] = {}
+    job_started = time.perf_counter()
 
     async def _status(text: str) -> None:
         if status_message_id is None:
@@ -101,30 +111,28 @@ async def generate_presentation_job(
 
         if source_type != "topic" and not request_data.get("raw_text"):
             await _status("⚙️ Читаю материал...")
-            if document_bytes is not None:
-                raw_text = await extract_from_document(document_bytes, document_mime_type)
-            elif urls:
-                raw_text, error_urls = await extract_from_url(urls)
-                if error_urls:
-                    logger.warning(
-                        "Some URLs failed to extract",
-                        extra={"job_id": job_id, "error_urls": error_urls},
-                    )
-            else:
-                raw_text = None
+            try:
+                with stage("ingest", timings):
+                    if document_ref is not None:
+                        document_bytes = await get_upload(document_ref)
+                    raw_text = await _extract_raw_text(job_id, document_bytes, document_mime_type, urls)
+            except UploadNotFound:
+                # Задача пролежала в очереди дольше TTL файла — просим прислать заново
+                logger.warning("Uploaded document expired or missing", extra={"ref": document_ref})
+                await _status("❌ Файл устарел — пришлите его ещё раз через /new")
+                return {"status": "failed", "job_id": job_id, "reason": "upload_not_found"}
             request_data["raw_text"] = raw_text
 
         request = UserRequest.model_validate(request_data)
 
         await _status("⚙️ Пишу текст слайдов...")
-        presentation = await generate_presentation_structure(request)
+        with stage("llm", timings):
+            presentation = await generate_presentation_structure(request)
 
         if request.presentation_type == PresentationType.DOKLAD:
-            # ВАЖНО: main.py/worker.py вызывают logging.basicConfig(level=INFO)
-            # без своего format= — стандартный форматтер "%(levelname)s:%(name)s:
-            # %(message)s" НЕ печатает extra={...}. Раньше диагностика уходила
-            # туда и молча пропадала из логов Railway (видно только голый текст
-            # предупреждения). Поэтому здесь всё нужное — прямо в тексте сообщения.
+            # Диагностика написана прямо в тексте сообщения — это осталось с
+            # тех пор, когда логи теряли extra={...}. Теперь логи JSON и extra
+            # печатаются (logging_setup), но текст оставлен как есть.
             expected_count = _default_slide_count(request.presentation_type)
             if presentation.slide_count != expected_count:
                 logger.warning(
@@ -194,36 +202,47 @@ async def generate_presentation_job(
                         })
 
         await _status("⚙️ Подбираю изображения...")
-        image_urls = await fetch_images_for_slides(presentation.slides)
+        with stage("images", timings):
+            image_urls = await fetch_images_for_slides(presentation.slides)
 
         await _status("⚙️ Собираю дизайн...")
-        html = render_presentation(
-            presentation,
-            image_urls=image_urls,
-            watermark=watermark,
-            color_scheme=color_scheme,
-        )
+        with stage("render_html", timings):
+            html = render_presentation(
+                presentation,
+                image_urls=image_urls,
+                watermark=watermark,
+                color_scheme=color_scheme,
+            )
 
         await _status("⚙️ Рендерю PDF...")
         has_mermaid = any(s.layout.value == "diagram" for s in presentation.slides)
-        pdf_bytes = await html_to_pdf(html, has_mermaid=has_mermaid, expected_pages=presentation.slide_count)
+        with stage("render_pdf", timings):
+            pdf_bytes = await html_to_pdf(html, has_mermaid=has_mermaid, expected_pages=presentation.slide_count)
 
-        await upload_pdf(job_id, pdf_bytes)
+        with stage("upload", timings):
+            await upload_pdf(job_id, pdf_bytes)
 
-        async with get_session() as session:
-            if session:
-                user = await get_or_create_user(session, user_id)
-                await record_presentation(
-                    session,
-                    user=user,
-                    topic=request.topic,
-                    presentation_type=request.presentation_type.value,
-                    audience=request.audience.value,
-                    language=request.language,
-                    slide_count=presentation.slide_count,
-                    has_brief=bool(request.extra_instructions),
-                    watermark=watermark,
-                )
+        # JSON презентации сохраняем вместе с записью (ТЗ, раздел 8, п. 14):
+        # разбор жалоб, аналитика, будущий переэкспорт без новой генерации.
+        # Длительности — всё, что посчитано к этому моменту (без deliver).
+        with stage("db_record", timings):
+            async with get_session() as session:
+                if session:
+                    user = await get_or_create_user(session, user_id)
+                    await record_presentation(
+                        session,
+                        user=user,
+                        topic=request.topic,
+                        presentation_type=request.presentation_type.value,
+                        audience=request.audience.value,
+                        language=request.language,
+                        slide_count=presentation.slide_count,
+                        has_brief=bool(request.extra_instructions),
+                        watermark=watermark,
+                        job_id=job_id,
+                        spec=presentation.model_dump(mode="json"),
+                        durations_ms=dict(timings),
+                    )
 
         if status_message_id is not None:
             try:
@@ -243,27 +262,63 @@ async def generate_presentation_job(
         if watermark:
             caption += "\n\n<i>Бесплатная версия · Уберите водяной знак в /plan</i>"
 
-        await bot.send_document(
-            chat_id=chat_id,
-            document=BufferedInputFile(pdf_bytes, filename=f"{safe_title}.pdf"),
-            caption=caption,
-            parse_mode="HTML",
-            reply_markup=_kb_after_pdf(),
-        )
+        with stage("deliver", timings):
+            await bot.send_document(
+                chat_id=chat_id,
+                document=BufferedInputFile(pdf_bytes, filename=f"{safe_title}.pdf"),
+                caption=caption,
+                parse_mode="HTML",
+                reply_markup=_kb_after_pdf(),
+            )
 
         logger.info(
             "Job completed",
-            extra={"job_id": job_id, "chat_id": chat_id, "slide_count": presentation.slide_count},
+            extra={
+                "job_id": job_id, "chat_id": chat_id, "slide_count": presentation.slide_count,
+                "total_ms": int((time.perf_counter() - job_started) * 1000), "durations_ms": timings,
+            },
         )
         return {"status": "ok", "job_id": job_id, "slide_count": presentation.slide_count}
 
     except Exception as e:
-        logger.exception("Job failed", extra={"job_id": job_id, "chat_id": chat_id, "error": str(e)})
+        logger.exception(
+            "Job failed",
+            extra={
+                "job_id": job_id, "chat_id": chat_id, "error": str(e),
+                "total_ms": int((time.perf_counter() - job_started) * 1000), "durations_ms": timings,
+            },
+        )
         await _status("❌ Что-то пошло не так. Попробуйте ещё раз через /new")
         raise
 
+    finally:
+        # Файлы пользователя не храним дольше обработки (ТЗ 6.5)
+        if document_ref is not None:
+            await delete_upload(document_ref)
+
+
+async def _extract_raw_text(
+    job_id: str,
+    document_bytes: bytes | None,
+    document_mime_type: str | None,
+    urls: list[str] | None,
+) -> str | None:
+    if document_bytes is not None:
+        return await extract_from_document(document_bytes, document_mime_type)
+    if urls:
+        raw_text, error_urls = await extract_from_url(urls)
+        if error_urls:
+            logger.warning(
+                "Some URLs failed to extract",
+                extra={"job_id": job_id, "error_urls": error_urls},
+            )
+        return raw_text
+    return None
+
 
 async def startup(ctx: dict) -> None:
+    # CLI arq после импорта модуля ставит свой текстовый хендлер — переопределяем
+    setup_logging()
     ctx["bot"] = Bot(token=settings.telegram_bot_token)
     await init_db()
     await get_renderer()
@@ -272,6 +327,7 @@ async def startup(ctx: dict) -> None:
 
 async def shutdown(ctx: dict) -> None:
     await shutdown_renderer()
+    await close_uploads()
     await close_db()
     bot: Bot | None = ctx.get("bot")
     if bot is not None:

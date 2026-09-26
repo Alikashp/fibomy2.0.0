@@ -1,0 +1,1140 @@
+{
+  "convert_sec": 1.82,
+  "fonts": [
+    {
+      "font": "Arial",
+      "server_substitute": "Liberation Sans",
+      "metric_compatible": true,
+      "known_metric_clone": "Liberation Sans",
+      "langs": {
+        "ru": {
+          "missing": [],
+          "pdf_fonts": [
+            "LiberationSans"
+          ]
+        },
+        "en": {
+          "missing": [],
+          "pdf_fonts": [
+            "LiberationSans"
+          ]
+        },
+        "uk": {
+          "missing": [],
+          "pdf_fonts": [
+            "LiberationSans"
+          ]
+        },
+        "be": {
+          "missing": [],
+          "pdf_fonts": [
+            "LiberationSans"
+          ]
+        },
+        "kk": {
+          "missing": [],
+          "pdf_fonts": [
+            "LiberationSans"
+          ]
+        },
+        "uz": {
+          "missing": [],
+          "pdf_fonts": [
+            "LiberationSans"
+          ]
+        },
+        "ky": {
+          "missing": [],
+          "pdf_fonts": [
+            "LiberationSans"
+          ]
+        },
+        "tg": {
+          "missing": [],
+          "pdf_fonts": [
+            "LiberationSans"
+          ]
+        },
+        "az": {
+          "missing": [],
+          "pdf_fonts": [
+            "LiberationSans"
+          ]
+        },
+        "hy": {
+          "missing": [
+            "Ա",
+            "Բ",
+            "Գ",
+            "Ե",
+            "Հ",
+            "Ֆ",
+            "ա",
+            "բ",
+            "գ",
+            "յ",
+            "ն",
+            "ս",
+            "տ",
+            "ր",
+            "ֆ",
+            "և"
+          ],
+          "pdf_fonts": [
+            "DejaVuSans"
+          ]
+        },
+        "ka": {
+          "missing": [
+            "ა",
+            "ბ",
+            "ე",
+            "ვ",
+            "თ",
+            "ი",
+            "ლ",
+            "ნ",
+            "ო",
+            "რ",
+            "ს",
+            "უ",
+            "ქ"
+          ],
+          "pdf_fonts": [
+            "DejaVuSans"
+          ]
+        },
+        "es": {
+          "missing": [],
+          "pdf_fonts": [
+            "LiberationSans"
+          ]
+        },
+        "de": {
+          "missing": [],
+          "pdf_fonts": [
+            "LiberationSans"
+          ]
+        },
+        "fr": {
+          "missing": [],
+          "pdf_fonts": [
+            "LiberationSans"
+          ]
+        },
+        "tr": {
+          "missing": [],
+          "pdf_fonts": [
+            "LiberationSans"
+          ]
+        },
+        "sym": {
+          "missing": [
+            "֏",
+            "₸",
+            "₺",
+            "₼",
+            "₽",
+            "₾"
+          ],
+          "pdf_fonts": [
+            "LiberationSans"
+          ]
+        }
+      }
+    },
+    {
+      "font": "Calibri",
+      "server_substitute": "Carlito",
+      "metric_compatible": true,
+      "known_metric_clone": "Carlito",
+      "langs": {
+        "ru": {
+          "missing": [],
+          "pdf_fonts": [
+            "Carlito-Regular"
+          ]
+        },
+        "en": {
+          "missing": [],
+          "pdf_fonts": [
+            "Carlito-Regular"
+          ]
+        },
+        "uk": {
+          "missing": [],
+          "pdf_fonts": [
+            "Carlito-Regular"
+          ]
+        },
+        "be": {
+          "missing": [],
+          "pdf_fonts": [
+            "Carlito-Regular"
+          ]
+        },
+        "kk": {
+          "missing": [],
+          "pdf_fonts": [
+            "Carlito-Regular"
+          ]
+        },
+        "uz": {
+          "missing": [],
+          "pdf_fonts": [
+            "Carlito-Regular"
+          ]
+        },
+        "ky": {
+          "missing": [],
+          "pdf_fonts": [
+            "Carlito-Regular"
+          ]
+        },
+        "tg": {
+          "missing": [],
+          "pdf_fonts": [
+            "Carlito-Regular"
+          ]
+        },
+        "az": {
+          "missing": [],
+          "pdf_fonts": [
+            "Carlito-Regular"
+          ]
+        },
+        "hy": {
+          "missing": [
+            "Ա",
+            "Բ",
+            "Գ",
+            "Ե",
+            "Հ",
+            "Ֆ",
+            "ա",
+            "բ",
+            "գ",
+            "յ",
+            "ն",
+            "ս",
+            "տ",
+            "ր",
+            "ֆ",
+            "և"
+          ],
+          "pdf_fonts": [
+            "DejaVuSans"
+          ]
+        },
+        "ka": {
+          "missing": [
+            "ა",
+            "ბ",
+            "ე",
+            "ვ",
+            "თ",
+            "ი",
+            "ლ",
+            "ნ",
+            "ო",
+            "რ",
+            "ს",
+            "უ",
+            "ქ"
+          ],
+          "pdf_fonts": [
+            "DejaVuSans"
+          ]
+        },
+        "es": {
+          "missing": [],
+          "pdf_fonts": [
+            "Carlito-Regular"
+          ]
+        },
+        "de": {
+          "missing": [],
+          "pdf_fonts": [
+            "Carlito-Regular"
+          ]
+        },
+        "fr": {
+          "missing": [],
+          "pdf_fonts": [
+            "Carlito-Regular"
+          ]
+        },
+        "tr": {
+          "missing": [],
+          "pdf_fonts": [
+            "Carlito-Regular"
+          ]
+        },
+        "sym": {
+          "missing": [
+            "֏",
+            "₺",
+            "₼",
+            "₽",
+            "₾"
+          ],
+          "pdf_fonts": [
+            "Carlito-Regular"
+          ]
+        }
+      }
+    },
+    {
+      "font": "Segoe UI",
+      "server_substitute": "Noto Sans",
+      "metric_compatible": false,
+      "known_metric_clone": "Selawik",
+      "langs": {
+        "ru": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "en": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "uk": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "be": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "kk": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "uz": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "ky": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "tg": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "az": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "hy": {
+          "missing": [
+            "Ա",
+            "Բ",
+            "Գ",
+            "Ե",
+            "Հ",
+            "Ֆ",
+            "ա",
+            "բ",
+            "գ",
+            "յ",
+            "ն",
+            "ս",
+            "տ",
+            "ր",
+            "ֆ",
+            "և"
+          ],
+          "pdf_fonts": [
+            "DejaVuSans"
+          ]
+        },
+        "ka": {
+          "missing": [
+            "ა",
+            "ბ",
+            "ე",
+            "ვ",
+            "თ",
+            "ი",
+            "ლ",
+            "ნ",
+            "ო",
+            "რ",
+            "ს",
+            "უ",
+            "ქ"
+          ],
+          "pdf_fonts": [
+            "DejaVuSans"
+          ]
+        },
+        "es": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "de": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "fr": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "tr": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "sym": {
+          "missing": [
+            "֏",
+            "↑",
+            "→",
+            "≈",
+            "≤",
+            "≥"
+          ],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        }
+      }
+    },
+    {
+      "font": "Verdana",
+      "server_substitute": "Noto Sans",
+      "metric_compatible": false,
+      "known_metric_clone": null,
+      "langs": {
+        "ru": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "en": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "uk": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "be": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "kk": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "uz": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "ky": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "tg": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "az": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "hy": {
+          "missing": [
+            "Ա",
+            "Բ",
+            "Գ",
+            "Ե",
+            "Հ",
+            "Ֆ",
+            "ա",
+            "բ",
+            "գ",
+            "յ",
+            "ն",
+            "ս",
+            "տ",
+            "ր",
+            "ֆ",
+            "և"
+          ],
+          "pdf_fonts": [
+            "DejaVuSans"
+          ]
+        },
+        "ka": {
+          "missing": [
+            "ა",
+            "ბ",
+            "ე",
+            "ვ",
+            "თ",
+            "ი",
+            "ლ",
+            "ნ",
+            "ო",
+            "რ",
+            "ს",
+            "უ",
+            "ქ"
+          ],
+          "pdf_fonts": [
+            "DejaVuSans"
+          ]
+        },
+        "es": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "de": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "fr": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "tr": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "sym": {
+          "missing": [
+            "֏",
+            "↑",
+            "→",
+            "≈",
+            "≤",
+            "≥"
+          ],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        }
+      }
+    },
+    {
+      "font": "Tahoma",
+      "server_substitute": "Noto Sans",
+      "metric_compatible": false,
+      "known_metric_clone": null,
+      "langs": {
+        "ru": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "en": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "uk": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "be": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "kk": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "uz": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "ky": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "tg": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "az": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "hy": {
+          "missing": [
+            "Ա",
+            "Բ",
+            "Գ",
+            "Ե",
+            "Հ",
+            "Ֆ",
+            "ա",
+            "բ",
+            "գ",
+            "յ",
+            "ն",
+            "ս",
+            "տ",
+            "ր",
+            "ֆ",
+            "և"
+          ],
+          "pdf_fonts": [
+            "DejaVuSans"
+          ]
+        },
+        "ka": {
+          "missing": [
+            "ა",
+            "ბ",
+            "ე",
+            "ვ",
+            "თ",
+            "ი",
+            "ლ",
+            "ნ",
+            "ო",
+            "რ",
+            "ს",
+            "უ",
+            "ქ"
+          ],
+          "pdf_fonts": [
+            "DejaVuSans"
+          ]
+        },
+        "es": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "de": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "fr": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "tr": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "sym": {
+          "missing": [
+            "֏",
+            "↑",
+            "→",
+            "≈",
+            "≤",
+            "≥"
+          ],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        }
+      }
+    },
+    {
+      "font": "Trebuchet MS",
+      "server_substitute": "Noto Sans",
+      "metric_compatible": false,
+      "known_metric_clone": null,
+      "langs": {
+        "ru": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "en": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "uk": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "be": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "kk": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "uz": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "ky": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "tg": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "az": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "hy": {
+          "missing": [
+            "Ա",
+            "Բ",
+            "Գ",
+            "Ե",
+            "Հ",
+            "Ֆ",
+            "ա",
+            "բ",
+            "գ",
+            "յ",
+            "ն",
+            "ս",
+            "տ",
+            "ր",
+            "ֆ",
+            "և"
+          ],
+          "pdf_fonts": [
+            "DejaVuSans"
+          ]
+        },
+        "ka": {
+          "missing": [
+            "ა",
+            "ბ",
+            "ე",
+            "ვ",
+            "თ",
+            "ი",
+            "ლ",
+            "ნ",
+            "ო",
+            "რ",
+            "ს",
+            "უ",
+            "ქ"
+          ],
+          "pdf_fonts": [
+            "DejaVuSans"
+          ]
+        },
+        "es": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "de": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "fr": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "tr": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        },
+        "sym": {
+          "missing": [
+            "֏",
+            "↑",
+            "→",
+            "≈",
+            "≤",
+            "≥"
+          ],
+          "pdf_fonts": [
+            "NotoSans-Regular"
+          ]
+        }
+      }
+    },
+    {
+      "font": "Georgia",
+      "server_substitute": "Noto Serif",
+      "metric_compatible": false,
+      "known_metric_clone": "Gelasio",
+      "langs": {
+        "ru": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSerif-Regular"
+          ]
+        },
+        "en": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSerif-Regular"
+          ]
+        },
+        "uk": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSerif-Regular"
+          ]
+        },
+        "be": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSerif-Regular"
+          ]
+        },
+        "kk": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSerif-Regular"
+          ]
+        },
+        "uz": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSerif-Regular"
+          ]
+        },
+        "ky": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSerif-Regular"
+          ]
+        },
+        "tg": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSerif-Regular"
+          ]
+        },
+        "az": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSerif-Regular"
+          ]
+        },
+        "hy": {
+          "missing": [
+            "Ա",
+            "Բ",
+            "Գ",
+            "Ե",
+            "Հ",
+            "Ֆ",
+            "ա",
+            "բ",
+            "գ",
+            "յ",
+            "ն",
+            "ս",
+            "տ",
+            "ր",
+            "ֆ",
+            "և"
+          ],
+          "pdf_fonts": [
+            "DejaVuSerif"
+          ]
+        },
+        "ka": {
+          "missing": [
+            "ა",
+            "ბ",
+            "ე",
+            "ვ",
+            "თ",
+            "ი",
+            "ლ",
+            "ნ",
+            "ო",
+            "რ",
+            "ს",
+            "უ",
+            "ქ"
+          ],
+          "pdf_fonts": [
+            "DejaVuSerif"
+          ]
+        },
+        "es": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSerif-Regular"
+          ]
+        },
+        "de": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSerif-Regular"
+          ]
+        },
+        "fr": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSerif-Regular"
+          ]
+        },
+        "tr": {
+          "missing": [],
+          "pdf_fonts": [
+            "NotoSerif-Regular"
+          ]
+        },
+        "sym": {
+          "missing": [
+            "֏",
+            "↑",
+            "→",
+            "≈",
+            "≤",
+            "≥"
+          ],
+          "pdf_fonts": [
+            "NotoSerif-Regular"
+          ]
+        }
+      }
+    },
+    {
+      "font": "Times New Roman",
+      "server_substitute": "Liberation Serif",
+      "metric_compatible": true,
+      "known_metric_clone": "Liberation Serif",
+      "langs": {
+        "ru": {
+          "missing": [],
+          "pdf_fonts": [
+            "LiberationSerif"
+          ]
+        },
+        "en": {
+          "missing": [],
+          "pdf_fonts": [
+            "LiberationSerif"
+          ]
+        },
+        "uk": {
+          "missing": [],
+          "pdf_fonts": [
+            "LiberationSerif"
+          ]
+        },
+        "be": {
+          "missing": [],
+          "pdf_fonts": [
+            "LiberationSerif"
+          ]
+        },
+        "kk": {
+          "missing": [],
+          "pdf_fonts": [
+            "LiberationSerif"
+          ]
+        },
+        "uz": {
+          "missing": [],
+          "pdf_fonts": [
+            "LiberationSerif"
+          ]
+        },
+        "ky": {
+          "missing": [],
+          "pdf_fonts": [
+            "LiberationSerif"
+          ]
+        },
+        "tg": {
+          "missing": [],
+          "pdf_fonts": [
+            "LiberationSerif"
+          ]
+        },
+        "az": {
+          "missing": [],
+          "pdf_fonts": [
+            "LiberationSerif"
+          ]
+        },
+        "hy": {
+          "missing": [
+            "Ա",
+            "Բ",
+            "Գ",
+            "Ե",
+            "Հ",
+            "Ֆ",
+            "ա",
+            "բ",
+            "գ",
+            "յ",
+            "ն",
+            "ս",
+            "տ",
+            "ր",
+            "ֆ",
+            "և"
+          ],
+          "pdf_fonts": [
+            "DejaVuSerif"
+          ]
+        },
+        "ka": {
+          "missing": [
+            "ა",
+            "ბ",
+            "ე",
+            "ვ",
+            "თ",
+            "ი",
+            "ლ",
+            "ნ",
+            "ო",
+            "რ",
+            "ს",
+            "უ",
+            "ქ"
+          ],
+          "pdf_fonts": [
+            "DejaVuSerif"
+          ]
+        },
+        "es": {
+          "missing": [],
+          "pdf_fonts": [
+            "LiberationSerif"
+          ]
+        },
+        "de": {
+          "missing": [],
+          "pdf_fonts": [
+            "LiberationSerif"
+          ]
+        },
+        "fr": {
+          "missing": [],
+          "pdf_fonts": [
+            "LiberationSerif"
+          ]
+        },
+        "tr": {
+          "missing": [],
+          "pdf_fonts": [
+            "LiberationSerif"
+          ]
+        },
+        "sym": {
+          "missing": [
+            "֏",
+            "₸",
+            "₺",
+            "₼",
+            "₽",
+            "₾"
+          ],
+          "pdf_fonts": [
+            "LiberationSerif"
+          ]
+        }
+      }
+    }
+  ]
+}
