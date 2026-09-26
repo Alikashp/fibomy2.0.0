@@ -1,0 +1,34 @@
+# Дозаполнение пустого слайда: что заполнить (instruction) и форма ответа (example). Ключ — SlideLayout.
+bullets:
+  instruction: 'Заполни "bullets": 3-4 пункта. У каждого: "text" — информационное предложение с конкретикой, "subtitle" — название пункта (1-3 слова), "icon" — одна из: file-text, list, check, alert-triangle, clock, calendar, users, user, coin, chart-bar, target, bulb, search, settings, lock, message-circle, folder, arrow-up, arrow-right, help-circle, star, bolt, shield, refresh, link.'
+  example: '{"bullets": [{"text": "...", "subtitle": "...", "icon": "..."}]}'
+why_now:
+  instruction: 'Заполни "bullets": 3-4 пункта, каждый — одно законченное предложение.'
+  example: '{"bullets": [{"text": "..."}]}'
+metrics:
+  instruction: 'Заполни "metrics": 2-3 показателя. У каждого: "value" (например "44%"), "label" (2-4 слова), "trend" (короткое пояснение к цифре). Используй правдоподобные для темы цифры, не выдумывай абсурдные значения.'
+  example: '{"metrics": [{"value": "...", "label": "...", "trend": "..."}]}'
+two_column:
+  instruction: 'Заполни "two_column": "left_title", "right_title" (название каждой стороны сравнения) и по 3 пункта в "left_bullets"/"right_bullets" — каждый пункт объект {"text": "..."}.'
+  example: '{"two_column": {"left_title": "...", "right_title": "...", "left_bullets": [{"text": "..."}], "right_bullets": [{"text": "..."}]}}'
+diagram:
+  instruction: Заполни "mermaid_code" — валидный Mermaid, синтаксис "graph LR", максимум 6 узлов, подписи узлов 1-3 слова. И "body_text" — 2-3 предложения, поясняющие логику процесса.
+  example: '{"mermaid_code": "graph LR\nA[...] --> B[...]", "body_text": "..."}'
+quote:
+  instruction: Заполни "body_text" — сильный тезис одним предложением. "subtitle" — одно предложение, поясняющее, почему это так.
+  example: '{"body_text": "...", "subtitle": "..."}'
+timeline:
+  instruction: 'Заполни "timeline_items": 4 этапа. У каждого: "date" (период), "title" (2-4 слова), "description" (одно предложение).'
+  example: '{"timeline_items": [{"date": "...", "title": "...", "description": "..."}]}'
+image_full:
+  instruction: 'Заполни "image_query" (на английском, для поиска фото) и "two_column" с двумя сопоставленными блоками: "left_title"/"left_text" и "right_title"/"right_text".'
+  example: '{"image_query": "...", "two_column": {"left_title": "...", "left_text": "...", "right_title": "...", "right_text": "..."}}'
+image_hero:
+  instruction: 'Заполни "image_query" (на английском), "body_text" (2 предложения) и "bullets" — 2 коротких пункта, каждый объект {"text": "..."}.'
+  example: '{"image_query": "...", "body_text": "...", "bullets": [{"text": "..."}]}'
+team:
+  instruction: 'Заполни "team_members": 3-4 члена команды, у каждого "name", "role", "gender" (male/female).'
+  example: '{"team_members": [{"name": "...", "role": "...", "gender": "male"}]}'
+competition:
+  instruction: 'Заполни "competition_table": "our_name", "competitors" (реальные названия компаний), "features" (минимум 5 критериев сравнения).'
+  example: '{"competition_table": {"our_name": "...", "competitors": [{"name": "..."}], "features": [{"name": "...", "values": {}}]}}'

@@ -22,6 +22,7 @@ from arq.connections import ArqRedis, RedisSettings
 sys.path.insert(0, str(Path(__file__).parent))
 
 from config import settings
+from generation.prompts import load_template
 from schemas.presentation import PresentationType
 from db.session import init_db, close_db, get_session, get_or_create_user, upgrade_user_plan, update_user_profile
 from db.models import PlanType
@@ -989,14 +990,14 @@ async def _confirm_and_generate(message: Message, data: dict, state: FSMContext)
 # /start, /plan и прочие команды других пользователей, пока одна презентация
 # ещё готовится.
 
+BRIEF_TEMPLATE = load_template("brief.txt")
+
+
 async def generate_and_send(message: Message, data: dict, watermark: bool = True):
     brief = data.get("brief")
     extra = None
     if brief:
-        extra = (
-            f"ВАЖНО — используй эти реальные данные:\n\n{brief}\n\n"
-            f"Вставляй точно: имена, цифры, контакты."
-        )
+        extra = BRIEF_TEMPLATE.substitute(brief=brief)
 
     # Собираем request_data как обычный dict, а не через UserRequest(...) —
     # для DOKLAD+document source_type != "topic", а raw_text ещё не заполнен

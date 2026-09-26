@@ -1,6 +1,5 @@
 import json
 import logging
-from string import Template
 
 from openai import AsyncOpenAI
 from tenacity import retry, stop_after_attempt, wait_exponential
@@ -11,6 +10,9 @@ from schemas.presentation import (
     ContentVolume, ContentSourceType, Slide, SlideLayout, BulletPoint,
     _slide_has_required_content,
 )
+from generation.prompts import (
+    PROMPTS_VERSION, load_enum_map, load_template, load_template_map, load_text, load_yaml,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -19,40 +21,10 @@ client = AsyncOpenAI(
     base_url=settings.openai_base_url,
 )
 
-SYSTEM_PROMPT = """\
-Ты — эксперт по созданию профессиональных презентаций и бизнес-аналитик.
-Генерируй структуру презентации строго в формате JSON.
+# Все тексты промптов — в prompts/ (см. generation/prompts.py). Здесь только
+# сборка: какой блок подставить в зависимости от запроса.
 
-ЯЗЫК — КРИТИЧЕСКИ ВАЖНО:
-- Весь текст (title, subtitle, body_text, bullets, labels, trends) пиши ТОЛЬКО на языке: {language}
-- Казахский (kk) — пиши на казахском, НЕ на русском
-- Узбекский (uz) — пиши на узбекском, НЕ на русском
-- image_query — ВСЕГДА на английском (для поиска фото)
-
-ПРАВИЛА JSON:
-1. Возвращай ТОЛЬКО валидный JSON без пояснений и markdown.
-2. Первый слайд ВСЕГДА layout="title", последний ВСЕГДА layout="closing".
-3. mermaid_code — только для layout="diagram", валидный Mermaid-синтаксис.
-
-ТЕКУЩАЯ ДАТА: {current_date}. Используй её как отправную точку для роадмапа. Все этапы роадмапа — в будущем от этой даты, НЕ в прошлом.
-
-ОБЪЁМ КОНТЕНТА: {volume_instruction}
-
-ДАННЫЕ И ЦИФРЫ:
-- Используй реальные данные из своих знаний: рынки, статистику, исследования.
-- Источник указывай в поле trend или source: "Grand View Research, 2024".
-- Если точных данных нет — используй данные смежной отрасли с пометкой "оценочно".
-- НЕ пиши [ЦИФРА] — лучше реалистичный диапазон "$5-15B".
-
-{structure_block}
-
-{competition_table_block}
-
-{market_slide_block}
-
-СХЕМА JSON:
-{schema}
-"""
+SYSTEM_PROMPT = load_text("system.txt")
 
 # Раньше эти два блока приходили модели ВСЕГДА, при любом presentation_type —
 # включая DOKLAD, где ни таблицы конкурентов, ни слайда объёма рынка не
@@ -60,33 +32,9 @@ SYSTEM_PROMPT = """\
 # structure_block (см. _pick_structure_block) содержит соответствующий layout
 # — см. _competition_table_block()/_market_slide_block() ниже.
 
-COMPETITION_TABLE_BLOCK = """\
-COMPETITION TABLE — СТРОГИЕ ПРАВИЛА (если структура выше требует layout="competition"):
-1. competitors: ТОЛЬКО реальные названия компаний на этом рынке. ЗАПРЕЩЕНО писать "Competitor A", "Конкурент 1" и любые заглушки.
-2. features: МИНИМУМ 5 критериев, релевантных для данной отрасли. Меньше 5 — ошибка.
-3. Ключи в values ДОЛЖНЫ точно совпадать с именами в competitors.
-4. Значения: "yes", "no", или текст до 10 символов ("частично", "платно").
+COMPETITION_TABLE_BLOCK = load_text("blocks_competition_table.txt")
 
-Пример для медицины:
-"competition_table": {
-  "our_name": "ЗдоровыйЯ",
-  "competitors": [{"name": "DocDoc"}, {"name": "НаПоправку"}, {"name": "Zoon"}],
-  "features": [
-    {"name": "ИИ-подбор врача", "values": {"DocDoc": "no", "НаПоправку": "no", "Zoon": "no"}},
-    {"name": "Верифицированные отзывы", "values": {"DocDoc": "yes", "НаПоправку": "no", "Zoon": "no"}},
-    {"name": "Запись онлайн 24/7", "values": {"DocDoc": "yes", "НаПоправку": "yes", "Zoon": "частично"}},
-    {"name": "Телемедицина", "values": {"DocDoc": "yes", "НаПоправку": "no", "Zoon": "no"}},
-    {"name": "Цена от $5/мес", "values": {"DocDoc": "no", "НаПоправку": "no", "Zoon": "yes"}}
-  ]
-}"""
-
-MARKET_SLIDE_BLOCK = """\
-MARKET SLIDE — поле source в каждой метрике:
-"metrics": [
-  {"value": "$140B", "label": "Весь мировой рынок", "trend": "+7%/год", "source": "Grand View Research, 2024. Расчёт: все продажи корма глобально."},
-  {"value": "$1.8B", "label": "Онлайн СНГ", "trend": "+18%/год", "source": "Data Insight, 2024. ~9% от TAM $20B — средняя e-com пенетрация."},
-  {"value": "$54M", "label": "Цель за 3 года", "trend": "3% от SAM", "source": "Расчёт: 300К пользователей × $15 × 12 мес. Консервативная оценка."}
-]"""
+MARKET_SLIDE_BLOCK = load_text("blocks_market_slide.txt")
 
 
 def _competition_table_block(structure_block: str) -> str:
@@ -96,46 +44,14 @@ def _competition_table_block(structure_block: str) -> str:
 def _market_slide_block(structure_block: str) -> str:
     return MARKET_SLIDE_BLOCK if 'layout="market"' in structure_block else ""
 
-USER_PROMPT_TEMPLATE = Template("""\
-Создай презентацию:
+USER_PROMPT_TEMPLATE = load_template("user.txt")
 
-Тема: $topic
-Тип: $presentation_type
-Аудитория: $audience
-Язык: $language — ВСЕ тексты только на этом языке
-$slide_count_instruction
-$extra_instructions_block
-$source_material_block
+SOURCE_MATERIAL_BLOCK = load_template("source_material.txt")
+EXTRA_INSTRUCTIONS_BLOCK = load_template("extra_instructions.txt")
 
-Контекст по типу:
-$type_context
-
-Контекст по аудитории:
-$audience_context
-
-Верни только JSON.
-""")
-
-SOURCE_MATERIAL_BLOCK = Template("""\
-ВАЖНО: используй строго материал ниже как источник фактов. НЕ выдумывай данные и цифры сверх этого текста. Разрешено только добавлять структурные элементы — переходы, заголовки слайдов, логичную последовательность.
-
-МАТЕРИАЛ:
-$raw_text""")
-
-TYPE_CONTEXTS = {
-    PresentationType.PITCH_DECK: "Питч для инвесторов. Структура строго по 11 слайдам выше. Акцент на цифрах, рынке, уникальности.",
-    PresentationType.DIPLOMA: "Защита дипломной работы. Структура: тема → цель → методология → результаты → выводы. Академический стиль.",
-    PresentationType.CORP_REPORT: "Корпоративный отчёт. Структура строго по 9 слайдам выше. Резюме → метрики → план vs факт → проблемы → следующий период.",
-    PresentationType.EDUCATIONAL: "Обучающая презентация. Структура: введение → концепции → примеры → практика → резюме.",
-    PresentationType.SALES: "Коммерческое предложение. Структура: боль → решение → преимущества → кейсы → условия → CTA.",
-    PresentationType.CONFERENCE: "Доклад на конференции. Структура строго по 9 слайдам выше. Тезис → контекст → ключевые идеи → доказательства → выводы.",
-    PresentationType.ROADMAP: "Стратегия и роадмап. Структура: текущее состояние → цели → план по кварталам → ресурсы → результаты.",
-    # DOKLAD: реальное значение НЕ читается отсюда — оно веткой считается в
-    # _doklad_type_context() внутри _build_user_prompt() в зависимости от
-    # request.source_type. Запись здесь — просто документированный дефолт
-    # на случай, если кто-то обратится к TYPE_CONTEXTS[DOKLAD] напрямую.
-    PresentationType.DOKLAD: "Доклад. Контекст веткой зависит от source_type — см. _doklad_type_context().",
-}
+# TYPE_CONTEXTS[DOKLAD] — только документированный дефолт: реальный текст для
+# DOKLAD считается в _doklad_type_context() по request.source_type.
+TYPE_CONTEXTS = load_enum_map("type_contexts.yaml", PresentationType)
 
 # ── Жёсткая по-слайдовая структура для типов, где она уже задана ───────────────
 # Для типов, которых здесь нет, используется GENERIC_STRUCTURE_FALLBACK —
@@ -144,45 +60,8 @@ TYPE_CONTEXTS = {
 # (см. Sprint 1, задача про conference/corp_report).
 
 STRUCTURE_BLOCKS: dict[PresentationType, str] = {
-
-    PresentationType.PITCH_DECK: """\
-СТРУКТУРА ПИТЧ-ДЕКА (строго 11 слайдов):
-1. title — название, подзаголовок. ОБЯЗАТЕЛЬНО image_query на английском (например: "modern startup office team" или "technology innovation abstract").
-2. problem — layout="problem", title = РЕАЛЬНЫЙ заголовок проблемы (не "Проблема"), subtitle = одно предложение. ОБЯЗАТЕЛЬНО: image_query на английском для фото слева. metrics: 2-3 цифры с source.
-3. solution — layout="solution", title = РЕАЛЬНЫЙ заголовок решения (не "Решение"), subtitle = одно предложение. ОБЯЗАТЕЛЬНО: image_query для фото справа. bullets: 3 преимущества. metrics: 2-3 результата.
-4. why_now — layout="bullets", title = "Почему сейчас?", subtitle = краткий контекст. bullets: 4 тренда, каждый формат "Название — объяснение в 1-2 предложения".
-5. market — layout="market", title = "Объём рынка", subtitle = методология расчёта. 3 метрики TAM/SAM/SOM с обязательным полем source (источник + расчёт).
-6. biz_model — layout="two_column". title = "Модель монетизации". two_column.left_title = тип модели через запятую (например: "Freemium, Подписка"). left_bullets: СТРОГО массив объектов формата {"text": "Название — Цена", "emphasis": false}. НЕ строки, только объекты. right_text = контекст о модели. БЕЗ юнит-экономики.
-7. traction — layout="metrics", title = "Трекшн", subtitle = контекст. 3 метрики прогресса (от прошлого к настоящему).
-8. competition — layout="competition". СТРОГО ОБЯЗАТЕЛЬНО заполнить competition_table. Ищи реальных конкурентов: прямых (те же функции), косвенных (альтернативные решения), или крупных игроков рынка. Если конкурентов действительно нет — напиши "Нет прямых конкурентов" в one из ячеек и объясни почему в title. МИНИМУМ 5 критериев сравнения. НИКОГДА не пиши "Competitor A/B/C".
-9. team — layout="team", 3-4 члена с gender (male/female), bio обязательно.
-10. roadmap — layout="timeline", 4 этапа + body_text с распределением инвестиций по строкам.
-11. closing — layout="closing", title = "Давайте работать вместе", subtitle = приглашение к диалогу или вопросы, body_text = условия инвестиций или следующий шаг.""",
-
-    PresentationType.CONFERENCE: """\
-СТРУКТУРА ДОКЛАДА НА КОНФЕРЕНЦИИ (строго 9 слайдов):
-1. title — layout="title". Тезис доклада: конкретное, спорное или неожиданное утверждение в заголовке, НЕ просто тема ("Мы теряем 40% инженеров на онбординге" вместо "О найме"). ОБЯЗАТЕЛЬНО image_query на английском.
-2. context — layout="bullets" (или "quote", если есть сильная цитата/факт-затравка). title = формулировка проблемы/контекста. Почему это важно аудитории именно сейчас — 1 предложение в subtitle.
-3. idea1 — layout="bullets". title = формулировка ключевой идеи 1. bullets: 3-4 аргумента.
-4. proof1 — layout="metrics" (реальные цифры с source) или "diagram" (mermaid-схема механизма/процесса) — доказательство к идее 1.
-5. idea2 — layout="bullets". title = формулировка ключевой идеи 2. bullets: 3-4 аргумента.
-6. proof2 — layout="metrics" или "diagram" — доказательство к идее 2 (используй другой вариант, чем в шаге 4, если возможно — не повторяй одинаковый layout дважды подряд без причины).
-7. idea3 — layout="bullets" (либо "two_column" для сравнения "было / стало", "до / после"). Третья, обычно самая практичная, идея доклада.
-8. takeaway — layout="quote". Главный вывод доклада одной фразой в body_text. subtitle = автор/спикер.
-9. closing — layout="closing". Конкретный призыв к действию: что аудитории сделать после доклада (написать, попробовать, задать вопрос в кулуарах).""",
-
-    PresentationType.CORP_REPORT: """\
-СТРУКТУРА КОРПОРАТИВНОГО ОТЧЁТА (строго 9 слайдов):
-1. title — layout="title". Резюме периода одной строкой в заголовке (например: "Q1 2026: выручка +18%, издержки -6%"), НЕ просто "Отчёт за Q1".
-2. kpi — layout="metrics". title = "Ключевые метрики" (или конкретнее). 3 метрики периода, у каждой обязательно trend (рост/падение, знак важен) и source.
-3. plan_vs_fact — layout="two_column". two_column.left_title = "План", right_title = "Факт". left/right_bullets — сопоставимые пункты, расхождения называй прямо, без приукрашивания.
-4. wins — layout="bullets". title = "Достижения" (или конкретнее). bullets: 3-5 пунктов, что сработало за период.
-5. risks — layout="bullets". title = "Проблемы и риски". bullets: 3-5 пунктов, честно и конкретно, без размытых формулировок вроде "есть отдельные сложности".
-6. dynamics — layout="metrics" (операционные показатели, воронка) или "diagram" (mermaid-схема процесса/пайплайна). Доказательства к динамике периода.
-7. next_period — layout="timeline". 3-4 этапа плана на следующий период с датами.
-8. quote — layout="quote". Комментарий руководителя: body_text = прямая цитата, subtitle = имя и должность.
-9. closing — layout="closing". Итог периода и конкретные следующие шаги для получателей отчёта.""",
-
+    ptype: load_text(f"structures/{ptype.value}.txt")
+    for ptype in (PresentationType.PITCH_DECK, PresentationType.CONFERENCE, PresentationType.CORP_REPORT)
 }
 
 # DOKLAD — единственный тип, где даже жёсткая по-слайдовая структура (не
@@ -192,113 +71,11 @@ STRUCTURE_BLOCKS: dict[PresentationType, str] = {
 # (см. _pick_structure_block() ниже и template_engine.DOKLAD_TEMPLATE_BY_SOURCE,
 # где та же развилка определяет ещё и выбор HTML-шаблона).
 
-LAYOUT_CATALOG = """\
-КАТАЛОГ ТИПОВ СЛАЙДОВ — выбирай layout под смысл контента, а не по порядку.
+LAYOUT_CATALOG = load_text("doklad/layout_catalog.txt")
 
-bullets — 3-4 равнозначных пункта. У КАЖДОГО пункта заполни три поля:
-  subtitle — название пункта, 1-3 слова;
-  text — одно информационное предложение с конкретикой: механизмом, следствием, названием или числом;
-  icon — имя иконки из списка ниже, подходящее по смыслу.
-  НЕ используй, если пункты образуют последовательность (тогда diagram) или сравниваются попарно (тогда two_column).
+DOKLAD_NARRATIVE_TOPIC = load_text("doklad/narrative_topic.txt")
 
-metrics — 2-3 показателя. ПРЕДПОЧТИТЕЛЬНО проценты — они рисуются кольцами.
-  У каждого: value (например "44%"), label (2-4 слова), trend (короткое пояснение к цифре).
-  НЕ используй, если у тебя нет реальных цифр. ЗАПРЕЩЕНО выдумывать числа ради этого layout.
-
-two_column — два параллельных блока по теме слайда. Это может быть:
-  • сравнение (до/после, было/стало, в теории/на практике, подход А/подход Б),
-  • ИЛИ два самостоятельных тезиса, раскрывающих разные грани одной темы
-    (например: «что фиксируем» / «кто отвечает», «внутренние причины» / «внешние причины»).
-  Заполни left_title и right_title — название каждого блока по смыслу,
-  и по 3 пункта в left_bullets и right_bullets.
-  right_preferred=true — ТОЛЬКО если это сравнение и правая сторона объективно предпочтительнее.
-  При двух равнозначных тезисах — false.
-  НЕ используй, если содержание не делится на две части естественно — тогда бери bullets.
-
-diagram — процесс, механизм, последовательность шагов.
-  ОБЯЗАТЕЛЬНО mermaid_code, синтаксис graph LR (горизонтально), МАКСИМУМ 6 узлов.
-  Подписи узлов 1-3 слова. body_text — 2-3 предложения, поясняющие логику процесса.
-  НЕ используй, если связи между элементами нет.
-
-quote — сильный тезис доклада, поданный крупно.
-  title — короткая подпись темы. body_text — сам тезис одним предложением.
-  subtitle — одно предложение, поясняющее, почему это так.
-  ЗАПРЕЩЕНО приписывать тезис реальным людям или книгам — это формулировка самого докладчика.
-  Не больше 1 раза за презентацию.
-
-timeline — этапы во времени. 4 этапа, у каждого date (период), title (2-4 слова), description (одно предложение).
-
-image_full — разбор примера с иллюстрацией. Два сопоставленных блока в two_column-полях
-  плюс image_query на английском.
-
-image_hero — когда визуальный образ несёт основную нагрузку.
-  ОБЯЗАТЕЛЬНО image_query на английском, title, body_text (2 предложения) и 2 коротких пункта в bullets.
-
-title — только первый слайд. closing — только последний.
-
-ДОПУСТИМЫЕ ИКОНКИ (поле icon, только из этого списка):
-file-text, list, check, alert-triangle, clock, calendar, users, user, coin,
-chart-bar, target, bulb, search, settings, lock, message-circle, folder,
-arrow-up, arrow-right, help-circle, star, bolt, shield, refresh, link
-
-ПРАВИЛА ВЫБОРА:
-1. НЕ ставь два слайда с одинаковым layout подряд.
-2. НЕ используй один и тот же layout больше 3 раз за презентацию.
-3. Стремись использовать не менее 4 разных layout помимо title и closing —
-   но только там, где содержание это позволяет.
-4. Выбрал layout — заполни ВСЕ его обязательные поля. Слайд с выбранным layout и пустыми полями — грубая ошибка.
-5. Поле title заполняется НА КАЖДОМ слайде конкретной содержательной формулировкой по теме.
-   "Как модель учится на примерах" — верно.
-   "Первая часть темы", "Вторая часть темы", "Ключевые тезисы", "Контекст", пустая строка — ошибка.
-
-ПРИОРИТЕТ ПРАВИЛ: заполняемость важнее разнообразия.
-Если для layout нет реального содержания — НЕ выбирай его,
-даже если из-за этого разнообразие окажется меньше.
-Слайд с выбранным layout и пустыми полями — грубейшая ошибка,
-хуже, чем два похожих layout в одной презентации."""
-
-DOKLAD_NARRATIVE_TOPIC = """\
-СТРУКТУРА УЧЕБНОГО ДОКЛАДА (строго 9 слайдов):
-
-Слайд 1 — layout="title". Тема простыми словами. ОБЯЗАТЕЛЬНО image_query на английском.
-Слайд 8 — выводы: layout="bullets", 3 пункта — что следует из разобранного материала.
-Слайд 9 — layout="closing". Заполни только title="Спасибо за внимание".
-
-Слайды 2-7 раскрывают тему в такой смысловой последовательности.
-Формулируй заголовок каждого слайда по СОДЕРЖАНИЮ, а не по его роли в структуре.
-Layout выбирай САМ по каталогу выше:
-
-2. Где тема проявляется в жизни или практике аудитории.
-3. Первая смысловая часть темы — через логику и бытовую аналогию.
-4. Наглядный пример или механизм к ней.
-5. Вторая смысловая часть темы.
-6. Пример, сопоставление или сильная формулировка ко второй части.
-7. Что обычно понимают неверно — частые заблуждения.
-
-ВАЖНО: аудитория только знакомится с темой. Объясняй через логику и примеры.
-НЕ выдумывай статистику — если реальных данных нет, выбирай layout без чисел.
-Тон — докладчика, который разобрался в теме, а не консультанта, который внедрял процесс.
-НЕ давай советов формата "начните с...", "через месяц проверьте..." — это доклад, а не консалтинг."""
-
-DOKLAD_NARRATIVE_TEXT = """\
-СТРУКТУРА ОТЧЁТНОГО ДОКЛАДА ПО МАТЕРИАЛУ (строго 9 слайдов):
-
-Слайд 1 — layout="title". Резюме работы одной строкой ИЗ материала. ОБЯЗАТЕЛЬНО image_query.
-Слайд 8 — выводы: layout="bullets", 3 пункта из материала.
-Слайд 9 — layout="closing". Заполни только title="Спасибо за внимание".
-
-Слайды 2-7, layout выбирай САМ по каталогу:
-
-2. Какая была задача или цель — из материала.
-3. Что сделано — конкретные шаги СТРОГО из присланного текста.
-4. Результаты — если в материале есть цифры, используй metrics; если нет, опиши словами.
-5. Дополнительные результаты или описанный в материале процесс.
-6. Сложности по ходу работы — честно, без приукрашивания.
-7. Главный вывод или наблюдение.
-
-ВАЖНО: используй строго материал из блока МАТЕРИАЛ как источник фактов.
-НЕ выдумывай данные, цифры и события сверх присланного текста.
-В layout="quote" здесь МОЖНО использовать цитату из материала с указанием источника в subtitle."""
+DOKLAD_NARRATIVE_TEXT = load_text("doklad/narrative_text.txt")
 
 STRUCTURE_BLOCKS_DOKLAD_BY_SOURCE: dict[ContentSourceType, str] = {
     ContentSourceType.TOPIC: LAYOUT_CATALOG + "\n\n" + DOKLAD_NARRATIVE_TOPIC,
@@ -317,29 +94,15 @@ def _pick_structure_block(request: UserRequest) -> str:
     return STRUCTURE_BLOCKS.get(request.presentation_type, GENERIC_STRUCTURE_FALLBACK)
 
 
-GENERIC_STRUCTURE_FALLBACK = (
-    "Явной пошаговой структуры (по слайдам) для этого типа презентации пока нет — "
-    "ориентируйся на \"Контекст по типу\" в пользовательском сообщении ниже. "
-    "Выбирай layout каждого слайда по смыслу его контента "
-    "(problem/solution/bullets/market/metrics/two_column/competition/team/timeline/diagram/quote/image_full), "
-    "НЕ копируй бездумно форму питч-дека."
-)
+GENERIC_STRUCTURE_FALLBACK = load_text("structures/generic_fallback.txt")
 
-AUDIENCE_CONTEXTS = {
-    AudienceType.INVESTORS: "Инвесторы хотят: рынок, бизнес-модель, тракшн, команду. Язык ROI и масштабируемости. Цифры важнее слов.",
-    AudienceType.CLIENTS: "Клиенты хотят: как решает их проблему, каков результат, почему можно доверять. Конкретные кейсы.",
-    AudienceType.STUDENTS: "Академическая аудитория. Строгость, методология, логическая последовательность.",
-    AudienceType.COLLEAGUES: "Коллеги знают контекст. Фокус на сути, решениях, следующих шагах.",
-    AudienceType.MANAGEMENT: "Руководство: краткость и цифры. Выводы сначала, потом детали.",
-    AudienceType.GENERAL: "Широкая аудитория. Простой язык, понятные аналогии.",
-    AudienceType.SCHOOLKIDS: "Простой язык, без жаргона и канцелярита, аналогии из повседневной жизни, короче предложения.",
-    AudienceType.FRIENDS: "Неформальный тон, можно юмор, минимум канцелярита, обращение на 'ты'.",
-}
+AUDIENCE_CONTEXTS = load_enum_map("audience_contexts.yaml", AudienceType)
 
 # Аудитории, для которых DOKLAD+topic-ветка дополнительно усиливает
 # требование к простоте языка (сверх того, что уже даёт AUDIENCE_CONTEXTS
 # само по себе) — см. _doklad_type_context().
 _DOKLAD_SIMPLIFY_AUDIENCES = (AudienceType.SCHOOLKIDS, AudienceType.STUDENTS)
+_DOKLAD_TYPE_CONTEXTS = load_yaml("doklad/type_contexts.yaml")
 
 
 def _doklad_type_context(request: UserRequest) -> str:
@@ -348,149 +111,30 @@ def _doklad_type_context(request: UserRequest) -> str:
     (см. Sprint: "Задача 1. Новый тип DOKLAD с веткой по source_type").
     """
     if request.source_type == ContentSourceType.TOPIC:
-        text = (
-            "Учебный/ознакомительный доклад. Простое объяснение темы для аудитории, "
-            "которая только знакомится с вопросом. Не выдумывай псевдо-исследовательские "
-            "цифры без источника — лучше объяснение через логику и примеры, чем фейковая статистика."
-        )
+        text = _DOKLAD_TYPE_CONTEXTS["topic"]
         if request.audience in _DOKLAD_SIMPLIFY_AUDIENCES:
-            text += (
-                " ОСОБЕННО ВАЖНО для этой аудитории: максимально простой язык, короткие "
-                "предложения, конкретная бытовая аналогия на каждую идею, никакого термина "
-                "без немедленного объяснения простыми словами тут же."
-            )
+            text += _DOKLAD_TYPE_CONTEXTS["topic_simplify_suffix"]
         return text
 
     # TEXT / DOCUMENT / URL — доклад по уже готовому материалу, не с нуля.
-    return (
-        "Отчётный доклад по готовому материалу — НЕ учебный и НЕ питч-дек. "
-        "Используй строго материал из блока МАТЕРИАЛ ниже как источник фактов, "
-        "не выдумывай данные сверх него. Структура отчётная: "
-        "что сделано → результаты → сложности → следующие шаги."
-    )
+    return _DOKLAD_TYPE_CONTEXTS["material"]
 
 
-VOLUME_INSTRUCTIONS: dict[ContentVolume, str] = {
+VOLUME_INSTRUCTIONS: dict[ContentVolume, str] = load_enum_map("volume.yaml", ContentVolume)
 
-    ContentVolume.SHORT: """\
-ОБЪЁМ КОНТЕНТА — краткий. Ориентиры по типам слайдов:
 
-bullets — 3 пункта. Каждый пункт: одно короткое предложение с конкретикой,
-  а не обрывок из 3-4 слов.
-  Плохо: "Помогает избежать ошибок".
-  Хорошо: "Общий словарь терминов убирает большую часть споров на приёмке".
-
-metrics — 2-3 метрики. label: 2-3 слова. trend: короткая фраза.
-  source: одно короткое предложение — откуда цифра.
-
-two_column — по 2-3 пункта в каждой колонке, каждый одним коротким предложением.
-
-diagram — 3-5 узлов в схеме. Подписи узлов: 1-2 слова.
-  body_text под схемой: одно предложение.
-
-quote — одно предложение. Отточенная формулировка, не пересказ слайда.
-
-timeline — 3-4 этапа. title этапа: 2-3 слова. description: одно короткое предложение.
-
-image_full — body_text: 1-2 предложения.
-
-closing — body_text: 1-2 предложения, конкретное действие.
-
-Для ЛЮБОГО слайда: subtitle — одно короткое предложение, не повторяющее title.""",
-
-    ContentVolume.MEDIUM: """\
-ОБЪЁМ КОНТЕНТА — стандартный. Ориентиры по типам слайдов:
-
-bullets — 4 пункта. Каждый пункт: одно законченное предложение
-  формата "Утверждение — объяснение или следствие".
-  Плохо: "Помогает избежать недопонимания".
-  Хорошо: "Общий словарь терминов убирает большую часть споров на приёмке —
-  команда и заказчик перестают понимать одни и те же слова по-разному".
-
-metrics — 3 метрики. label: 2-4 слова. trend: короткая фраза.
-  source: одно предложение — откуда цифра и как посчитана.
-
-two_column — по 3 пункта в каждой колонке, каждый одним предложением.
-
-diagram — 4-6 узлов в схеме. Подписи узлов: 1-3 слова.
-  body_text под схемой: 1-2 предложения, поясняющие связь между элементами.
-
-quote — 1-2 предложения. Отточенная формулировка, а не пересказ содержания слайда.
-
-timeline — 4 этапа. title этапа: 2-4 слова. description: одно предложение.
-
-image_full — body_text: 2-3 предложения.
-
-closing — body_text: 2-3 предложения, конкретное действие.
-
-Для ЛЮБОГО слайда: subtitle — одно предложение, не повторяющее title.""",
-
-    ContentVolume.LONG: """\
-ОБЪЁМ КОНТЕНТА — развёрнутый. Ориентиры по типам слайдов:
-
-bullets — 5 пунктов. Каждый пункт: два предложения — утверждение,
-  затем объяснение, пример или следствие.
-  Плохо: "Помогает избежать недопонимания".
-  Хорошо: "Общий словарь терминов убирает большую часть споров на приёмке.
-  Команда и заказчик перестают понимать одни и те же слова по-разному,
-  а спорные формулировки всплывают до начала работы, а не после сдачи".
-
-metrics — 3-4 метрики. label: 3-5 слов. trend: фраза с пояснением динамики.
-  source: 1-2 предложения — откуда цифра, как посчитана, что из неё следует.
-
-two_column — по 4 пункта в каждой колонке, каждый одним развёрнутым предложением.
-
-diagram — 5-7 узлов в схеме. Подписи узлов: 1-3 слова.
-  body_text под схемой: 2-3 предложения, разбирающие логику процесса.
-
-quote — 2-3 предложения. Развёрнутая мысль, а не пересказ содержания слайда.
-
-timeline — 4-5 этапов. title этапа: 2-4 слова. description: 1-2 предложения.
-
-image_full — body_text: 3-4 предложения.
-
-closing — body_text: 3-4 предложения, конкретное действие и следующий шаг.
-
-Для ЛЮБОГО слайда: subtitle — одно развёрнутое предложение, не повторяющее title.""",
-
-}
+_JSON_SCHEMA = load_text("json_schema.txt")
 
 
 def _get_json_schema() -> str:
-    return """{
-  "meta": {
-    "title": "string", "subtitle": "string|null", "author": "string|null",
-    "company": "string|null", "date": "string|null", "language": "ru|en|uz|kk|es|ar|zh|de",
-    "presentation_type": "pitch_deck|diploma|corp_report|educational|sales|conference|roadmap|doklad",
-    "audience": "investors|clients|students|colleagues|management|general|schoolkids|friends",
-    "color_scheme": "default"
-  },
-  "slides": [{
-    "index": 1,
-    "layout": "title|problem|solution|bullets|market|metrics|two_column|competition|team|timeline|diagram|quote|image_full|image_hero|closing",
-    "title": "string|null", "subtitle": "string|null", "body_text": "string|null",
-    "bullets": [{"text": "string", "subtitle": "string|null", "icon": "string|null (из списка допустимых иконок)", "emphasis": false}],
-    "metrics": [{"value": "string", "label": "string", "trend": "string|null", "source": "string|null"}],
-    "team_members": [{"name": "string", "role": "string", "bio": "string|null", "gender": "male|female"}],
-    "timeline_items": [{"date": "string", "title": "string", "description": "string|null"}],
-    "two_column": {"left_title": "string|null", "left_text": "string|null", "left_bullets": [{"text": "string", "emphasis": false}], "right_title": "string|null", "right_text": "string|null", "right_bullets": [{"text": "string", "emphasis": false}], "right_preferred": false},
-    "competition_table": {
-      "our_name": "string",
-      "competitors": [{"name": "string"}],
-      "features": [{"name": "string", "values": {"CompetitorName": "yes|no|partial text"}}]
-    },
-    "image_query": "string|null (ВСЕГДА на английском)",
-    "mermaid_code": "string|null",
-    "speaker_notes": "string|null"
-  }]
-}"""
+    return _JSON_SCHEMA
 
 
 def _build_user_prompt(request: UserRequest) -> str:
     slide_count = request.slide_count_hint or _default_slide_count(request.presentation_type)
     extra_block = ""
     if request.extra_instructions:
-        extra_block = f"ВАЖНО — используй эти реальные данные:\n{request.extra_instructions}"
+        extra_block = EXTRA_INSTRUCTIONS_BLOCK.substitute(extra_instructions=request.extra_instructions)
 
     source_material_block = ""
     if request.source_type != ContentSourceType.TOPIC and request.raw_text:
@@ -507,7 +151,6 @@ def _build_user_prompt(request: UserRequest) -> str:
         audience=request.audience.value,
         language=request.language,
         slide_count_hint=slide_count,
-        slide_count_instruction=f"Количество слайдов: {slide_count} (строго).",
         extra_instructions_block=extra_block,
         source_material_block=source_material_block,
         type_context=type_context,
@@ -526,73 +169,15 @@ def _build_user_prompt(request: UserRequest) -> str:
 # дешевле и надёжнее полной перегенерации, а если и он не удастся —
 # оставляем слайд как есть (тихо, без падения job'а).
 
+_PATCH_SPECS = load_yaml("patch_instructions.yaml")
 _LAYOUT_PATCH_INSTRUCTIONS: dict[SlideLayout, str] = {
-    SlideLayout.BULLETS: (
-        'Заполни "bullets": 3-4 пункта. У каждого: "text" — информационное '
-        'предложение с конкретикой, "subtitle" — название пункта (1-3 слова), '
-        '"icon" — одна из: file-text, list, check, alert-triangle, clock, calendar, '
-        'users, user, coin, chart-bar, target, bulb, search, settings, lock, '
-        'message-circle, folder, arrow-up, arrow-right, help-circle, star, bolt, '
-        'shield, refresh, link.'
-    ),
-    SlideLayout.WHY_NOW: (
-        'Заполни "bullets": 3-4 пункта, каждый — одно законченное предложение.'
-    ),
-    SlideLayout.METRICS: (
-        'Заполни "metrics": 2-3 показателя. У каждого: "value" (например "44%"), '
-        '"label" (2-4 слова), "trend" (короткое пояснение к цифре). '
-        'Используй правдоподобные для темы цифры, не выдумывай абсурдные значения.'
-    ),
-    SlideLayout.TWO_COLUMN: (
-        'Заполни "two_column": "left_title", "right_title" (название каждой '
-        'стороны сравнения) и по 3 пункта в "left_bullets"/"right_bullets" — '
-        'каждый пункт объект {"text": "..."}.'
-    ),
-    SlideLayout.DIAGRAM: (
-        'Заполни "mermaid_code" — валидный Mermaid, синтаксис "graph LR", '
-        'максимум 6 узлов, подписи узлов 1-3 слова. И "body_text" — '
-        '2-3 предложения, поясняющие логику процесса.'
-    ),
-    SlideLayout.QUOTE: (
-        'Заполни "body_text" — сильный тезис одним предложением. '
-        '"subtitle" — одно предложение, поясняющее, почему это так.'
-    ),
-    SlideLayout.TIMELINE: (
-        'Заполни "timeline_items": 4 этапа. У каждого: "date" (период), '
-        '"title" (2-4 слова), "description" (одно предложение).'
-    ),
-    SlideLayout.IMAGE_FULL: (
-        'Заполни "image_query" (на английском, для поиска фото) и "two_column" '
-        'с двумя сопоставленными блоками: "left_title"/"left_text" и '
-        '"right_title"/"right_text".'
-    ),
-    SlideLayout.IMAGE_HERO: (
-        'Заполни "image_query" (на английском), "body_text" (2 предложения) и '
-        '"bullets" — 2 коротких пункта, каждый объект {"text": "..."}.'
-    ),
-    SlideLayout.TEAM: (
-        'Заполни "team_members": 3-4 члена команды, у каждого "name", "role", '
-        '"gender" (male/female).'
-    ),
-    SlideLayout.COMPETITION: (
-        'Заполни "competition_table": "our_name", "competitors" (реальные '
-        'названия компаний), "features" (минимум 5 критериев сравнения).'
-    ),
+    SlideLayout(key): spec["instruction"] for key, spec in _PATCH_SPECS.items()
 }
 
 _PATCH_JSON_EXAMPLES: dict[SlideLayout, str] = {
-    SlideLayout.BULLETS: '{"bullets": [{"text": "...", "subtitle": "...", "icon": "..."}]}',
-    SlideLayout.WHY_NOW: '{"bullets": [{"text": "..."}]}',
-    SlideLayout.METRICS: '{"metrics": [{"value": "...", "label": "...", "trend": "..."}]}',
-    SlideLayout.TWO_COLUMN: '{"two_column": {"left_title": "...", "right_title": "...", "left_bullets": [{"text": "..."}], "right_bullets": [{"text": "..."}]}}',
-    SlideLayout.DIAGRAM: '{"mermaid_code": "graph LR\\nA[...] --> B[...]", "body_text": "..."}',
-    SlideLayout.QUOTE: '{"body_text": "...", "subtitle": "..."}',
-    SlideLayout.TIMELINE: '{"timeline_items": [{"date": "...", "title": "...", "description": "..."}]}',
-    SlideLayout.IMAGE_FULL: '{"image_query": "...", "two_column": {"left_title": "...", "left_text": "...", "right_title": "...", "right_text": "..."}}',
-    SlideLayout.IMAGE_HERO: '{"image_query": "...", "body_text": "...", "bullets": [{"text": "..."}]}',
-    SlideLayout.TEAM: '{"team_members": [{"name": "...", "role": "...", "gender": "male"}]}',
-    SlideLayout.COMPETITION: '{"competition_table": {"our_name": "...", "competitors": [{"name": "..."}], "features": [{"name": "...", "values": {}}]}}',
+    SlideLayout(key): spec["example"] for key, spec in _PATCH_SPECS.items()
 }
+_PATCH_PROMPT = load_template_map("patch_slide.yaml")
 
 
 # Layout'ы, для которых есть дешёвый локальный путь деградации в bullets
@@ -638,21 +223,19 @@ async def _patch_one_slide(request: UserRequest, slide: Slide) -> Slide:
 
     material_block = ""
     if request.source_type != ContentSourceType.TOPIC and request.raw_text:
-        material_block = f'\nМАТЕРИАЛ (используй как источник фактов):\n{request.raw_text[:3000]}'
+        material_block = _PATCH_PROMPT["material_block"].substitute(raw_text=request.raw_text[:3000])
 
-    system_prompt = f"""\
-Ты дописываешь ОДИН слайд презентации, у которого не хватает содержания.
-Возвращай ТОЛЬКО валидный JSON без пояснений и markdown.
-
-Тема презентации: {request.topic}
-Аудитория: {request.audience.value}
-Язык: {request.language} — весь текст только на этом языке.{material_block}
-
-Этот слайд имеет layout="{slide.layout.value}"{f', заголовок "{slide.title}"' if slide.title else ""}{f', подзаголовок "{slide.subtitle}"' if slide.subtitle else ""}.
-{instruction}
-
-Верни JSON строго такой формы (реальный осмысленный контент по теме, не заглушки):
-{example}"""
+    system_prompt = _PATCH_PROMPT["system"].substitute(
+        topic=request.topic,
+        audience=request.audience.value,
+        language=request.language,
+        material_block=material_block,
+        layout=slide.layout.value,
+        title_part=_PATCH_PROMPT["title_part"].substitute(title=slide.title) if slide.title else "",
+        subtitle_part=_PATCH_PROMPT["subtitle_part"].substitute(subtitle=slide.subtitle) if slide.subtitle else "",
+        instruction=instruction,
+        example=example,
+    )
 
     response = await client.chat.completions.create(
         model=settings.openai_model,
@@ -757,6 +340,7 @@ async def generate_presentation_structure(request: UserRequest) -> PresentationS
         "type": request.presentation_type,
         "language": request.language,
         "model": settings.openai_model,
+        "prompts_version": PROMPTS_VERSION,
     })
 
     response = await client.chat.completions.create(
