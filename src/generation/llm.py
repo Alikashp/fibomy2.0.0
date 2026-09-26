@@ -131,8 +131,25 @@ def _get_json_schema() -> str:
     return _JSON_SCHEMA
 
 
+def _slide_count(request: UserRequest) -> int:
+    return request.slide_count_hint or _default_slide_count(request.presentation_type)
+
+
+# 8000 — бюджет, при котором 9 слайдов доклада перестали обрезаться (см.
+# комментарий у вызова ниже). Для колод длиннее растим пропорционально, не
+# выше потолка ответа gpt-4o (16 384).
+_MAX_TOKENS_BASE = 8000
+_MAX_TOKENS_BASE_SLIDES = 9
+_MAX_TOKENS_CAP = 16000
+
+
+def _max_tokens_for(slide_count: int) -> int:
+    scaled = -(-_MAX_TOKENS_BASE * slide_count // _MAX_TOKENS_BASE_SLIDES)  # округление вверх
+    return min(_MAX_TOKENS_CAP, max(_MAX_TOKENS_BASE, scaled))
+
+
 def _build_user_prompt(request: UserRequest) -> str:
-    slide_count = request.slide_count_hint or _default_slide_count(request.presentation_type)
+    slide_count = _slide_count(request)
     extra_block = ""
     if request.extra_instructions:
         extra_block = EXTRA_INSTRUCTIONS_BLOCK.substitute(extra_instructions=request.extra_instructions)
@@ -342,6 +359,10 @@ async def generate_presentation_structure(request: UserRequest) -> PresentationS
         "language": request.language,
         "model": settings.openai_model,
         "prompts_version": PROMPTS_VERSION,
+        "slide_count_hint": _slide_count(request),
+        "source_type": request.source_type.value,
+        # В промпт пока не передаётся — пишем, чтобы видеть выбор пользователей
+        "source_mode": request.source_mode.value if request.source_mode else None,
     })
 
     response = await client.chat.completions.create(
@@ -352,8 +373,9 @@ async def generate_presentation_structure(request: UserRequest) -> PresentationS
         # т.д.) — в json_object-режиме модель при нехватке бюджета не ломает
         # синтаксис, а тихо обрезает слайды/поля в конце, чтобы закрыть JSON
         # корректно. Из-за этого "строго 9 слайдов" превращалось в 8 без
-        # ошибки парсинга — см. лог с slide_count=8.
-        max_tokens=8000,
+        # ошибки парсинга — см. лог с slide_count=8. Для 12–15 слайдов
+        # бюджет растёт — см. _max_tokens_for.
+        max_tokens=_max_tokens_for(_slide_count(request)),
         response_format={"type": "json_object"},
         messages=[
             {"role": "system", "content": system_prompt},

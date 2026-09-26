@@ -55,6 +55,10 @@ class User(Base):
     # (worker.py), а не заполняются моделью.
     author_name: Mapped[str | None] = mapped_column(String(150))
     author_group: Mapped[str | None] = mapped_column(String(150))
+    # Последний выбор «strict» / «extend» (schemas.presentation.SourceMode) —
+    # отмечается как вариант по умолчанию, когда бот снова спрашивает режим
+    # работы с материалом (main.py). NULL — ещё не выбирал.
+    source_mode: Mapped[str | None] = mapped_column(String(16))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

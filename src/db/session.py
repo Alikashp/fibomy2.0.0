@@ -152,6 +152,12 @@ async def update_user_profile(
     await session.flush()
 
 
+async def update_user_source_mode(session: AsyncSession, user: User, source_mode: str) -> None:
+    """Запоминает выбор режима работы с материалом (strict / extend) — main.py."""
+    user.source_mode = source_mode
+    await session.flush()
+
+
 async def record_presentation(
     session: AsyncSession,
     user: User,

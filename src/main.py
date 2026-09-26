@@ -4,6 +4,7 @@ import sys
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import CommandStart, Command
@@ -23,8 +24,11 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from config import settings
 from generation.prompts import load_template
-from schemas.presentation import PresentationType
-from db.session import init_db, close_db, get_session, get_or_create_user, upgrade_user_plan, update_user_profile
+from schemas.presentation import PresentationType, SourceMode
+from db.session import (
+    init_db, close_db, get_session, get_or_create_user, upgrade_user_plan, update_user_profile,
+    update_user_source_mode,
+)
 from db.models import PlanType
 from generation.uploads import close_uploads, put_upload
 from logging_setup import setup_logging
@@ -197,7 +201,8 @@ MENU_TEXT = "📋 <b>Меню</b>\n\nВыберите действие:"
 HELP_TEXT = (
     "❓ <b>Что умеет Fibonacci AI</b>\n\n"
     "Собираю презентацию в PDF за 60–90 секунд: питч-дек для инвесторов или доклад "
-    "на любую тему — с нуля по названию темы, или строго по вашему готовому тексту/документу.\n\n"
+    "на любую тему — с нуля по названию темы или по вашему готовому тексту/документу "
+    "(только по нему или с дополнением общими знаниями — на ваш выбор).\n\n"
     "Команды:\n"
     "/new — начать новую презентацию\n"
     "/plan — тарифы и лимит бесплатных презентаций\n"
@@ -241,6 +246,23 @@ class OnboardingQuestion:
     choices: list[tuple[str, str]] | None = None  # [(label, value), ...] — только для kind="choice"
     skippable: bool = False               # только для kind="text"
     skip_label: str = "⚡ Пропустить"
+    choices_in_row: bool = False          # все варианты одной строкой (короткие подписи)
+    ask_if: Callable[[dict], bool] | None = None  # None — спрашиваем всегда
+
+
+def _has_material(data: dict) -> bool:
+    return data.get("source_type") in ("text", "document")
+
+
+# Число слайдов доклада. 9 — прежнее фиксированное значение, оно же
+# _default_slide_count(DOKLAD) в llm.py. Границы — UserRequest.slide_count_hint (5–20).
+DOKLAD_SLIDE_COUNTS = (5, 7, 9, 12, 15)
+DOKLAD_DEFAULT_SLIDE_COUNT = 9
+
+SOURCE_MODE_LABELS = {
+    SourceMode.STRICT.value: "📎 Только мой материал",
+    SourceMode.EXTEND.value: "🧠 Дополнить общими знаниями",
+}
 
 
 ONBOARDING_QUESTIONS: dict[PresentationType, list[OnboardingQuestion]] = {
@@ -269,10 +291,33 @@ ONBOARDING_QUESTIONS: dict[PresentationType, list[OnboardingQuestion]] = {
             choices=[("⚡ Кратко", "short"), ("📄 Стандартно", "medium"), ("📚 Подробно", "long")],
         ),
         OnboardingQuestion(
+            key="slide_count",
+            kind="choice",
+            prompt="🔢 <b>Сколько слайдов сделать?</b>\n\n<i>Вместе с титульным и финальным.</i>",
+            choices=[
+                (f"{n} ✓" if n == DOKLAD_DEFAULT_SLIDE_COUNT else str(n), str(n))
+                for n in DOKLAD_SLIDE_COUNTS
+            ],
+            choices_in_row=True,
+        ),
+        OnboardingQuestion(
             key="has_material",
             kind="choice",
-            prompt="📎 <b>У вас есть готовый текст или документ по теме?</b>\n\n<i>Если да — доклад соберём строго по вашему материалу, без выдумывания фактов.</i>",
+            prompt="📎 <b>У вас есть готовый текст или документ по теме?</b>",
             choices=[("🆕 Нет, с нуля по теме", "no"), ("✅ Да, есть", "yes")],
+        ),
+        OnboardingQuestion(
+            key="source_mode",
+            kind="choice",
+            prompt=(
+                "📚 <b>Как работать с вашим материалом?</b>\n\n"
+                "<i>📎 Только мой материал — все факты и числа из вашего текста. "
+                "Если материала мало, слайдов будет меньше выбранного.\n"
+                "🧠 Дополнить общими знаниями — добавим пояснения и контекст, "
+                "но числа, даты и источники — только из вашего материала.</i>"
+            ),
+            choices=[(label, value) for value, label in SOURCE_MODE_LABELS.items()],
+            ask_if=_has_material,
         ),
     ],
 
@@ -631,7 +676,8 @@ async def on_back(call: CallbackQuery, state: FSMContext):
 
     if current == Gen.onboarding.state:
         idx = data.get("onboarding_index", 0)
-        if idx <= 0:
+        prev = _prev_asked_index(_onboarding_questions(data), data, idx)
+        if prev < 0:
             user_plan = await _get_user_plan(call.from_user.id)
             await _edit(
                 "🎨 <b>Выберите цветовую схему</b>\n\n"
@@ -644,8 +690,8 @@ async def on_back(call: CallbackQuery, state: FSMContext):
                 await call.message.edit_reply_markup(reply_markup=None)
             except Exception:
                 pass
-            await state.update_data(onboarding_index=idx - 1)
-            data["onboarding_index"] = idx - 1
+            await state.update_data(onboarding_index=prev)
+            data["onboarding_index"] = prev
             await _ask_onboarding_question(call.message, data, state)
         return
 
@@ -676,21 +722,69 @@ def _onboarding_questions(data: dict) -> list[OnboardingQuestion]:
     return ONBOARDING_QUESTIONS.get(ptype, [])
 
 
+def _is_asked(q: OnboardingQuestion, data: dict) -> bool:
+    return q.ask_if is None or q.ask_if(data)
+
+
+def _prev_asked_index(questions: list[OnboardingQuestion], data: dict, idx: int) -> int:
+    """Индекс предыдущего вопроса, который реально задаётся; -1 — вопросов до idx нет."""
+    idx -= 1
+    while idx >= 0 and not _is_asked(questions[idx], data):
+        idx -= 1
+    return idx
+
+
+async def _get_saved_source_mode(user_id: int) -> str | None:
+    async with get_session() as session:
+        if session:
+            user = await get_or_create_user(session, user_id)
+            return user.source_mode
+    return None
+
+
+async def _save_source_mode(user_id: int, source_mode: str) -> None:
+    async with get_session() as session:
+        if session:
+            user = await get_or_create_user(session, user_id)
+            await update_user_source_mode(session, user, source_mode)
+
+
 async def _ask_onboarding_question(target: Message, data: dict, state: FSMContext) -> None:
     questions = _onboarding_questions(data)
     idx = data.get("onboarding_index", 0)
+
+    # Условные вопросы (ask_if) пропускаем, не показывая
+    skipped = idx
+    while idx < len(questions) and not _is_asked(questions[idx], data):
+        idx += 1
+    if idx != skipped:
+        data["onboarding_index"] = idx
+        await state.update_data(onboarding_index=idx)
 
     if idx >= len(questions):
         await _confirm_and_generate(target, data, state)
         return
 
     q = questions[idx]
+    choices = list(q.choices or [])
+    if q.key == "source_mode":
+        # Прошлый выбор из профиля — первым и с пометкой (ТЗ 3.2).
+        # target — сообщение в личном чате, chat.id = Telegram user id.
+        saved = await _get_saved_source_mode(target.chat.id)
+        if saved in SOURCE_MODE_LABELS:
+            choices.sort(key=lambda c: c[1] != saved)
+            choices = [
+                (f"{label} ✓ как в прошлый раз" if value == saved else label, value)
+                for label, value in choices
+            ]
+
     rows: list[list[InlineKeyboardButton]] = []
     if q.kind == "choice":
-        rows = [
-            [InlineKeyboardButton(text=label, callback_data=f"oq:{q.key}:{value}")]
-            for label, value in (q.choices or [])
+        buttons = [
+            InlineKeyboardButton(text=label, callback_data=f"oq:{q.key}:{value}")
+            for label, value in choices
         ]
+        rows = [buttons] if q.choices_in_row else [[b] for b in buttons]
     elif q.skippable:
         rows = [
             [InlineKeyboardButton(text=q.skip_label, callback_data=f"oq_skip:{q.key}")],
@@ -712,6 +806,17 @@ async def on_onboarding_choice(call: CallbackQuery, state: FSMContext):
     await call.answer()
 
     await state.update_data(**{key: value})
+
+    if key == "has_material" and value == "no":
+        # Пользователь мог прислать материал, вернуться «Назад» и передумать —
+        # старый материал не должен уйти в генерацию.
+        await state.update_data(
+            source_type="topic", raw_text=None, document_ref=None,
+            document_mime_type=None, source_mode=None,
+        )
+    elif key == "source_mode":
+        await _save_source_mode(call.from_user.id, value)
+
     data = await state.get_data()
 
     # DOKLAD: "есть готовый текст/документ?" -> да — уходим за материалом
@@ -982,10 +1087,15 @@ async def _confirm_and_generate(message: Message, data: dict, state: FSMContext)
             watermark = True
 
     extra_line = ""
+    if data.get("slide_count"):
+        extra_line += f"\n• Слайдов: <b>{data['slide_count']}</b>"
     if data.get("brief"):
-        extra_line = "\n• <b>Бриф:</b> добавлен ✓"
-    elif data.get("source_type") in ("text", "document"):
-        extra_line = "\n• <b>Материал:</b> добавлен ✓ (доклад соберём строго по нему)"
+        extra_line += "\n• <b>Бриф:</b> добавлен ✓"
+    elif _has_material(data):
+        if data.get("source_mode") == SourceMode.EXTEND.value:
+            extra_line += "\n• <b>Материал:</b> добавлен ✓ (дополним общими знаниями, числа — только из материала)"
+        else:
+            extra_line += "\n• <b>Материал:</b> добавлен ✓ (доклад соберём только по нему)"
 
     await message.answer(
         f"✅ <b>Создаю презентацию:</b>\n\n"
@@ -1023,15 +1133,20 @@ async def generate_and_send(message: Message, data: dict, watermark: bool = True
     # UserRequest-валидатор требует raw_text сразу, как только source_type
     # != topic, так что собирать полноценный Pydantic-объект здесь, до
     # экстракции, нельзя — тот же капкан, что уже чинили в worker.py.
+    source_type = data.get("source_type") or "topic"
     request_data = {
         "topic": data["topic"],
         "presentation_type": data["presentation_type"],
         "audience": data["audience"],
         "language": data["language"],
         "extra_instructions": extra,
-        "source_type": data.get("source_type") or "topic",
+        "source_type": source_type,
         "raw_text": data.get("raw_text"),
         "content_volume": data.get("content_volume") or "medium",
+        # Раньше число слайдов не передавалось вовсе, и доклад всегда был из 9
+        # (_default_slide_count). None — тип без вопроса о числе слайдов.
+        "slide_count_hint": int(data["slide_count"]) if data.get("slide_count") else None,
+        "source_mode": data.get("source_mode") if source_type != "topic" else None,
     }
 
     job_id = uuid.uuid4().hex[:12]

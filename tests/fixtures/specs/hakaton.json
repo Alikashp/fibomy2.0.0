@@ -1,0 +1,254 @@
+{
+  "meta": {
+    "date": "Q3 2026",
+    "title": "Техническое задание для хакатона",
+    "author": null,
+    "company": null,
+    "audience": "general",
+    "language": "ru",
+    "subtitle": "Обзор и результаты работы",
+    "author_name": null,
+    "author_group": null,
+    "color_scheme": "default",
+    "presentation_type": "doklad"
+  },
+  "slides": [
+    {
+      "index": 1,
+      "title": "Техническое задание для хакатона",
+      "layout": "title",
+      "bullets": [],
+      "metrics": [],
+      "subtitle": "Обзор и результаты работы",
+      "body_text": null,
+      "image_url": null,
+      "two_column": null,
+      "image_query": "hackathon project management",
+      "mermaid_code": null,
+      "team_members": [],
+      "speaker_notes": null,
+      "timeline_items": [],
+      "competition_table": null
+    },
+    {
+      "index": 2,
+      "title": "Актуальность задачи",
+      "layout": "problem",
+      "bullets": [],
+      "metrics": [],
+      "subtitle": "Необходимость автоматизации создания презентаций",
+      "body_text": "Каждую неделю в компании рождаются десятки презентаций. Существующие AI-инструменты хорошо генерируют содержание, но не справляются с дизайном.",
+      "image_url": null,
+      "two_column": null,
+      "image_query": "presentation design challenges",
+      "mermaid_code": null,
+      "team_members": [],
+      "speaker_notes": null,
+      "timeline_items": [],
+      "competition_table": null
+    },
+    {
+      "index": 3,
+      "title": "Описание задачи",
+      "layout": "solution",
+      "bullets": [],
+      "metrics": [],
+      "subtitle": "Цели и функциональность сервиса",
+      "body_text": "Сервис решает три бизнес-задачи, включая парсинг шаблонов и генерацию слайдов. Он также обеспечивает визуализацию и аудит слайдов.",
+      "image_url": null,
+      "two_column": null,
+      "image_query": "presentation automation solution",
+      "mermaid_code": null,
+      "team_members": [],
+      "speaker_notes": null,
+      "timeline_items": [],
+      "competition_table": null
+    },
+    {
+      "index": 4,
+      "title": "Результаты работы",
+      "layout": "metrics",
+      "bullets": [],
+      "metrics": [
+        {
+          "label": "Успешная генерация",
+          "trend": "Сервис генерирует 90% успешных презентаций.",
+          "value": "90%",
+          "source": "Тестирование сервиса, 2026"
+        },
+        {
+          "label": "Время генерации",
+          "trend": "Генерация колоды занимает не более 5 минут.",
+          "value": "5 минут",
+          "source": "Внутренние тесты, 2026"
+        },
+        {
+          "label": "Варианты презентации",
+          "trend": "Каждый шаблон генерирует 3 варианта презентации.",
+          "value": "3 варианта",
+          "source": "Техническое задание, 2026"
+        }
+      ],
+      "subtitle": "Эффективность сервиса",
+      "body_text": null,
+      "image_url": null,
+      "two_column": null,
+      "image_query": null,
+      "mermaid_code": null,
+      "team_members": [],
+      "speaker_notes": null,
+      "timeline_items": [],
+      "competition_table": null
+    },
+    {
+      "index": 5,
+      "title": null,
+      "layout": "bullets",
+      "bullets": [
+        {
+          "icon": "file-text",
+          "text": "Сервис автоматически анализирует и распознает элементы шаблона, что ускоряет процесс создания презентаций.",
+          "emphasis": false,
+          "subtitle": "Парсинг шаблона"
+        },
+        {
+          "icon": "list",
+          "text": "Генерация структуры слайдов на основе брифа позволяет избежать ручного распределения контента.",
+          "emphasis": false,
+          "subtitle": "Автоматическая структура"
+        },
+        {
+          "icon": "chart-bar",
+          "text": "Контекстуальная визуализация помогает лучше донести информацию до аудитории, используя графики и диаграммы.",
+          "emphasis": false,
+          "subtitle": "Визуализация данных"
+        },
+        {
+          "icon": "check",
+          "text": "Аудит слайдов обеспечивает высокое качество, позволяя пользователям выявлять и исправлять артефакты.",
+          "emphasis": false,
+          "subtitle": "Контроль качества"
+        }
+      ],
+      "metrics": [],
+      "subtitle": null,
+      "body_text": null,
+      "image_url": null,
+      "two_column": null,
+      "image_query": null,
+      "mermaid_code": null,
+      "team_members": [],
+      "speaker_notes": null,
+      "timeline_items": [],
+      "competition_table": null
+    },
+    {
+      "index": 6,
+      "title": "Главный вывод",
+      "layout": "quote",
+      "bullets": [],
+      "metrics": [],
+      "subtitle": "Это позволяет сократить время на подготовку и улучшить качество итогового продукта.",
+      "body_text": "Автоматизация создания презентаций значительно ускоряет рабочий процесс.",
+      "image_url": null,
+      "two_column": null,
+      "image_query": null,
+      "mermaid_code": null,
+      "team_members": [],
+      "speaker_notes": null,
+      "timeline_items": [],
+      "competition_table": null
+    },
+    {
+      "index": 7,
+      "title": "Следующие шаги",
+      "layout": "timeline",
+      "bullets": [],
+      "metrics": [],
+      "subtitle": "План действий на будущее",
+      "body_text": null,
+      "image_url": null,
+      "two_column": null,
+      "image_query": null,
+      "mermaid_code": null,
+      "team_members": [],
+      "speaker_notes": null,
+      "timeline_items": [
+        {
+          "date": "Q4 2026",
+          "title": "Тестирование сервиса",
+          "description": "Проведение пилотного тестирования продукта."
+        },
+        {
+          "date": "Q1 2027",
+          "title": "Сбор отзывов",
+          "description": "Анализ обратной связи от пользователей для улучшения сервиса."
+        },
+        {
+          "date": "Q2 2027",
+          "title": "Внедрение решения",
+          "description": "Подготовка к внедрению в бизнес-процессы компании."
+        },
+        {
+          "date": "Q3 2027",
+          "title": "Расширение функционала",
+          "description": "Добавление новых функций на основании полученных отзывов."
+        }
+      ],
+      "competition_table": null
+    },
+    {
+      "index": 8,
+      "title": "Выводы",
+      "layout": "bullets",
+      "bullets": [
+        {
+          "icon": null,
+          "text": "Сервис успешно демонстрирует высокую степень автоматизации.",
+          "emphasis": false,
+          "subtitle": null
+        },
+        {
+          "icon": null,
+          "text": "Генерация презентаций осуществляется в рекордно короткие сроки.",
+          "emphasis": false,
+          "subtitle": null
+        },
+        {
+          "icon": null,
+          "text": "Качество итоговых презентаций соответствует корпоративным стандартам.",
+          "emphasis": false,
+          "subtitle": null
+        }
+      ],
+      "metrics": [],
+      "subtitle": "Основные достижения и результаты",
+      "body_text": null,
+      "image_url": null,
+      "two_column": null,
+      "image_query": null,
+      "mermaid_code": null,
+      "team_members": [],
+      "speaker_notes": null,
+      "timeline_items": [],
+      "competition_table": null
+    },
+    {
+      "index": 9,
+      "title": "Спасибо за внимание",
+      "layout": "closing",
+      "bullets": [],
+      "metrics": [],
+      "subtitle": null,
+      "body_text": "Мы открыты к вопросам и обсуждениям по представленному проекту.",
+      "image_url": null,
+      "two_column": null,
+      "image_query": null,
+      "mermaid_code": null,
+      "team_members": [],
+      "speaker_notes": null,
+      "timeline_items": [],
+      "competition_table": null
+    }
+  ]
+}

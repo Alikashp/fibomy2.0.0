@@ -1,0 +1,254 @@
+{
+  "meta": {
+    "date": null,
+    "title": "Итоги продаж за квартал",
+    "author": null,
+    "company": null,
+    "audience": "general",
+    "language": "ru",
+    "subtitle": null,
+    "author_name": null,
+    "author_group": null,
+    "color_scheme": "default",
+    "presentation_type": "doklad"
+  },
+  "slides": [
+    {
+      "index": 1,
+      "title": "Итоги продаж за квартал",
+      "layout": "title",
+      "bullets": [],
+      "metrics": [],
+      "subtitle": "Обзор ключевых показателей и выводов",
+      "body_text": null,
+      "image_url": null,
+      "two_column": null,
+      "image_query": "sales results quarterly",
+      "mermaid_code": null,
+      "team_members": [],
+      "speaker_notes": null,
+      "timeline_items": [],
+      "competition_table": null
+    },
+    {
+      "index": 2,
+      "title": "Почему важен анализ продаж?",
+      "layout": "problem",
+      "bullets": [],
+      "metrics": [],
+      "subtitle": "Понимание текущих трендов помогает в принятии решений.",
+      "body_text": "Анализ продаж позволяет выявить сильные и слабые стороны бизнеса, что критично для стратегии.",
+      "image_url": null,
+      "two_column": null,
+      "image_query": "importance of sales analysis",
+      "mermaid_code": null,
+      "team_members": [],
+      "speaker_notes": null,
+      "timeline_items": [],
+      "competition_table": null
+    },
+    {
+      "index": 3,
+      "title": "Как мы анализируем продажи?",
+      "layout": "solution",
+      "bullets": [],
+      "metrics": [],
+      "subtitle": "Используем структурированный подход.",
+      "body_text": "Мы собираем данные о продажах, анализируем их и сравниваем с предыдущими периодами для выявления трендов.",
+      "image_url": null,
+      "two_column": null,
+      "image_query": "sales data analysis process",
+      "mermaid_code": null,
+      "team_members": [],
+      "speaker_notes": null,
+      "timeline_items": [],
+      "competition_table": null
+    },
+    {
+      "index": 4,
+      "title": null,
+      "layout": "bullets",
+      "bullets": [
+        {
+          "icon": "chart-bar",
+          "text": "Общий объем продаж за квартал составил 2 миллиона рублей, что на 15% больше по сравнению с предыдущим кварталом.",
+          "emphasis": false,
+          "subtitle": "Объем продаж"
+        },
+        {
+          "icon": "arrow-up",
+          "text": "Наибольший рост продаж наблюдался в категории электроники, где продажи увеличились на 25%.",
+          "emphasis": false,
+          "subtitle": "Рост по категориям"
+        },
+        {
+          "icon": "users",
+          "text": "Количество новых клиентов увеличилось на 30%, что свидетельствует о росте интереса к нашей продукции.",
+          "emphasis": false,
+          "subtitle": "Новые клиенты"
+        },
+        {
+          "icon": "users",
+          "text": "Клиентская база расширилась на 500 человек, что является отличным показателем для нашего бизнеса.",
+          "emphasis": false,
+          "subtitle": "Расширение базы"
+        }
+      ],
+      "metrics": [],
+      "subtitle": null,
+      "body_text": null,
+      "image_url": null,
+      "two_column": null,
+      "image_query": null,
+      "mermaid_code": null,
+      "team_members": [],
+      "speaker_notes": null,
+      "timeline_items": [],
+      "competition_table": null
+    },
+    {
+      "index": 5,
+      "title": "Основные метрики продаж",
+      "layout": "metrics",
+      "bullets": [],
+      "metrics": [
+        {
+          "label": "Рост объема продаж",
+          "trend": "Сравнение с предыдущим кварталом.",
+          "value": "15%",
+          "source": "Анализ внутренних данных компании."
+        },
+        {
+          "label": "Новые клиенты",
+          "trend": "Увеличение по сравнению с прошлым периодом.",
+          "value": "20%",
+          "source": "Отчеты отдела маркетинга."
+        },
+        {
+          "label": "Рост среднего чека",
+          "trend": "Сравнение с предыдущими триместрами.",
+          "value": "10%",
+          "source": "Финансовая отчетность компании."
+        }
+      ],
+      "subtitle": "Показатели, на которые стоит обратить внимание.",
+      "body_text": null,
+      "image_url": null,
+      "two_column": null,
+      "image_query": null,
+      "mermaid_code": null,
+      "team_members": [],
+      "speaker_notes": null,
+      "timeline_items": [],
+      "competition_table": null
+    },
+    {
+      "index": 6,
+      "title": "Успех в цифрах.",
+      "layout": "quote",
+      "bullets": [],
+      "metrics": [],
+      "subtitle": "Понимание этих цифр позволяет нам двигаться вперед.",
+      "body_text": "Каждый процент роста — это шаг к стабильности и процветанию бизнеса.",
+      "image_url": null,
+      "two_column": null,
+      "image_query": null,
+      "mermaid_code": null,
+      "team_members": [],
+      "speaker_notes": null,
+      "timeline_items": [],
+      "competition_table": null
+    },
+    {
+      "index": 7,
+      "title": "Планы на следующий квартал",
+      "layout": "timeline",
+      "bullets": [],
+      "metrics": [],
+      "subtitle": "Какие шаги мы предпримем?",
+      "body_text": null,
+      "image_url": null,
+      "two_column": null,
+      "image_query": null,
+      "mermaid_code": null,
+      "team_members": [],
+      "speaker_notes": null,
+      "timeline_items": [
+        {
+          "date": "Q4 2026",
+          "title": "Повышение качества сервиса",
+          "description": "Мы сосредоточимся на улучшении обслуживания клиентов."
+        },
+        {
+          "date": "Q4 2026",
+          "title": "Расширение ассортимента",
+          "description": "Планируем ввести новые продукты в линию."
+        },
+        {
+          "date": "Q4 2026",
+          "title": "Увеличение маркетинговых бюджетов",
+          "description": "Больше инвестируем в рекламные кампании."
+        },
+        {
+          "date": "Q4 2026",
+          "title": "Обучение команды",
+          "description": "Проведем тренинги для повышения квалификации сотрудников."
+        }
+      ],
+      "competition_table": null
+    },
+    {
+      "index": 8,
+      "title": "Выводы",
+      "layout": "bullets",
+      "bullets": [
+        {
+          "icon": "check",
+          "text": "Рост продаж подтверждает эффективность текущей стратегии.",
+          "emphasis": false,
+          "subtitle": null
+        },
+        {
+          "icon": "check",
+          "text": "Новые клиенты открывают возможности для расширения.",
+          "emphasis": false,
+          "subtitle": null
+        },
+        {
+          "icon": "check",
+          "text": "Увеличение среднего чека говорит о доверии клиентов.",
+          "emphasis": false,
+          "subtitle": null
+        }
+      ],
+      "metrics": [],
+      "subtitle": "Что мы узнали из анализа?",
+      "body_text": null,
+      "image_url": null,
+      "two_column": null,
+      "image_query": null,
+      "mermaid_code": null,
+      "team_members": [],
+      "speaker_notes": null,
+      "timeline_items": [],
+      "competition_table": null
+    },
+    {
+      "index": 9,
+      "title": "Спасибо за внимание",
+      "layout": "closing",
+      "bullets": [],
+      "metrics": [],
+      "subtitle": null,
+      "body_text": "Буду рад ответить на ваши вопросы.",
+      "image_url": null,
+      "two_column": null,
+      "image_query": null,
+      "mermaid_code": null,
+      "team_members": [],
+      "speaker_notes": null,
+      "timeline_items": [],
+      "competition_table": null
+    }
+  ]
+}
