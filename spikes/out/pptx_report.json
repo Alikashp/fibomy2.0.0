@@ -1,0 +1,104 @@
+{
+  "pptx": "spike_deck.pptx",
+  "pptx_kb": 96.1,
+  "pdf_kb": 94.1,
+  "libreoffice_convert_sec": [
+    1.5,
+    1.42,
+    1.62
+  ],
+  "libreoffice_convert_median_sec": 1.5,
+  "libreoffice_convert_20_slides_sec": [
+    1.97,
+    2.06,
+    1.84
+  ],
+  "slides": [
+    {
+      "slide": 1,
+      "objects": {
+        "text": 7,
+        "chart": 1,
+        "shape": 1
+      },
+      "out_of_bounds": 0,
+      "autofit_on": 0
+    },
+    {
+      "slide": 2,
+      "objects": {
+        "text": 4,
+        "table": 1
+      },
+      "out_of_bounds": 0,
+      "autofit_on": 0
+    },
+    {
+      "slide": 3,
+      "objects": {
+        "text": 9,
+        "shape": 6,
+        "picture": 3
+      },
+      "out_of_bounds": 0,
+      "autofit_on": 0
+    },
+    {
+      "slide": 4,
+      "objects": {
+        "text": 5,
+        "chart": 1
+      },
+      "out_of_bounds": 0,
+      "autofit_on": 0
+    },
+    {
+      "slide": 5,
+      "objects": {
+        "text": 11,
+        "shape": 4
+      },
+      "out_of_bounds": 0,
+      "autofit_on": 0
+    }
+  ],
+  "pdf_fonts": {
+    "1": [
+      "LiberationSans",
+      "LiberationSans-Bold",
+      "NotoSans-Bold",
+      "NotoSans-Regular"
+    ],
+    "2": [
+      "LiberationSans",
+      "LiberationSans-Bold",
+      "NotoSans-Bold",
+      "NotoSans-Regular"
+    ],
+    "3": [
+      "LiberationSans",
+      "LiberationSans-Bold",
+      "NotoSans-Bold",
+      "NotoSans-Regular"
+    ],
+    "4": [
+      "LiberationSans",
+      "LiberationSans-Bold",
+      "NotoSans-Bold",
+      "NotoSans-Regular"
+    ],
+    "5": [
+      "LiberationSans",
+      "LiberationSans-Bold",
+      "NotoSans-Bold",
+      "NotoSans-Regular"
+    ]
+  },
+  "previews": [
+    "previews/spike_deck-01.png",
+    "previews/spike_deck-02.png",
+    "previews/spike_deck-03.png",
+    "previews/spike_deck-04.png",
+    "previews/spike_deck-05.png"
+  ]
+}
