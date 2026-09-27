@@ -38,6 +38,13 @@ class ContentSourceType(str, Enum):
     URL      = "url"
 
 
+class SourceMode(str, Enum):
+    """Как обращаться с материалом пользователя (ТЗ 3.2, 3.3.3).
+    Имеет смысл только при source_type != TOPIC."""
+    STRICT = "strict"   # только материал; слайдов не больше выбранного
+    EXTEND = "extend"   # материал + общие знания без чисел, дат и источников
+
+
 class SlideLayout(str, Enum):
     TITLE        = "title"
     PROBLEM      = "problem"
@@ -281,9 +288,16 @@ class UserRequest(BaseModel):
     source_type: ContentSourceType = ContentSourceType.TOPIC
     raw_text: Optional[str] = Field(None, max_length=15000)
     content_volume: ContentVolume = ContentVolume.MEDIUM
+    # Выбор пользователя «только мой материал» / «дополнить общими знаниями».
+    # None — не задан (режим «по теме» или задача из очереди до деплоя).
+    # В промпт пока не передаётся.
+    source_mode: Optional[SourceMode] = None
 
     @model_validator(mode="after")
     def validate_raw_text(self):
         if self.source_type != ContentSourceType.TOPIC and not (self.raw_text and self.raw_text.strip()):
             raise ValueError("raw_text обязателен, если source_type != topic")
+        if self.source_type == ContentSourceType.TOPIC:
+            # Без материала режим не имеет смысла — не тащим его дальше
+            self.source_mode = None
         return self

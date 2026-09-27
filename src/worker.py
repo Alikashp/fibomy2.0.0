@@ -133,7 +133,7 @@ async def generate_presentation_job(
             # Диагностика написана прямо в тексте сообщения — это осталось с
             # тех пор, когда логи теряли extra={...}. Теперь логи JSON и extra
             # печатаются (logging_setup), но текст оставлен как есть.
-            expected_count = _default_slide_count(request.presentation_type)
+            expected_count = request.slide_count_hint or _default_slide_count(request.presentation_type)
             if presentation.slide_count != expected_count:
                 logger.warning(
                     f"DOKLAD job={job_id}: LLM returned {presentation.slide_count} slides, "

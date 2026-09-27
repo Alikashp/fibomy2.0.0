@@ -1,0 +1,298 @@
+{
+  "meta": {
+    "date": "Q3 2026",
+    "title": "Итоги продаж за квартал",
+    "author": null,
+    "company": null,
+    "audience": "general",
+    "language": "ru",
+    "subtitle": "Отчёт о результатах сети кофеен «Северный кофе»",
+    "author_name": null,
+    "author_group": null,
+    "color_scheme": "default",
+    "presentation_type": "doklad"
+  },
+  "slides": [
+    {
+      "index": 1,
+      "title": "Итоги продаж за квартал",
+      "layout": "title",
+      "bullets": [],
+      "metrics": [],
+      "subtitle": "Отчёт о результатах сети кофеен «Северный кофе»",
+      "body_text": null,
+      "image_url": null,
+      "two_column": null,
+      "image_query": "coffee shop sales report",
+      "mermaid_code": null,
+      "team_members": [],
+      "speaker_notes": null,
+      "timeline_items": [],
+      "competition_table": null
+    },
+    {
+      "index": 2,
+      "title": "Общая динамика",
+      "layout": "bullets",
+      "bullets": [
+        {
+          "icon": "chart-bar",
+          "text": "Квартал закрыт с ростом выручки — основной вклад дал сентябрь.",
+          "emphasis": false,
+          "subtitle": "Рост выручки"
+        },
+        {
+          "icon": "users",
+          "text": "Трафик заметно вырос после возвращения студентов — открытие новой точки увеличило число гостей.",
+          "emphasis": false,
+          "subtitle": "Рост трафика"
+        },
+        {
+          "icon": "coin",
+          "text": "Средний чек вырос медленнее выручки — рост обеспечен прежде всего числом гостей.",
+          "emphasis": false,
+          "subtitle": "Средний чек"
+        },
+        {
+          "icon": "file-text",
+          "text": "Общая выручка за квартал составила 47,3 млн руб. — это результат увеличения потока клиентов.",
+          "emphasis": false,
+          "subtitle": "Выручка квартала"
+        }
+      ],
+      "metrics": [],
+      "subtitle": "Рост выручки по сравнению с прошлым годом",
+      "body_text": null,
+      "image_url": null,
+      "two_column": null,
+      "image_query": null,
+      "mermaid_code": null,
+      "team_members": [],
+      "speaker_notes": null,
+      "timeline_items": [],
+      "competition_table": null
+    },
+    {
+      "index": 3,
+      "title": "Каналы продаж",
+      "layout": "metrics",
+      "bullets": [],
+      "metrics": [
+        {
+          "label": "Продажи в зале",
+          "trend": "Рост на 8% к III кв. 2025",
+          "value": "65%",
+          "source": "Отчет сети кофеен"
+        },
+        {
+          "label": "Доставка",
+          "trend": "Самый быстрорастущий канал",
+          "value": "18%",
+          "source": "Отчет сети кофеен"
+        },
+        {
+          "label": "Предзаказ в приложении",
+          "trend": "Новый канал",
+          "value": "10%",
+          "source": "Отчет сети кофеен"
+        }
+      ],
+      "subtitle": "Разбивка выручки по каналам",
+      "body_text": null,
+      "image_url": null,
+      "two_column": null,
+      "image_query": null,
+      "mermaid_code": null,
+      "team_members": [],
+      "speaker_notes": null,
+      "timeline_items": [],
+      "competition_table": null
+    },
+    {
+      "index": 4,
+      "title": null,
+      "layout": "bullets",
+      "bullets": [
+        {
+          "icon": "chart-bar",
+          "text": "Выручка за III квартал составила 47,3 млн руб., что на 8% больше, чем в прошлом году.",
+          "emphasis": false,
+          "subtitle": "Выручка"
+        },
+        {
+          "icon": "arrow-up",
+          "text": "Доставка показала рост на 41%, став вторым по значимости каналом продаж.",
+          "emphasis": false,
+          "subtitle": "Доставка"
+        },
+        {
+          "icon": "users",
+          "text": "Санкт-Петербург лидирует по выручке на одну точку, выполнив план на 112%.",
+          "emphasis": false,
+          "subtitle": "Города"
+        },
+        {
+          "icon": "bulb",
+          "text": "Запуск программы лояльности в IV квартале для удержания клиентов.",
+          "emphasis": false,
+          "subtitle": "Программа лояльности"
+        }
+      ],
+      "metrics": [],
+      "subtitle": null,
+      "body_text": null,
+      "image_url": null,
+      "two_column": null,
+      "image_query": null,
+      "mermaid_code": null,
+      "team_members": [],
+      "speaker_notes": null,
+      "timeline_items": [],
+      "competition_table": null
+    },
+    {
+      "index": 5,
+      "title": "Выводы и планы",
+      "layout": "bullets",
+      "bullets": [
+        {
+          "icon": "settings",
+          "text": "Запускается программа лояльности в приложении — это поможет удержать гостей.",
+          "emphasis": false,
+          "subtitle": "Программа лояльности"
+        },
+        {
+          "icon": "folder",
+          "text": "Открытие двух новых точек в Санкт-Петербурге — это увеличит охват.",
+          "emphasis": false,
+          "subtitle": "Новые точки"
+        },
+        {
+          "icon": "message-circle",
+          "text": "Разработка нового предложения для корпоративных клиентов — это поможет вернуть клиентов.",
+          "emphasis": false,
+          "subtitle": "Корпоративные предложения"
+        }
+      ],
+      "metrics": [],
+      "subtitle": "Стратегия на IV квартал",
+      "body_text": null,
+      "image_url": null,
+      "two_column": null,
+      "image_query": null,
+      "mermaid_code": null,
+      "team_members": [],
+      "speaker_notes": null,
+      "timeline_items": [],
+      "competition_table": null
+    },
+    {
+      "index": 6,
+      "title": "Ключевой вывод",
+      "layout": "quote",
+      "bullets": [],
+      "metrics": [],
+      "subtitle": "Эти каналы требуют дальнейшего развития.",
+      "body_text": "Рост квартала обеспечен трафиком и доставкой.",
+      "image_url": null,
+      "two_column": null,
+      "image_query": null,
+      "mermaid_code": null,
+      "team_members": [],
+      "speaker_notes": null,
+      "timeline_items": [],
+      "competition_table": null
+    },
+    {
+      "index": 7,
+      "title": "Планы на IV квартал",
+      "layout": "timeline",
+      "bullets": [],
+      "metrics": [],
+      "subtitle": "Основные этапы работы",
+      "body_text": null,
+      "image_url": null,
+      "two_column": null,
+      "image_query": null,
+      "mermaid_code": null,
+      "team_members": [],
+      "speaker_notes": null,
+      "timeline_items": [
+        {
+          "date": "Октябрь 2026",
+          "title": "Запуск программы лояльности",
+          "description": "Программа будет активирована в приложении."
+        },
+        {
+          "date": "Ноябрь 2026",
+          "title": "Открытие новых точек",
+          "description": "Две новые точки будут запущены в Санкт-Петербурге."
+        },
+        {
+          "date": "Декабрь 2026",
+          "title": "Пересмотр условий",
+          "description": "Будут разработаны новые предложения для корпоративных клиентов."
+        },
+        {
+          "date": "Конец декабря 2026",
+          "title": "Анализ результатов",
+          "description": "Оценка эффективности всех новых инициатив."
+        }
+      ],
+      "competition_table": null
+    },
+    {
+      "index": 8,
+      "title": "Итоги работы",
+      "layout": "bullets",
+      "bullets": [
+        {
+          "icon": "chart-bar",
+          "text": "Квартал завершен с положительной динамикой — выручка значительно возросла.",
+          "emphasis": false,
+          "subtitle": "Рост выручки"
+        },
+        {
+          "icon": "arrow-up",
+          "text": "Каналы доставки и предзаказа показали рост — важные направления для развития.",
+          "emphasis": false,
+          "subtitle": "Развитие каналов"
+        },
+        {
+          "icon": "alert-triangle",
+          "text": "Необходимость улучшения корпоративного канала — требуется новое предложение.",
+          "emphasis": false,
+          "subtitle": "Корпоративные заказы"
+        }
+      ],
+      "metrics": [],
+      "subtitle": "Краткое резюме квартала",
+      "body_text": null,
+      "image_url": null,
+      "two_column": null,
+      "image_query": null,
+      "mermaid_code": null,
+      "team_members": [],
+      "speaker_notes": null,
+      "timeline_items": [],
+      "competition_table": null
+    },
+    {
+      "index": 9,
+      "title": "Спасибо за внимание",
+      "layout": "closing",
+      "bullets": [],
+      "metrics": [],
+      "subtitle": null,
+      "body_text": "Будем рады ответить на ваши вопросы и обсудить дальнейшие шаги.",
+      "image_url": null,
+      "two_column": null,
+      "image_query": null,
+      "mermaid_code": null,
+      "team_members": [],
+      "speaker_notes": null,
+      "timeline_items": [],
+      "competition_table": null
+    }
+  ]
+}
