@@ -41,7 +41,7 @@ Fibonacci AI — Telegram-бот, который по теме, тексту и�
 
 ## Быстрые факты
 
-- Код: `src/`. Бот — `src/main.py`, воркер — `src/worker.py` (ARQ), генерация — `src/generation/`, схемы — `src/schemas/`, шаблоны — `src/templates/<тип>/template.html`.
+- Код: `src/`. Бот — `src/main.py` (тексты и клавиатуры диалога со сводкой — `src/dialog.py`), воркер — `src/worker.py` (ARQ), генерация — `src/generation/`, схемы — `src/schemas/`, шаблоны — `src/templates/<тип>/template.html`.
 - Бот и воркер — два отдельных сервиса Railway из одного Docker-образа. Бот — `railway.toml` (CMD из `Dockerfile`), воркер — `railway.worker.toml` (`sh -c "cd src && arq worker.WorkerSettings"`). Все переменные окружения — в `.env.example`, читаются только через `src/config.py`.
 - CI — GitHub Actions: `.github/workflows/tests.yml` (юнит-тесты, снимок промптов относительно базы, `check_case.py` на `tests/fixtures/specs/`; без ключей) и `.github/workflows/golden.yml` (реальные генерации golden-корпуса через `tests/golden/run_golden.py`, комментарий в PR, артефакт `golden-decks`; нужен секрет `OPENAI_API_KEY`).
 - Параметры запроса и цены моделей LLM — `prompts/models.yaml` (код — `src/generation/llm_models.py`). Модель — `OPENAI_MODEL`, уровень рассуждений — `OPENAI_REASONING_EFFORT`.

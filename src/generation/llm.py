@@ -534,8 +534,8 @@ async def postprocess_presentation(request: UserRequest, presentation: Presentat
     presentation = postprocess.timelines_without_dates_to_bullets(presentation)
     presentation = await _patch_empty_slides(request, presentation)
     presentation = await _patch_missing_titles(request, presentation)
-    if _is_doklad(request):
-        # У питч-дека source по-прежнему пишет модель (расчёт TAM/SAM/SOM)
+    # Источник чисел модель не пишет — его и сноску ставит код (ТЗ 3.3.3, D-025)
+    if _is_doklad(request) or request.presentation_type == PresentationType.PITCH_DECK:
         presentation = postprocess.assign_sources(presentation, request)
     return presentation
 

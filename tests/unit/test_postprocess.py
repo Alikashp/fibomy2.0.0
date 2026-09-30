@@ -154,6 +154,15 @@ class AssignSources(unittest.TestCase):
         self.assertEqual([s.footnote for s in p.slides], [
             None, postprocess.ESTIMATE_FOOTNOTE, None, postprocess.ESTIMATE_FOOTNOTE, None])
 
+    def test_pitch_topic_source_by_code(self):
+        """Питч-дек по теме: источник модели стирается, под карточкой пусто, сноска внизу слайда."""
+        slides = [{"index": 0, "layout": "market", "title": "Объём рынка", "metrics": [
+            {"value": "$9B", "label": "TAM", "trend": "весь рынок", "source": "Некое исследование, 2024"}]}]
+        req = UserRequest(topic="Аренда инструмента", presentation_type="pitch_deck", audience="investors")
+        p = postprocess.assign_sources(_p(slides, "pitch_deck"), req)
+        self.assertIsNone(p.slides[1].metrics[0].source)
+        self.assertEqual(p.slides[1].footnote, postprocess.ESTIMATE_FOOTNOTE)
+
 
 if __name__ == "__main__":
     unittest.main()

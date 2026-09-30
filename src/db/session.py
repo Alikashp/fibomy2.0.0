@@ -158,6 +158,23 @@ async def update_user_source_mode(session: AsyncSession, user: User, source_mode
     await session.flush()
 
 
+_LAST_CHOICE_FIELDS = ("last_language", "last_slide_count", "last_audience", "last_color_scheme", "source_mode")
+
+
+async def update_user_last_choices(session: AsyncSession, user: User, choices: dict) -> None:
+    """Сохраняет параметры сводки, с которыми пользователь запустил генерацию
+    (dialog.last_choices). Ключи вне списка и значения None пропускаются."""
+    for key in _LAST_CHOICE_FIELDS:
+        if choices.get(key) is not None:
+            setattr(user, key, choices[key])
+    await session.flush()
+
+
+def user_last_choices(user: User) -> dict:
+    """Прошлый выбор пользователя для dialog.default_params."""
+    return {key: getattr(user, key) for key in _LAST_CHOICE_FIELDS}
+
+
 async def record_presentation(
     session: AsyncSession,
     user: User,

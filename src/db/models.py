@@ -56,9 +56,15 @@ class User(Base):
     author_name: Mapped[str | None] = mapped_column(String(150))
     author_group: Mapped[str | None] = mapped_column(String(150))
     # Последний выбор «strict» / «extend» (schemas.presentation.SourceMode) —
-    # отмечается как вариант по умолчанию, когда бот снова спрашивает режим
-    # работы с материалом (main.py). NULL — ещё не выбирал.
+    # подставляется в сводку по умолчанию, если приложен материал (dialog.py).
+    # NULL — ещё не выбирал.
     source_mode: Mapped[str | None] = mapped_column(String(16))
+    # Последний выбор в сводке перед генерацией (main.py, dialog.py) — подставляется
+    # по умолчанию в следующий раз. NULL — ещё не выбирал.
+    last_language: Mapped[str | None] = mapped_column(String(8))
+    last_slide_count: Mapped[int | None] = mapped_column(Integer)
+    last_audience: Mapped[str | None] = mapped_column(String(32))
+    last_color_scheme: Mapped[str | None] = mapped_column(String(16))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

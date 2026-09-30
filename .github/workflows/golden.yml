@@ -59,7 +59,7 @@ jobs:
       OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'gpt-6-luna' }}
       OPENAI_REASONING_EFFORT: ${{ vars.OPENAI_REASONING_EFFORT || 'low' }}
       OPENAI_TIMEOUT_SECONDS: ${{ vars.OPENAI_TIMEOUT_SECONDS || '45' }}
-      TELEGRAM_BOT_TOKEN: ci-dummy   # Settings требует; Telegram не используется
+      TELEGRAM_BOT_TOKEN: "123456:ci-dummy"   # Settings требует; Telegram не используется
     steps:
       - uses: actions/checkout@v4
 
