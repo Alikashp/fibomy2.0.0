@@ -32,7 +32,7 @@ from aiogram.types import BufferedInputFile, InlineKeyboardButton, InlineKeyboar
 from arq.connections import RedisSettings
 
 from config import settings
-from schemas.presentation import UserRequest, PresentationType, SlideLayout, _slide_has_required_content
+from schemas.presentation import UserRequest, PresentationType, SlideLayout, SourceMode, _slide_has_required_content
 from generation.content_extractor import extract_from_document, extract_from_url
 from generation.llm import generate_presentation_structure, _default_slide_count
 from generation.image_fetcher import fetch_images_for_slides
@@ -134,7 +134,14 @@ async def generate_presentation_job(
             # тех пор, когда логи теряли extra={...}. Теперь логи JSON и extra
             # печатаются (logging_setup), но текст оставлен как есть.
             expected_count = request.slide_count_hint or _default_slide_count(request.presentation_type)
-            if presentation.slide_count != expected_count:
+            logger.info("Doklad generated", extra={
+                "source_genre": presentation.meta.source_genre,
+                "source_mode": request.source_mode.value if request.source_mode else None,
+                "slide_count": presentation.slide_count, "slide_count_hint": expected_count,
+            })
+            # В strict меньше слайдов — законный исход (материала мало), не обрезка
+            if (presentation.slide_count != expected_count
+                    and not _material_shortage_note(request, presentation.slide_count)):
                 logger.warning(
                     f"DOKLAD job={job_id}: LLM returned {presentation.slide_count} slides, "
                     f"expected {expected_count} — likely response truncation (see max_tokens "
@@ -259,6 +266,9 @@ async def generate_presentation_job(
             f"✨ <b>{presentation.meta.title}</b>\n"
             f"{presentation.slide_count} слайдов"
         )
+        short_note = _material_shortage_note(request, presentation.slide_count)
+        if short_note:
+            caption += f"\n\n{short_note}"
         if watermark:
             caption += "\n\n<i>Бесплатная версия · Уберите водяной знак в /plan</i>"
 
@@ -295,6 +305,21 @@ async def generate_presentation_job(
         # Файлы пользователя не храним дольше обработки (ТЗ 6.5)
         if document_ref is not None:
             await delete_upload(document_ref)
+
+
+def _material_shortage_note(request: UserRequest, slide_count: int) -> str | None:
+    """«Только мой материал»: слайдов не больше выбранного, и если модель
+    сделала меньше — говорим пользователю, что материала хватило на X (ТЗ 3.3.3)."""
+    if request.source_type.value == "topic" or not request.slide_count_hint:
+        return None
+    if (request.source_mode or SourceMode.STRICT) != SourceMode.STRICT:
+        return None
+    if slide_count >= request.slide_count_hint:
+        return None
+    return (
+        f"В вашем материале хватило на {slide_count} слайдов из {request.slide_count_hint} — "
+        f"добавьте текст, если нужно больше."
+    )
 
 
 async def _extract_raw_text(

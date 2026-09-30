@@ -41,4 +41,4 @@ Fibonacci AI — Telegram-бот, который по теме, тексту и�
 
 - Код: `src/`. Бот — `src/main.py`, воркер — `src/worker.py` (ARQ), генерация — `src/generation/`, схемы — `src/schemas/`, шаблоны — `src/templates/<тип>/template.html`.
 - Бот и воркер — два отдельных сервиса Railway из одного Docker-образа. Бот — `railway.toml` (CMD из `Dockerfile`), воркер — `railway.worker.toml` (`sh -c "cd src && arq worker.WorkerSettings"`). Все переменные окружения — в `.env.example`, читаются только через `src/config.py`.
-- Автотестов в репозитории нет.
+- Тесты: `python -m unittest discover -s tests/unit -t tests/unit` (стандартный unittest, LLM подменяется). Проверка колоды по golden-кейсу ТЗ 7.4 — `python tests/golden/check_case.py <deck.json> <G-01|G-02|G-03>`. Снимок собранных промптов до и после правки `prompts/` — `python tests/golden/prompt_snapshot.py <папка>`.

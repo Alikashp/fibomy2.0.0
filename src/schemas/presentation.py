@@ -38,6 +38,9 @@ class ContentSourceType(str, Enum):
     URL      = "url"
 
 
+SOURCE_GENRES = frozenset({"report", "task", "plan", "article"})
+
+
 class SourceMode(str, Enum):
     """Как обращаться с материалом пользователя (ТЗ 3.2, 3.3.3).
     Имеет смысл только при source_type != TOPIC."""
@@ -111,7 +114,10 @@ class TeamMember(BaseModel):
 
 
 class TimelineItem(BaseModel):
-    date: str = Field(..., max_length=30)
+    # Необязательна: без даты в источнике этап не должен её получать (ТЗ 3.3.2).
+    # Таймлайн, где хоть у одного этапа нет даты, код рисует списком —
+    # generation/postprocess.timelines_without_dates_to_bullets.
+    date: Optional[str] = Field(None, max_length=30)
     title: str = Field(..., max_length=100)
     description: Optional[str] = Field(None, max_length=300)
 
@@ -168,6 +174,8 @@ class Slide(BaseModel):
     image_url: Optional[str] = None
     mermaid_code: Optional[str] = None
     speaker_notes: Optional[str] = Field(None, max_length=500)
+    # Сноска внизу слайда — ставит код, не модель (ТЗ 3.3.3: «Оценочные данные…»)
+    footnote: Optional[str] = Field(None, max_length=200)
 
     @field_validator("mermaid_code")
     @classmethod
@@ -194,6 +202,14 @@ class PresentationMeta(BaseModel):
     # подставляются в worker.py из настроек пользователя в боте (профиль).
     author_name: Optional[str] = None
     author_group: Optional[str] = None
+    # Жанр материала пользователя — модель определяет его в докладе по материалу
+    # (prompts/doklad/narrative_text.txt). Шаблон его не рисует, пишется в лог.
+    source_genre: Optional[str] = None
+
+    @field_validator("source_genre", mode="before")
+    @classmethod
+    def validate_source_genre(cls, v):
+        return v if v in SOURCE_GENRES else None
 
 
 def _has_two_column_content(slide: "Slide") -> bool:
@@ -292,6 +308,9 @@ class UserRequest(BaseModel):
     # None — не задан (режим «по теме» или задача из очереди до деплоя).
     # В промпт пока не передаётся.
     source_mode: Optional[SourceMode] = None
+    # Имя присланного файла — для подписи источника чисел «по данным: …»
+    # (generation/postprocess.assign_sources). None — текст или тема.
+    source_name: Optional[str] = Field(None, max_length=255)
 
     @model_validator(mode="after")
     def validate_raw_text(self):

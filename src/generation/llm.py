@@ -1,5 +1,8 @@
+import asyncio
 import json
 import logging
+from datetime import datetime
+from string import Template
 
 from openai import AsyncOpenAI
 from tenacity import retry, stop_after_attempt, wait_exponential
@@ -7,9 +10,10 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 from config import settings
 from schemas.presentation import (
     PresentationSchema, UserRequest, PresentationType, AudienceType,
-    ContentVolume, ContentSourceType, Slide, SlideLayout, BulletPoint,
+    ContentVolume, ContentSourceType, SourceMode, Slide, SlideLayout, BulletPoint,
     _slide_has_required_content,
 )
+from generation import postprocess
 from generation.prompts import (
     PROMPTS_VERSION, load_enum_map, load_template, load_template_map, load_text, load_yaml,
 )
@@ -23,9 +27,12 @@ client = AsyncOpenAI(
 )
 
 # Все тексты промптов — в prompts/ (см. generation/prompts.py). Здесь только
-# сборка: какой блок подставить в зависимости от запроса.
+# сборка: какой блок подставить в зависимости от запроса. Блоки, верные только
+# для одного режима (по теме / по материалу, strict / extend), выбирает код, а
+# не условие внутри текста промпта (ТЗ 4.8.6).
 
 SYSTEM_PROMPT = load_text("system.txt")
+_SYSTEM_BLOCKS = load_yaml("system_blocks.yaml")
 
 # Раньше эти два блока приходили модели ВСЕГДА, при любом presentation_type —
 # включая DOKLAD, где ни таблицы конкурентов, ни слайда объёма рынка не
@@ -47,8 +54,12 @@ def _market_slide_block(structure_block: str) -> str:
 
 USER_PROMPT_TEMPLATE = load_template("user.txt")
 
-SOURCE_MATERIAL_BLOCK = load_template("source_material.txt")
+SOURCE_MATERIAL_BLOCKS: dict[SourceMode, Template] = {
+    SourceMode.STRICT: load_template("source_material_strict.txt"),
+    SourceMode.EXTEND: load_template("source_material_extend.txt"),
+}
 EXTRA_INSTRUCTIONS_BLOCK = load_template("extra_instructions.txt")
+_SLIDE_COUNT_LINES = load_template_map("slide_count.yaml")
 
 # TYPE_CONTEXTS[DOKLAD] — только документированный дефолт: реальный текст для
 # DOKLAD считается в _doklad_type_context() по request.source_type.
@@ -121,14 +132,30 @@ def _doklad_type_context(request: UserRequest) -> str:
     return _DOKLAD_TYPE_CONTEXTS["material"]
 
 
+# Объём и схема ответа у доклада свои (prompts/doklad/): без metrics[].source,
+# с meta.source_genre, только layout'ы каталога. Остальные типы — прежние файлы.
 VOLUME_INSTRUCTIONS: dict[ContentVolume, str] = load_enum_map("volume.yaml", ContentVolume)
+DOKLAD_VOLUME_INSTRUCTIONS: dict[ContentVolume, str] = load_enum_map("doklad/volume.yaml", ContentVolume)
 
 
 _JSON_SCHEMA = load_text("json_schema.txt")
+_DOKLAD_JSON_SCHEMA = load_text("doklad/json_schema.txt")
 
 
-def _get_json_schema() -> str:
-    return _JSON_SCHEMA
+def _get_json_schema(presentation_type: PresentationType | None = None) -> str:
+    return _DOKLAD_JSON_SCHEMA if presentation_type == PresentationType.DOKLAD else _JSON_SCHEMA
+
+
+def _is_doklad(request: UserRequest) -> bool:
+    return request.presentation_type == PresentationType.DOKLAD
+
+
+def _material_mode(request: UserRequest) -> SourceMode | None:
+    """None — режим «по теме». По материалу без явного выбора (задачи из очереди
+    до деплоя, API без параметра) — strict: безопасный вариант (ТЗ 3.10)."""
+    if request.source_type == ContentSourceType.TOPIC or not request.raw_text:
+        return None
+    return request.source_mode or SourceMode.STRICT
 
 
 def _slide_count(request: UserRequest) -> int:
@@ -148,15 +175,57 @@ def _max_tokens_for(slide_count: int) -> int:
     return min(_MAX_TOKENS_CAP, max(_MAX_TOKENS_BASE, scaled))
 
 
+_MONTHS_RU = ["январе", "феврале", "марте", "апреле", "мае", "июне", "июле", "августе",
+              "сентябре", "октябре", "ноябре", "декабре"]
+
+
+def _current_date(now: datetime) -> str:
+    return f"Q{(now.month - 1) // 3 + 1} {now.year} ({now.day} {_MONTHS_RU[now.month - 1]})"
+
+
+def _data_key(mode: SourceMode | None) -> str:
+    return {None: "data_topic", SourceMode.STRICT: "data_strict", SourceMode.EXTEND: "data_extend"}[mode]
+
+
+def _build_system_prompt(request: UserRequest, now: datetime) -> str:
+    mode = _material_mode(request)
+    structure_block = _pick_structure_block(request)
+    volumes = DOKLAD_VOLUME_INSTRUCTIONS if _is_doklad(request) else VOLUME_INSTRUCTIONS
+    # Якорь роадмапа — только «по теме»: по материалу даты берутся из материала (П2)
+    date_block = "" if mode else (
+        Template(_SYSTEM_BLOCKS["date_topic"]).substitute(current_date=_current_date(now)) + "\n\n"
+    )
+    return SYSTEM_PROMPT.format(
+        role=_SYSTEM_BLOCKS["role_material" if mode else "role_topic"],
+        schema=_get_json_schema(request.presentation_type),
+        language=request.language,
+        date_block=date_block,
+        volume_instruction=volumes.get(request.content_volume, volumes[ContentVolume.MEDIUM]),
+        data_block=_SYSTEM_BLOCKS[_data_key(mode)],
+        structure_block=structure_block,
+        competition_table_block=_competition_table_block(structure_block),
+        market_slide_block=_market_slide_block(structure_block),
+    )
+
+
+def _slide_count_line(request: UserRequest) -> str:
+    if not _is_doklad(request):
+        key = "default"
+    else:
+        key = {None: "doklad_topic", SourceMode.STRICT: "doklad_strict",
+               SourceMode.EXTEND: "doklad_extend"}[_material_mode(request)]
+    return _SLIDE_COUNT_LINES[key].substitute(n=_slide_count(request))
+
+
 def _build_user_prompt(request: UserRequest) -> str:
-    slide_count = _slide_count(request)
     extra_block = ""
     if request.extra_instructions:
         extra_block = EXTRA_INSTRUCTIONS_BLOCK.substitute(extra_instructions=request.extra_instructions)
 
     source_material_block = ""
-    if request.source_type != ContentSourceType.TOPIC and request.raw_text:
-        source_material_block = SOURCE_MATERIAL_BLOCK.substitute(raw_text=request.raw_text)
+    mode = _material_mode(request)
+    if mode:
+        source_material_block = SOURCE_MATERIAL_BLOCKS[mode].substitute(raw_text=request.raw_text)
 
     if request.presentation_type == PresentationType.DOKLAD:
         type_context = _doklad_type_context(request)
@@ -168,12 +237,17 @@ def _build_user_prompt(request: UserRequest) -> str:
         presentation_type=request.presentation_type.value,
         audience=request.audience.value,
         language=request.language,
-        slide_count_hint=slide_count,
+        slide_count_line=_slide_count_line(request),
         extra_instructions_block=extra_block,
         source_material_block=source_material_block,
         type_context=type_context,
         audience_context=AUDIENCE_CONTEXTS.get(request.audience, ""),
     )
+
+
+def build_prompts(request: UserRequest, now: datetime | None = None) -> tuple[str, str]:
+    """(system, user) основного вызова. Используется и в tests/golden/prompt_snapshot.py."""
+    return _build_system_prompt(request, now or datetime.now()), _build_user_prompt(request)
 
 
 # ── Точечное дозаполнение пустых слайдов ────────────────────────────────────
@@ -186,6 +260,10 @@ def _build_user_prompt(request: UserRequest) -> str:
 # точечный follow-up запрос ТОЛЬКО на недостающее поле конкретного слайда:
 # дешевле и надёжнее полной перегенерации, а если и он не удастся —
 # оставляем слайд как есть (тихо, без падения job'а).
+#
+# Дозапрос видит весь материал и мысли остальных слайдов: раньше он писал
+# слайд вслепую — пересказ всего материала, повторы и противоречия соседям
+# (docs/PROMPT_REVIEW.md, раздел 9).
 
 _PATCH_SPECS = load_yaml("patch_instructions.yaml")
 _LAYOUT_PATCH_INSTRUCTIONS: dict[SlideLayout, str] = {
@@ -196,6 +274,9 @@ _PATCH_JSON_EXAMPLES: dict[SlideLayout, str] = {
     SlideLayout(key): spec["example"] for key, spec in _PATCH_SPECS.items()
 }
 _PATCH_PROMPT = load_template_map("patch_slide.yaml")
+
+_DIGEST_FACTS = 3        # сколько фактов слайда показывать дозапросу
+_DIGEST_FACT_CHARS = 140
 
 
 # Layout'ы, для которых есть дешёвый локальный путь деградации в bullets
@@ -233,39 +314,96 @@ def _locally_degrade_slide(slide: Slide) -> Slide | None:
     return degraded
 
 
-async def _patch_one_slide(request: UserRequest, slide: Slide) -> Slide:
+def _is_content_slide(slide: Slide) -> bool:
+    return slide.layout not in (SlideLayout.TITLE, SlideLayout.CLOSING)
+
+
+def _has_title(slide: Slide) -> bool:
+    return bool(slide.title and slide.title.strip())
+
+
+def _slide_facts(slide: Slide) -> list[str]:
+    facts = [f"{m.value} — {m.label}" for m in slide.metrics]
+    facts += [b.text for b in slide.bullets]
+    facts += [" ".join(p for p in (i.date, i.title) if p) for i in slide.timeline_items]
+    if slide.two_column:
+        facts += [b.text for b in slide.two_column.left_bullets + slide.two_column.right_bullets]
+    if slide.body_text:
+        facts.append(slide.body_text)
+    return [f[:_DIGEST_FACT_CHARS] for f in facts if f and f.strip()]
+
+
+def _slides_digest(presentation: PresentationSchema, exclude_index: int) -> str:
+    """Заголовки и ключевые факты остальных содержательных слайдов — для дозапроса."""
+    lines = []
+    for s in presentation.slides:
+        if s.index == exclude_index or not _is_content_slide(s):
+            continue
+        facts = "; ".join(_slide_facts(s)[:_DIGEST_FACTS])
+        title = f"«{s.title}»" if _has_title(s) else "(без заголовка)"
+        lines.append(f"- слайд {s.index} {title}" + (f": {facts}" if facts else ""))
+    return "\n".join(lines) or "- (других содержательных слайдов нет)"
+
+
+def _other_titles(presentation: PresentationSchema, exclude_index: int) -> str:
+    titles = [f"- {s.title}" for s in presentation.slides
+              if s.index != exclude_index and _is_content_slide(s) and _has_title(s)]
+    return "\n".join(titles) or "- (нет)"
+
+
+async def _ask_json(system_prompt: str, max_tokens: int) -> dict:
+    response = await client.chat.completions.create(
+        model=settings.openai_model,
+        temperature=0.7,
+        max_tokens=max_tokens,
+        response_format={"type": "json_object"},
+        messages=[{"role": "system", "content": system_prompt}],
+    )
+    return json.loads(response.choices[0].message.content)
+
+
+def _patch_system_prompt(request: UserRequest, presentation: PresentationSchema, slide: Slide) -> str:
     instruction = _LAYOUT_PATCH_INSTRUCTIONS.get(slide.layout)
     example = _PATCH_JSON_EXAMPLES.get(slide.layout)
     if instruction is None or example is None:
         raise ValueError(f"no patch instructions for layout={slide.layout.value}")
 
+    mode = _material_mode(request)
     material_block = ""
-    if request.source_type != ContentSourceType.TOPIC and request.raw_text:
-        material_block = _PATCH_PROMPT["material_block"].substitute(raw_text=request.raw_text[:3000])
+    if mode:
+        # Весь материал, а не raw_text[:3000]: таблицы в конце документа
+        # раньше до дозапроса не доходили (PROMPT_REVIEW, К16)
+        material_block = _PATCH_PROMPT["material_block"].substitute(raw_text=request.raw_text)
 
-    system_prompt = _PATCH_PROMPT["system"].substitute(
+    title_instruction = ""
+    if not _has_title(slide):
+        title_instruction = _PATCH_PROMPT["title_instruction"].template
+        example = '{"title": "...", "subtitle": "...", ' + example.lstrip()[1:]
+
+    return _PATCH_PROMPT["system"].substitute(
         topic=request.topic,
         audience=request.audience.value,
         language=request.language,
+        data_rule=_PATCH_PROMPT[_data_key(mode)].template,
         material_block=material_block,
+        other_slides=_slides_digest(presentation, slide.index),
         layout=slide.layout.value,
-        title_part=_PATCH_PROMPT["title_part"].substitute(title=slide.title) if slide.title else "",
+        title_part=_PATCH_PROMPT["title_part"].substitute(title=slide.title) if _has_title(slide) else "",
         subtitle_part=_PATCH_PROMPT["subtitle_part"].substitute(subtitle=slide.subtitle) if slide.subtitle else "",
         instruction=instruction,
+        title_instruction=title_instruction,
         example=example,
     )
 
-    response = await client.chat.completions.create(
-        model=settings.openai_model,
-        temperature=0.7,
-        max_tokens=800,
-        response_format={"type": "json_object"},
-        messages=[{"role": "system", "content": system_prompt}],
-    )
-    data = json.loads(response.choices[0].message.content)
+
+async def _patch_one_slide(request: UserRequest, presentation: PresentationSchema, slide: Slide) -> Slide:
+    data = await _ask_json(_patch_system_prompt(request, presentation, slide), max_tokens=800)
 
     merged = slide.model_dump(mode="json")
-    merged.update({k: v for k, v in data.items() if k in Slide.model_fields})
+    allowed = set(Slide.model_fields) - {"index", "layout", "footnote"}
+    if _has_title(slide):
+        allowed -= {"title"}  # заголовок, который уже есть, дозапрос не переписывает
+    merged.update({k: v for k, v in data.items() if k in allowed})
     patched = Slide.model_validate(merged)
     patched.index = slide.index
     patched.layout = slide.layout
@@ -275,48 +413,92 @@ async def _patch_one_slide(request: UserRequest, slide: Slide) -> Slide:
 async def _patch_empty_slides(request: UserRequest, presentation: PresentationSchema) -> PresentationSchema:
     gaps = [
         s for s in presentation.slides
-        if s.layout not in (SlideLayout.TITLE, SlideLayout.CLOSING)
-        and not _slide_has_required_content(s)
+        if _is_content_slide(s) and not _slide_has_required_content(s)
     ]
     if not gaps:
         return presentation
 
-    slides = list(presentation.slides)
     for slide in gaps:
         # Сначала дешёвая локальная деградация (без вызова LLM) — только
         # перекладывает то, что реально уже пришло в других полях слайда.
         # Если этого хватило — точечный запрос к модели не нужен вообще.
         degraded = _locally_degrade_slide(slide)
         working = degraded if degraded is not None else slide
+        result = None  # неудачный дозапрос — слайд остаётся как был
 
         if degraded is not None and _slide_has_required_content(working):
-            slides[slide.index - 1] = working
+            result = working
             logger.info(
                 f"Locally degraded slide #{slide.index} from layout={slide.layout.value} "
                 f"to bullets without an extra LLM call — salvaged {len(working.bullets)} bullet(s)"
             )
-            continue
-
-        try:
-            patched = await _patch_one_slide(request, working)
-            if _slide_has_required_content(patched):
-                slides[slide.index - 1] = patched
-                logger.info(
-                    f"Patched empty slide #{slide.index} (layout={patched.layout.value}, "
-                    f"originally {slide.layout.value})"
-                )
-            else:
+        else:
+            try:
+                # presentation — уже с исправленными слайдами: следующий дозапрос видит предыдущие
+                patched = await _patch_one_slide(request, presentation, working)
+                if _slide_has_required_content(patched):
+                    result = patched
+                    logger.info(
+                        f"Patched empty slide #{slide.index} (layout={patched.layout.value}, "
+                        f"originally {slide.layout.value}, had_title={_has_title(slide)})"
+                    )
+                else:
+                    logger.warning(
+                        f"Patch attempt for slide #{slide.index} (layout={patched.layout.value}, "
+                        f"originally {slide.layout.value}) still came back without the required "
+                        f"content — leaving as-is"
+                    )
+            except Exception as e:
                 logger.warning(
-                    f"Patch attempt for slide #{slide.index} (layout={patched.layout.value}, "
-                    f"originally {slide.layout.value}) still came back without the required "
-                    f"content — leaving as-is"
+                    f"Failed to patch empty slide #{slide.index} (layout={working.layout.value}, "
+                    f"originally {slide.layout.value}): {e}"
                 )
-        except Exception as e:
-            logger.warning(
-                f"Failed to patch empty slide #{slide.index} (layout={working.layout.value}, "
-                f"originally {slide.layout.value}): {e}"
-            )
 
+        if result is not None:
+            slides = list(presentation.slides)
+            slides[slide.index - 1] = result
+            presentation = presentation.model_copy(update={"slides": slides})
+
+    return presentation
+
+
+def _slide_content_for_title(slide: Slide) -> str:
+    parts = [f"подзаголовок: {slide.subtitle}"] if slide.subtitle else []
+    parts += [f"- {f}" for f in _slide_facts(slide)]
+    return "\n".join(parts) or "- (содержания нет)"
+
+
+async def _patch_title(request: UserRequest, presentation: PresentationSchema, slide: Slide) -> Slide:
+    prompt = _PATCH_PROMPT["title_only"].substitute(
+        topic=request.topic,
+        language=request.language,
+        layout=slide.layout.value,
+        slide_content=_slide_content_for_title(slide),
+        other_titles=_other_titles(presentation, slide.index),
+    )
+    data = await _ask_json(prompt, max_tokens=100)
+    title = str(data.get("title") or "").strip()
+    if not title:
+        raise ValueError("empty title in response")
+    return slide.model_copy(update={"title": title[:120]})
+
+
+async def _patch_missing_titles(request: UserRequest, presentation: PresentationSchema) -> PresentationSchema:
+    """Содержательный слайд без заголовка — дозапрос только заголовка (параллельно)."""
+    untitled = [s for s in presentation.slides if _is_content_slide(s) and not _has_title(s)]
+    if not untitled:
+        return presentation
+
+    results = await asyncio.gather(
+        *(_patch_title(request, presentation, s) for s in untitled), return_exceptions=True,
+    )
+    slides = list(presentation.slides)
+    for slide, result in zip(untitled, results):
+        if isinstance(result, Exception):
+            logger.warning(f"Failed to patch title of slide #{slide.index}: {result}")
+            continue
+        slides[slide.index - 1] = result
+        logger.info(f"Patched missing title of slide #{slide.index} (layout={slide.layout.value})")
     return presentation.model_copy(update={"slides": slides})
 
 
@@ -329,29 +511,28 @@ def _default_slide_count(presentation_type: PresentationType) -> int:
         PresentationType.SALES:       10,
         PresentationType.CONFERENCE:  9,   # держим в шаге с STRUCTURE_BLOCKS[CONFERENCE]
         PresentationType.ROADMAP:     11,
-        PresentationType.DOKLAD:      9,   # держим в шаге со STRUCTURE_BLOCKS_DOKLAD_BY_SOURCE
+        PresentationType.DOKLAD:      9,   # по умолчанию в боте (main.DOKLAD_DEFAULT_SLIDE_COUNT)
     }
     return defaults.get(presentation_type, 10)
 
 
+async def postprocess_presentation(request: UserRequest, presentation: PresentationSchema) -> PresentationSchema:
+    """Всё, что идёт после валидации ответа: детерминированные правки и дозапросы."""
+    if _is_doklad(request):
+        presentation = postprocess.remap_layouts(presentation)
+    presentation = postprocess.timelines_without_dates_to_bullets(presentation)
+    presentation = await _patch_empty_slides(request, presentation)
+    presentation = await _patch_missing_titles(request, presentation)
+    if _is_doklad(request):
+        # У питч-дека source по-прежнему пишет модель (расчёт TAM/SAM/SOM)
+        presentation = postprocess.assign_sources(presentation, request)
+    return presentation
+
+
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
 async def generate_presentation_structure(request: UserRequest) -> PresentationSchema:
-    from datetime import datetime
-    now = datetime.now()
-    months_ru = ["январе","феврале","марте","апреле","мае","июне","июле","августе","сентябре","октябре","ноябре","декабре"]
-    current_date = f"Q{(now.month-1)//3+1} {now.year} ({now.day} {months_ru[now.month-1]})"
-
-    structure_block = _pick_structure_block(request)
-    system_prompt = SYSTEM_PROMPT.format(
-        schema=_get_json_schema(),
-        language=request.language,
-        current_date=current_date,
-        volume_instruction=VOLUME_INSTRUCTIONS.get(request.content_volume, VOLUME_INSTRUCTIONS[ContentVolume.MEDIUM]),
-        structure_block=structure_block,
-        competition_table_block=_competition_table_block(structure_block),
-        market_slide_block=_market_slide_block(structure_block),
-    )
-    user_prompt = _build_user_prompt(request)
+    system_prompt, user_prompt = build_prompts(request)
+    mode = _material_mode(request)
 
     logger.info("Generating presentation", extra={
         "topic": request.topic[:50],
@@ -361,8 +542,7 @@ async def generate_presentation_structure(request: UserRequest) -> PresentationS
         "prompts_version": PROMPTS_VERSION,
         "slide_count_hint": _slide_count(request),
         "source_type": request.source_type.value,
-        # В промпт пока не передаётся — пишем, чтобы видеть выбор пользователей
-        "source_mode": request.source_mode.value if request.source_mode else None,
+        "source_mode": mode.value if mode else None,
     })
 
     response = await client.chat.completions.create(
@@ -387,6 +567,8 @@ async def generate_presentation_structure(request: UserRequest) -> PresentationS
 
     try:
         data = json.loads(raw_json)
+        if _is_doklad(request):
+            data = postprocess.prepare_doklad_json(data)
         presentation = PresentationSchema.model_validate(data)
     except json.JSONDecodeError as e:
         logger.error("LLM returned invalid JSON", extra={"error": str(e)})
@@ -398,8 +580,7 @@ async def generate_presentation_structure(request: UserRequest) -> PresentationS
     logger.info("Presentation generated", extra={
         "slide_count": presentation.slide_count,
         "title": presentation.meta.title[:50],
+        "source_genre": presentation.meta.source_genre,
     })
 
-    presentation = await _patch_empty_slides(request, presentation)
-
-    return presentation
+    return await postprocess_presentation(request, presentation)

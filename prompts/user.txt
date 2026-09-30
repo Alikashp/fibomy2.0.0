@@ -4,7 +4,7 @@
 Тип: $presentation_type
 Аудитория: $audience
 Язык: $language — ВСЕ тексты только на этом языке
-Количество слайдов: $slide_count_hint (строго).
+$slide_count_line
 $extra_instructions_block
 $source_material_block
 
