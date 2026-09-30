@@ -84,6 +84,28 @@ class GoldenRunFalsePositives(unittest.TestCase):
         self.assertNotIn("«Что сделано»", joined)
         self.assertTrue(any("результат" in w for w in r.warnings))
 
+    def test_g02_wording_from_pr76(self):
+        """Golden PR #76: всё требуемое в колоде есть, но другими словами."""
+        deck = self._deck([
+            {"layout": "two_column", "title": "Командам нужно показать работу с разными шаблонами",
+             "two_column": {"left_bullets": [
+                 {"text": "Нужно декомпозировать три шаблона разных типов и выделить токены дизайн-системы."},
+                 {"text": "Сервис должен генерировать структуру и содержание по брифу, а также слайды с графиками."},
+                 {"text": "Для одного шаблона нужно представить три визуально различимых варианта верстки."}]}},
+            {"layout": "bullets", "title": "Оценка охватывает архитектуру, качество и выступление",
+             "subtitle": "В техническом задании перечислены пять направлений оценки решения.",
+             "bullets": [{"text": "Подход коллектива — обоснованность архитектуры пайплайна."}]},
+        ])
+        passed = check_case.check(deck, "G-02").passed
+        for name in ("три бизнес-задачи сервиса", "требование трёх вариантов вёрстки", "есть критерии оценки"):
+            self.assertIn(name, passed)
+
+    def test_g02_missing_still_found(self):
+        deck = self._deck([{"layout": "bullets", "title": "Сроки", "bullets": [{"text": "Сдать до 1 марта."}]}])
+        joined = " | ".join(check_case.check(deck, "G-02").violations)
+        for name in ("три бизнес-задачи сервиса", "требование трёх вариантов вёрстки", "есть критерии оценки"):
+            self.assertIn(name, joined)
+
 
 if __name__ == "__main__":
     unittest.main()

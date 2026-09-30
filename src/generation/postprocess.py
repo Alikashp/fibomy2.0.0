@@ -14,7 +14,7 @@ import logging
 import re
 
 from schemas.presentation import (
-    BulletPoint, ContentSourceType, PresentationSchema, Slide, SlideLayout, UserRequest,
+    BulletPoint, ContentSourceType, PresentationSchema, PresentationType, Slide, SlideLayout, UserRequest,
 )
 
 logger = logging.getLogger(__name__)
@@ -195,9 +195,14 @@ def assign_sources(presentation: PresentationSchema, request: UserRequest) -> Pr
     """metrics[].source модель не заполняет (ТЗ 3.3.3) — его ставит код:
     - по материалу — «по данным: <имя файла>»;
     - по теме — «Оценочные данные — проверьте перед показом», и та же сноска
-      внизу каждого содержательного слайда, где есть число."""
+      внизу каждого содержательного слайда, где есть число.
+    Питч-дек рисует source под каждой карточкой — по теме там пусто (в карточке
+    остаётся trend с расчётом), предупреждение одно, в сноске слайда."""
     has_material = request.source_type != ContentSourceType.TOPIC
-    label = source_label(request) if has_material else ESTIMATE_FOOTNOTE
+    if has_material:
+        label = source_label(request)
+    else:
+        label = None if request.presentation_type == PresentationType.PITCH_DECK else ESTIMATE_FOOTNOTE
     slides = []
     for slide in presentation.slides:
         update: dict = {}

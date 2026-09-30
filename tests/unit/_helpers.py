@@ -8,7 +8,7 @@ from types import SimpleNamespace
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT / "src") not in sys.path:
     sys.path.insert(0, str(ROOT / "src"))
-os.environ.setdefault("TELEGRAM_BOT_TOKEN", "x")
+os.environ.setdefault("TELEGRAM_BOT_TOKEN", "123456:test")
 os.environ.setdefault("OPENAI_API_KEY", "x")
 
 FIXTURES = ROOT / "tests" / "fixtures"

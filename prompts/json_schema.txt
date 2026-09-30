@@ -11,7 +11,7 @@
     "layout": "title|problem|solution|bullets|market|metrics|two_column|competition|team|timeline|diagram|quote|image_full|image_hero|closing",
     "title": "string|null", "subtitle": "string|null", "body_text": "string|null",
     "bullets": [{"text": "string", "subtitle": "string|null", "icon": "string|null (из списка допустимых иконок)", "emphasis": false}],
-    "metrics": [{"value": "string", "label": "string", "trend": "string|null", "source": "string|null"}],
+    "metrics": [{"value": "string", "label": "string", "trend": "string|null"}],
     "team_members": [{"name": "string", "role": "string", "bio": "string|null", "gender": "male|female"}],
     "timeline_items": [{"date": "string", "title": "string", "description": "string|null"}],
     "two_column": {"left_title": "string|null", "left_text": "string|null", "left_bullets": [{"text": "string", "emphasis": false}], "right_title": "string|null", "right_text": "string|null", "right_bullets": [{"text": "string", "emphasis": false}], "right_preferred": false},

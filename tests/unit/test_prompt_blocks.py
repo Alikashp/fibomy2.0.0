@@ -63,9 +63,10 @@ class TopicMode(unittest.TestCase):
         self.assertNotIn("problem", schema)
         self.assertIn('"date": "string|null"', schema)
 
-    def test_pitch_deck_keeps_schema_and_slide_line(self):
+    def test_pitch_deck_without_source_keeps_slide_line(self):
         system, user = _prompts(presentation_type="pitch_deck", audience="investors")
-        self.assertIn('"source": "string|null"', system)
+        self.assertNotIn('"source"', system)          # источник ставит код (D-025)
+        self.assertNotIn("Research", system)
         self.assertIn("Количество слайдов: 11 (строго).", user)
         self.assertIn(DATE_ANCHOR, system)
 

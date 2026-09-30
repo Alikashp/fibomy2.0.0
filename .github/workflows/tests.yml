@@ -21,7 +21,7 @@ jobs:
     timeout-minutes: 15
     env:
       # Settings требует эти поля; в тестах модель не вызывается
-      TELEGRAM_BOT_TOKEN: ci-dummy
+      TELEGRAM_BOT_TOKEN: "123456:ci-dummy"
       OPENAI_API_KEY: ci-dummy
     steps:
       - uses: actions/checkout@v4

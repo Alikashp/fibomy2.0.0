@@ -17,6 +17,15 @@ class Template(unittest.TestCase):
         html = render_presentation(p, image_urls={}, watermark=False, color_scheme="light")
         self.assertIn('<div class="ftnote">Оценочные данные — проверьте перед показом</div>', html)
 
+    def test_pitch_footnote_rendered(self):
+        p = PresentationSchema.model_validate(deck([
+            {"index": 0, "layout": "market", "title": "Объём рынка", "footnote": "Оценочные данные — проверьте перед показом",
+             "metrics": [{"value": "$9B", "label": "TAM", "trend": "весь рынок"}]},
+        ], "pitch_deck"))
+        html = render_presentation(p, image_urls={}, watermark=False, color_scheme="light")
+        self.assertIn('<div class="ftnote">Оценочные данные — проверьте перед показом</div>', html)
+        self.assertNotIn('class="s5c-src"', html)   # под карточкой рынка источника нет
+
     def test_timeline_without_date_does_not_print_none(self):
         p = PresentationSchema.model_validate(deck([
             {"index": 0, "layout": "timeline", "title": "Т", "timeline_items": [{"title": "Этап"}]},

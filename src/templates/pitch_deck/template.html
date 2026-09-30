@@ -45,6 +45,7 @@ body{font-family:'DM Sans',sans-serif;background:#e8e8e4;-webkit-print-color-adj
 .ft{position:absolute;bottom:9px;left:16px;right:16px;display:flex;justify-content:space-between}
 .ftb{font-family:'Outfit',sans-serif;font-size:8px;font-weight:700;color:var(--g200)}
 .ftn{font-size:8px;color:var(--g200)}
+.ftnote{font-size:8px;color:var(--g500);text-align:center;flex:1;padding:0 12px}
 {% if watermark %}.wm{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-35deg);font-family:'Outfit',sans-serif;font-size:64px;font-weight:900;color:rgba(0,0,0,0.04);white-space:nowrap;pointer-events:none;z-index:100;letter-spacing:.1em}{% endif %}
 
 /* ══ TITLE ══ */
@@ -317,7 +318,7 @@ body{font-family:'DM Sans',sans-serif;background:#e8e8e4;-webkit-print-color-adj
     {% endfor %}
   </div>
 </div>
-<div class="ft"><div class="ftb">{{ meta.company or 'Fibonacci' }}.</div><div class="ftn">{{ slide.index }} / {{ slides|length }}</div></div>
+<div class="ft"><div class="ftb">{{ meta.company or 'Fibonacci' }}.</div>{% if slide.footnote %}<div class="ftnote">{{ slide.footnote }}</div>{% endif %}<div class="ftn">{{ slide.index }} / {{ slides|length }}</div></div>
 
 {# ══ SOLUTION ══ #}
 {% elif slide.layout.value == 'solution' %}
@@ -339,7 +340,7 @@ body{font-family:'DM Sans',sans-serif;background:#e8e8e4;-webkit-print-color-adj
   <div class="s3-photo-ph"></div>
   {% endif %}
 </div>
-<div class="ft"><div class="ftb">{{ meta.company or 'Fibonacci' }}.</div><div class="ftn">{{ slide.index }} / {{ slides|length }}</div></div>
+<div class="ft"><div class="ftb">{{ meta.company or 'Fibonacci' }}.</div>{% if slide.footnote %}<div class="ftnote">{{ slide.footnote }}</div>{% endif %}<div class="ftn">{{ slide.index }} / {{ slides|length }}</div></div>
 
 {# ══ BULLETS (WHY NOW) ══ #}
 {% elif slide.layout.value == 'bullets' %}
@@ -361,7 +362,7 @@ body{font-family:'DM Sans',sans-serif;background:#e8e8e4;-webkit-print-color-adj
   </div>
   {% endfor %}
 </div>
-<div class="ft"><div class="ftb">{{ meta.company or 'Fibonacci' }}.</div><div class="ftn">{{ slide.index }} / {{ slides|length }}</div></div>
+<div class="ft"><div class="ftb">{{ meta.company or 'Fibonacci' }}.</div>{% if slide.footnote %}<div class="ftnote">{{ slide.footnote }}</div>{% endif %}<div class="ftn">{{ slide.index }} / {{ slides|length }}</div></div>
 
 {# ══ MARKET ══ #}
 {% elif slide.layout.value == 'market' %}
@@ -384,7 +385,7 @@ body{font-family:'DM Sans',sans-serif;background:#e8e8e4;-webkit-print-color-adj
   </div>
   {% endfor %}
 </div>
-<div class="ft"><div class="ftb">{{ meta.company or 'Fibonacci' }}.</div><div class="ftn">{{ slide.index }} / {{ slides|length }}</div></div>
+<div class="ft"><div class="ftb">{{ meta.company or 'Fibonacci' }}.</div>{% if slide.footnote %}<div class="ftnote">{{ slide.footnote }}</div>{% endif %}<div class="ftn">{{ slide.index }} / {{ slides|length }}</div></div>
 
 {# ══ BIZ MODEL ══ #}
 {% elif slide.layout.value == 'two_column' %}
@@ -415,7 +416,7 @@ body{font-family:'DM Sans',sans-serif;background:#e8e8e4;-webkit-print-color-adj
 <div style="margin-top:10px;font-size:10px;color:var(--g500);line-height:1.5">{{ slide.two_column.right_text }}</div>
 {% endif %}
 {% endif %}
-<div class="ft"><div class="ftb">{{ meta.company or 'Fibonacci' }}.</div><div class="ftn">{{ slide.index }} / {{ slides|length }}</div></div>
+<div class="ft"><div class="ftb">{{ meta.company or 'Fibonacci' }}.</div>{% if slide.footnote %}<div class="ftnote">{{ slide.footnote }}</div>{% endif %}<div class="ftn">{{ slide.index }} / {{ slides|length }}</div></div>
 
 {# ══ TRACTION — вертикальная шкала ══ #}
 {% elif slide.layout.value == 'metrics' %}
@@ -443,7 +444,7 @@ body{font-family:'DM Sans',sans-serif;background:#e8e8e4;-webkit-print-color-adj
     {% endfor %}
   </div>
 </div>
-<div class="ft"><div class="ftb">{{ meta.company or 'Fibonacci' }}.</div><div class="ftn">{{ slide.index }} / {{ slides|length }}</div></div>
+<div class="ft"><div class="ftb">{{ meta.company or 'Fibonacci' }}.</div>{% if slide.footnote %}<div class="ftnote">{{ slide.footnote }}</div>{% endif %}<div class="ftn">{{ slide.index }} / {{ slides|length }}</div></div>
 
 {# ══ COMPETITION ══ #}
 {% elif slide.layout.value == 'competition' %}
@@ -481,7 +482,7 @@ body{font-family:'DM Sans',sans-serif;background:#e8e8e4;-webkit-print-color-adj
   </tbody>
 </table>
 {% endif %}
-<div class="ft"><div class="ftb">{{ meta.company or 'Fibonacci' }}.</div><div class="ftn">{{ slide.index }} / {{ slides|length }}</div></div>
+<div class="ft"><div class="ftb">{{ meta.company or 'Fibonacci' }}.</div>{% if slide.footnote %}<div class="ftnote">{{ slide.footnote }}</div>{% endif %}<div class="ftn">{{ slide.index }} / {{ slides|length }}</div></div>
 
 {# ══ TEAM ══ #}
 {% elif slide.layout.value == 'team' %}
@@ -502,7 +503,7 @@ body{font-family:'DM Sans',sans-serif;background:#e8e8e4;-webkit-print-color-adj
   </div>
   {% endfor %}
 </div>
-<div class="ft"><div class="ftb">{{ meta.company or 'Fibonacci' }}.</div><div class="ftn">{{ slide.index }} / {{ slides|length }}</div></div>
+<div class="ft"><div class="ftb">{{ meta.company or 'Fibonacci' }}.</div>{% if slide.footnote %}<div class="ftnote">{{ slide.footnote }}</div>{% endif %}<div class="ftn">{{ slide.index }} / {{ slides|length }}</div></div>
 
 {# ══ TIMELINE ══ #}
 {% elif slide.layout.value == 'timeline' %}
@@ -532,7 +533,7 @@ body{font-family:'DM Sans',sans-serif;background:#e8e8e4;-webkit-print-color-adj
   </div>
 </div>
 {% endif %}
-<div class="ft"><div class="ftb">{{ meta.company or 'Fibonacci' }}.</div><div class="ftn">{{ slide.index }} / {{ slides|length }}</div></div>
+<div class="ft"><div class="ftb">{{ meta.company or 'Fibonacci' }}.</div>{% if slide.footnote %}<div class="ftnote">{{ slide.footnote }}</div>{% endif %}<div class="ftn">{{ slide.index }} / {{ slides|length }}</div></div>
 
 {# ══ DIAGRAM ══ #}
 {% elif slide.layout.value == 'diagram' %}
@@ -546,14 +547,14 @@ body{font-family:'DM Sans',sans-serif;background:#e8e8e4;-webkit-print-color-adj
   <div class="mermaid" style="font-size:10px">{{ slide.mermaid_code }}</div>
   {% endif %}
 </div>
-<div class="ft"><div class="ftb">{{ meta.company or 'Fibonacci' }}.</div><div class="ftn">{{ slide.index }} / {{ slides|length }}</div></div>
+<div class="ft"><div class="ftb">{{ meta.company or 'Fibonacci' }}.</div>{% if slide.footnote %}<div class="ftnote">{{ slide.footnote }}</div>{% endif %}<div class="ftn">{{ slide.index }} / {{ slides|length }}</div></div>
 
 {# ══ QUOTE ══ #}
 {% elif slide.layout.value == 'quote' %}
 <div class="q-mark">"</div>
 {% if slide.body_text %}<div class="q-text">{{ slide.body_text }}</div>{% endif %}
 {% if slide.subtitle %}<div class="q-author">— <strong>{{ slide.subtitle }}</strong></div>{% endif %}
-<div class="ft"><div class="ftb">{{ meta.company or 'Fibonacci' }}.</div><div class="ftn">{{ slide.index }} / {{ slides|length }}</div></div>
+<div class="ft"><div class="ftb">{{ meta.company or 'Fibonacci' }}.</div>{% if slide.footnote %}<div class="ftnote">{{ slide.footnote }}</div>{% endif %}<div class="ftn">{{ slide.index }} / {{ slides|length }}</div></div>
 
 {# ══ IMAGE FULL ══ #}
 {% elif slide.layout.value == 'image_full' %}

@@ -2,9 +2,7 @@ import asyncio
 import logging
 import sys
 import uuid
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import CommandStart, Command
@@ -24,10 +22,10 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from config import settings
 from generation.prompts import load_template
-from schemas.presentation import PresentationType, SourceMode
+import dialog
 from db.session import (
     init_db, close_db, get_session, get_or_create_user, upgrade_user_plan, update_user_profile,
-    update_user_source_mode,
+    update_user_last_choices, user_last_choices,
 )
 from db.models import PlanType
 from generation.uploads import close_uploads, put_upload
@@ -63,13 +61,15 @@ PLANS = {
 # ── FSM ───────────────────────────────────────────────────────────────────────
 
 class Gen(StatesGroup):
+    """Короткий диалог (ТЗ 3.2, D-023): тип → тема или текст → материал/бриф → сводка.
+    Параметры меняются из сводки; флаг from_summary в данных FSM — пользователь
+    уже видел сводку, и после ввода нужно вернуться к ней."""
     choosing_type     = State()
     entering_topic    = State()
-    choosing_audience = State()
-    choosing_language = State()
-    choosing_scheme   = State()
-    onboarding        = State()  # генерическое состояние для ONBOARDING_QUESTIONS
+    material_choice   = State()  # DOKLAD: есть ли текст/документ по теме
     entering_material = State()  # DOKLAD: пользователь шлёт текст/документ по теме
+    entering_brief    = State()  # PITCH_DECK: необязательный бриф
+    summary           = State()
 
 
 class Profile(StatesGroup):
@@ -90,10 +90,7 @@ def kb_types() -> InlineKeyboardMarkup:
     # какой именно HTML-шаблон (conference/corp_report) получится, решает
     # source_type запроса, а не выбор пользователя здесь (см. template_engine).
     return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="🚀 Питч-дек", callback_data="type:pitch_deck"),
-            InlineKeyboardButton(text="🎤 Доклад",   callback_data="type:doklad"),
-        ],
+        [InlineKeyboardButton(text=label, callback_data=f"type:{key}") for key, label in dialog.TYPE_BUTTONS.items()],
         [InlineKeyboardButton(text="⬅️ Назад", callback_data="back")],
     ])
 
@@ -103,58 +100,6 @@ def kb_back() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="⬅️ Назад", callback_data="back")],
     ])
-
-
-def kb_audience() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="💰 Инвесторы",   callback_data="aud:investors"),
-            InlineKeyboardButton(text="🤝 Клиенты",     callback_data="aud:clients"),
-        ],
-        [
-            InlineKeyboardButton(text="👔 Руководство", callback_data="aud:management"),
-            InlineKeyboardButton(text="👥 Коллеги",     callback_data="aud:colleagues"),
-        ],
-        [
-            InlineKeyboardButton(text="🎓 Студенты",    callback_data="aud:students"),
-            InlineKeyboardButton(text="🌍 Все",         callback_data="aud:general"),
-        ],
-        [InlineKeyboardButton(text="⬅️ Назад", callback_data="back")],
-    ])
-
-
-def kb_language() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="🇷🇺 Русский",    callback_data="lang:ru"),
-            InlineKeyboardButton(text="🇬🇧 English",    callback_data="lang:en"),
-        ],
-        [
-            InlineKeyboardButton(text="🇺🇿 O'zbek",     callback_data="lang:uz"),
-            InlineKeyboardButton(text="🇰🇿 Қазақша",    callback_data="lang:kk"),
-        ],
-        [InlineKeyboardButton(text="⬅️ Назад", callback_data="back")],
-    ])
-
-
-def kb_scheme(plan: str = "free") -> InlineKeyboardMarkup:
-    rows = [
-        [InlineKeyboardButton(text="⬜ Classic Light", callback_data="scheme:light")],
-    ]
-    if plan != "free":
-        rows += [
-            [InlineKeyboardButton(text="🌑 Midnight",      callback_data="scheme:dark")],
-            [InlineKeyboardButton(text="🌿 Forest",        callback_data="scheme:forest")],
-            [InlineKeyboardButton(text="🔥 Ember",         callback_data="scheme:ember")],
-        ]
-    else:
-        rows += [
-            [InlineKeyboardButton(text="🌑 Midnight  🔒",  callback_data="scheme:locked")],
-            [InlineKeyboardButton(text="🌿 Forest  🔒",    callback_data="scheme:locked")],
-            [InlineKeyboardButton(text="🔥 Ember  🔒",     callback_data="scheme:locked")],
-        ]
-    rows.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="back")])
-    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def kb_reply_menu() -> ReplyKeyboardMarkup:
@@ -185,17 +130,6 @@ def kb_paywall() -> InlineKeyboardMarkup:
 
 # ── Лейблы ────────────────────────────────────────────────────────────────────
 
-TYPE_LABELS = {
-    "pitch_deck":  "Питч-дек",
-    "diploma":     "Диплом",
-    "corp_report": "Корпоративный отчёт",
-    "educational": "Обучающая",
-    "sales":       "Продажная",
-    "conference":  "Конференция",
-    "roadmap":     "Роадмап",
-    "doklad":      "Доклад",
-}
-
 MENU_TEXT = "📋 <b>Меню</b>\n\nВыберите действие:"
 
 HELP_TEXT = (
@@ -213,119 +147,16 @@ HELP_TEXT = (
 def _topic_prompt_text(ptype: str) -> str:
     if ptype == "doklad":
         topic_prompt = (
-            "✏️ Напишите тему презентации.\n"
-            "<i>Например: «Как работает нейросеть простыми словами» — "
-            "или пришлите готовый текст/документ по теме на следующем шаге.</i>"
+            "✏️ Напишите тему презентации или пришлите готовый текст / документ.\n"
+            "<i>Например: «Как работает нейросеть простыми словами». "
+            "Длинный текст или файл станут материалом доклада.</i>"
         )
     else:
         topic_prompt = (
             "✏️ Напишите тему презентации.\n"
             "<i>Например: «Стартап по доставке еды для собак»</i>"
         )
-    return f"Тип: <b>{TYPE_LABELS.get(ptype, ptype)}</b>\n\n{topic_prompt}"
-
-AUDIENCE_LABELS = {
-    "investors":  "Инвесторы",
-    "clients":    "Клиенты",
-    "management": "Руководство",
-    "colleagues": "Коллеги",
-    "students":   "Студенты",
-    "general":    "Все",
-}
-
-# ── Онбординг-вопросы по типу презентации ──────────────────────────────────────
-# Раньше был один флоу "Расскажите о проекте" на все типы (с разным только
-# текстом подсказки). Теперь у каждого PresentationType — свой список вопросов:
-# PITCH_DECK получает исходный вопрос как есть, DOKLAD — свой, короче.
-
-@dataclass
-class OnboardingQuestion:
-    key: str                              # ключ в FSM-данных (и дальше в UserRequest/job kwargs)
-    prompt: str                           # текст вопроса (HTML)
-    kind: str                             # "text" | "choice"
-    choices: list[tuple[str, str]] | None = None  # [(label, value), ...] — только для kind="choice"
-    skippable: bool = False               # только для kind="text"
-    skip_label: str = "⚡ Пропустить"
-    choices_in_row: bool = False          # все варианты одной строкой (короткие подписи)
-    ask_if: Callable[[dict], bool] | None = None  # None — спрашиваем всегда
-
-
-def _has_material(data: dict) -> bool:
-    return data.get("source_type") in ("text", "document")
-
-
-# Число слайдов доклада. 9 — прежнее фиксированное значение, оно же
-# _default_slide_count(DOKLAD) в llm.py. Границы — UserRequest.slide_count_hint (5–20).
-DOKLAD_SLIDE_COUNTS = (5, 7, 9, 12, 15)
-DOKLAD_DEFAULT_SLIDE_COUNT = 9
-
-SOURCE_MODE_LABELS = {
-    SourceMode.STRICT.value: "📎 Только мой материал",
-    SourceMode.EXTEND.value: "🧠 Дополнить общими знаниями",
-}
-
-
-ONBOARDING_QUESTIONS: dict[PresentationType, list[OnboardingQuestion]] = {
-
-    PresentationType.PITCH_DECK: [
-        OnboardingQuestion(
-            key="brief",
-            kind="text",
-            prompt=(
-                "📝 <b>Расскажите о проекте</b> — необязательно, но улучшит результат.\n\n"
-                "<i>— Команда: имена, роли, опыт\n"
-                "— Тракшн: пользователи, выручка, рост\n"
-                "— Инвестиции: сколько ищете\n"
-                "— Контакты: email, telegram</i>\n\n"
-                "Или нажмите кнопку ниже чтобы пропустить."
-            ),
-            skippable=True,
-        ),
-    ],
-
-    PresentationType.DOKLAD: [
-        OnboardingQuestion(
-            key="content_volume",
-            kind="choice",
-            prompt="📏 <b>Насколько подробным сделать доклад?</b>",
-            choices=[("⚡ Кратко", "short"), ("📄 Стандартно", "medium"), ("📚 Подробно", "long")],
-        ),
-        OnboardingQuestion(
-            key="slide_count",
-            kind="choice",
-            prompt="🔢 <b>Сколько слайдов сделать?</b>\n\n<i>Вместе с титульным и финальным.</i>",
-            choices=[
-                (f"{n} ✓" if n == DOKLAD_DEFAULT_SLIDE_COUNT else str(n), str(n))
-                for n in DOKLAD_SLIDE_COUNTS
-            ],
-            choices_in_row=True,
-        ),
-        OnboardingQuestion(
-            key="has_material",
-            kind="choice",
-            prompt="📎 <b>У вас есть готовый текст или документ по теме?</b>",
-            choices=[("🆕 Нет, с нуля по теме", "no"), ("✅ Да, есть", "yes")],
-        ),
-        OnboardingQuestion(
-            key="source_mode",
-            kind="choice",
-            prompt=(
-                "📚 <b>Как работать с вашим материалом?</b>\n\n"
-                "<i>📎 Только мой материал — все факты и числа из вашего текста. "
-                "Если материала мало, слайдов будет меньше выбранного.\n"
-                "🧠 Дополнить общими знаниями — добавим пояснения и контекст, "
-                "но числа, даты и источники — только из вашего материала.</i>"
-            ),
-            choices=[(label, value) for value, label in SOURCE_MODE_LABELS.items()],
-            ask_if=_has_material,
-        ),
-    ],
-
-    # DIPLOMA / EDUCATIONAL / SALES / CONFERENCE / ROADMAP — намеренно НЕ
-    # заполнены. Эти 5 типов сейчас недостижимы из kb_types() (см. Task A3 —
-    # в меню выбора только "Питч-дек" и "Доклад"), поэтому вопросы под них
-    # ещё не написаны. Заполнить, когда будем возвращать типы в меню по одному.
-}
+    return f"Тип: <b>{dialog.TYPE_LABELS.get(ptype, ptype)}</b>\n\n{topic_prompt}"
 
 
 # ── Handlers ──────────────────────────────────────────────────────────────────
@@ -525,353 +356,306 @@ async def cmd_new(message: Message, state: FSMContext):
 
 @dp.callback_query(F.data.startswith("type:"))
 async def on_type(call: CallbackQuery, state: FSMContext):
-    ptype = call.data.split(":")[1]
-    await state.update_data(presentation_type=ptype)
-    try:
-        await call.message.edit_text(
-            _topic_prompt_text(ptype),
-            parse_mode="HTML",
-            reply_markup=kb_back(),
-        )
-    except Exception:
-        pass
-    await state.set_state(Gen.entering_topic)
+    ptype = call.data.split(":", 1)[1]
     await call.answer()
+    if ptype not in dialog.TYPE_BUTTONS:
+        return
+    # Язык Telegram — запасной дефолт языка презентации (dialog.default_params)
+    await state.update_data(presentation_type=ptype, tg_lang=call.from_user.language_code)
+    await _edit(call.message, _topic_prompt_text(ptype), kb_back())
+    await state.set_state(Gen.entering_topic)
+
+
+def _text_material(text: str) -> dict:
+    return dict(source_type="text", raw_text=text[:dialog.MATERIAL_MAX_CHARS], source_name=None,
+                document_ref=None, document_mime_type=None, last_short_text_error_msg_id=None)
+
+
+_NO_MATERIAL = dict(source_type="topic", raw_text=None, source_name=None,
+                    document_ref=None, document_mime_type=None)
 
 
 @dp.message(Gen.entering_topic)
 async def on_topic(message: Message, state: FSMContext):
-    topic = message.text.strip()
-    if len(topic) < 3:
-        await message.answer("Тема слишком короткая.")
-        return
-    if len(topic) > 300:
-        await message.answer("Тема слишком длинная. Сократите до 300 символов.")
-        return
-    await state.update_data(topic=topic)
+    """Шаг 2: тема или текст. Длинный текст — это материал доклада (или бриф
+    питч-дека), тема берётся из его первой строки; файл к докладу — тоже сюда."""
     data = await state.get_data()
-    ptype = data.get("presentation_type", "pitch_deck")
-    await message.answer(
-        f"Тип: <b>{TYPE_LABELS.get(ptype, ptype)}</b>\n"
-        f"Тема: <b>{topic[:60]}{'...' if len(topic) > 60 else ''}</b>\n\n"
-        "Кто будет смотреть презентацию?",
-        parse_mode="HTML",
-        reply_markup=kb_audience(),
-    )
-    await state.set_state(Gen.choosing_audience)
+    ptype = data.get("presentation_type", "doklad")
+
+    if message.document:
+        if ptype != "doklad":
+            await message.answer("Файл можно приложить к докладу. Для питч-дека напишите тему.")
+            return
+        if not await _store_document(message, state):
+            return
+        if not data.get("topic"):
+            await state.update_data(topic=dialog.topic_from_file_name(message.document.file_name))
+        await _show_summary(message, state, message.from_user.id, edit=False)
+        return
+
+    text = (message.text or "").strip()
+    if len(text) < 3:
+        await message.answer("Тема слишком короткая — напишите хотя бы несколько слов.")
+        return
+    if len(text) > dialog.TOPIC_MAX_CHARS:
+        if ptype == "doklad":
+            await state.update_data(topic=dialog.topic_from_text(text), **_text_material(text))
+        else:
+            await state.update_data(topic=dialog.topic_from_text(text), brief=text[:BRIEF_MAX_CHARS])
+        await _show_summary(message, state, message.from_user.id, edit=False)
+        return
+
+    await state.update_data(topic=text)
+    if data.get("from_summary"):
+        await _show_summary(message, state, message.from_user.id, edit=False)
+    else:
+        await _ask_material_step(message, state)
 
 
-@dp.callback_query(F.data.startswith("aud:"))
-async def on_audience(call: CallbackQuery, state: FSMContext):
-    audience = call.data.split(":")[1]
-    await state.update_data(audience=audience)
+def _kb_material_choice() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📎 Да, пришлю файл или текст", callback_data="mat:yes")],
+        [InlineKeyboardButton(text="🆕 Нет, по теме", callback_data="mat:no")],
+        [InlineKeyboardButton(text="⬅️ Назад", callback_data="back")],
+    ])
+
+
+_BRIEF_PROMPT = (
+    "📝 <b>Расскажите о проекте</b> — необязательно, но улучшит результат.\n\n"
+    "<i>— Команда: имена, роли, опыт\n"
+    "— Тракшн: пользователи, выручка, рост\n"
+    "— Инвестиции: сколько ищете\n"
+    "— Контакты: email, telegram</i>\n\n"
+    "Или нажмите кнопку ниже чтобы пропустить."
+)
+BRIEF_MAX_CHARS = 2000
+
+
+def _kb_brief(from_summary: bool) -> InlineKeyboardMarkup:
+    rows = [[InlineKeyboardButton(text="🗑 Без брифа" if from_summary else "⚡ Пропустить",
+                                  callback_data="brief:skip")]]
+    rows.append([dialog.BACK_TO_SUMMARY] if from_summary
+                else [InlineKeyboardButton(text="⬅️ Назад", callback_data="back")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+async def _ask_material_step(message: Message, state: FSMContext) -> None:
+    """Шаг 3: материал для доклада, бриф для питч-дека."""
     data = await state.get_data()
-    if not data.get("presentation_type"):
-        await call.answer()
-        await state.clear()
-        await call.message.answer("Сессия устарела. Начнём заново:", reply_markup=kb_types())
-        await state.set_state(Gen.choosing_type)
-        return
-    try:
-        await call.message.edit_text(
-            "На каком языке делаем презентацию?",
-            reply_markup=kb_language(),
-        )
-    except Exception:
-        pass
-    await state.set_state(Gen.choosing_language)
+    if data.get("presentation_type") == "pitch_deck":
+        await message.answer(_BRIEF_PROMPT, parse_mode="HTML", reply_markup=_kb_brief(False))
+        await state.set_state(Gen.entering_brief)
+    else:
+        await message.answer("📎 <b>Есть готовый текст или документ по теме?</b>",
+                             parse_mode="HTML", reply_markup=_kb_material_choice())
+        await state.set_state(Gen.material_choice)
+
+
+_MATERIAL_PROMPT = "📎 Пришлите текст сообщением или документ файлом (.pdf, .docx, .pptx, .txt, до 20 МБ)."
+
+
+@dp.callback_query(F.data.in_({"mat:yes", "mat:no"}))
+async def on_material_choice(call: CallbackQuery, state: FSMContext):
     await call.answer()
+    if not (await state.get_data()).get("topic"):
+        await _restart(call.message, state)
+        return
+    if call.data == "mat:yes":
+        await _edit(call.message, _MATERIAL_PROMPT, kb_back())
+        await state.set_state(Gen.entering_material)
+        return
+    # «Нет» на первом проходе или «Без материала» из сводки: старый материал не уходит в генерацию
+    await state.update_data(**_NO_MATERIAL)
+    await _show_summary(call.message, state, call.from_user.id, edit=True)
 
 
-async def _get_user_plan(user_id: int) -> str:
+@dp.message(Gen.entering_brief)
+async def on_brief(message: Message, state: FSMContext):
+    text = (message.text or "").strip()
+    if not text:
+        await message.answer("Пришлите бриф текстом или нажмите «Пропустить».")
+        return
+    if len(text) > BRIEF_MAX_CHARS:
+        await message.answer(f"Слишком длинный текст. Сократите до {BRIEF_MAX_CHARS} символов.")
+        return
+    await state.update_data(brief=text)
+    await _show_summary(message, state, message.from_user.id, edit=False)
+
+
+@dp.callback_query(F.data == "brief:skip")
+async def on_brief_skip(call: CallbackQuery, state: FSMContext):
+    await call.answer()
+    if not (await state.get_data()).get("topic"):
+        await _restart(call.message, state)
+        return
+    await state.update_data(brief=None)
+    await _show_summary(call.message, state, call.from_user.id, edit=True)
+
+
+# ── Сводка параметров ────────────────────────────────────────────────────────
+# Все параметры на одном экране, каждый меняется кнопкой «Сменить…», после
+# выбора — снова сводка в том же сообщении (edit_message). Тексты и клавиатуры —
+# dialog.py. Дефолты — прошлый выбор из профиля (users.last_*), см. D-023.
+
+async def _edit(message: Message, text: str, reply_markup: InlineKeyboardMarkup | None = None) -> Message:
+    """Редактирует сообщение бота; не получилось (удалено, слишком старое) — присылает новое."""
+    try:
+        await message.edit_text(text, parse_mode="HTML", reply_markup=reply_markup)
+        return message
+    except Exception:
+        return await message.answer(text, parse_mode="HTML", reply_markup=reply_markup)
+
+
+async def _load_profile(user_id: int) -> tuple[dict, str]:
+    """(прошлый выбор, тариф). Без БД — пустой профиль и free."""
     async with get_session() as session:
         if session:
             user = await get_or_create_user(session, user_id)
-            return user.plan
-    return "free"
+            return user_last_choices(user), str(user.plan)
+    return {}, "free"
 
 
-@dp.callback_query(F.data.startswith("lang:"))
-async def on_language(call: CallbackQuery, state: FSMContext):
-    lang = call.data.split(":")[1]
-    await state.update_data(language=lang)
+async def _save_last_choices(user_id: int, data: dict) -> None:
+    async with get_session() as session:
+        if session:
+            user = await get_or_create_user(session, user_id)
+            await update_user_last_choices(session, user, dialog.last_choices(data))
+
+
+async def _show_summary(target: Message, state: FSMContext, user_id: int, edit: bool) -> None:
     data = await state.get_data()
-    ptype = data.get("presentation_type")
-    if not ptype:
-        await call.answer()
-        await state.clear()
-        await call.message.answer("Сессия устарела. Начнём заново:", reply_markup=kb_types())
-        await state.set_state(Gen.choosing_type)
-        return
-    user_plan = await _get_user_plan(call.from_user.id)
+    if not data.get("defaults_loaded"):
+        profile, plan = await _load_profile(user_id)
+        await state.update_data(**dialog.default_params(profile, data.get("tg_lang"), plan),
+                                plan=plan, defaults_loaded=True)
+        data = await state.get_data()
+    text = dialog.summary_text(data, data.get("plan", "free"))
+    kb = dialog.summary_keyboard(data)
+    if edit:
+        target = await _edit(target, text, kb)
+    else:
+        # После текстового ввода сводка приходит новым сообщением; у старой снимаем
+        # кнопки, чтобы в чате была одна живая сводка.
+        if data.get("summary_msg_id"):
+            try:
+                await bot.edit_message_reply_markup(chat_id=target.chat.id, message_id=data["summary_msg_id"],
+                                                    reply_markup=None)
+            except Exception:
+                pass
+        target = await target.answer(text, parse_mode="HTML", reply_markup=kb)
+    await state.update_data(summary_msg_id=target.message_id, from_summary=True)
+    await state.set_state(Gen.summary)
 
-    try:
-        await call.message.edit_text(
-            "🎨 <b>Выберите цветовую схему</b>\n\n"
-            "<i>Midnight, Forest и Ember доступны на платном плане</i>",
-            parse_mode="HTML",
-            reply_markup=kb_scheme(user_plan),
-        )
-    except Exception:
-        pass
-    await state.set_state(Gen.choosing_scheme)
+
+async def _restart(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    await message.answer("Сессия устарела. Начнём заново — выберите тип презентации:", reply_markup=kb_types())
+    await state.set_state(Gen.choosing_type)
+
+
+@dp.callback_query(F.data.startswith("sum:"))
+async def on_summary_action(call: CallbackQuery, state: FSMContext):
+    action = call.data.split(":", 1)[1]
     await call.answer()
+    data = await state.get_data()
+    if not data.get("topic") or not data.get("presentation_type"):
+        await _restart(call.message, state)
+        return
+
+    if action == "back":
+        await _show_summary(call.message, state, call.from_user.id, edit=True)
+    elif action == "go":
+        await _generate_from_summary(call, state)
+    elif action == "topic":
+        await _edit(call.message, "✏️ Напишите новую тему или пришлите текст для презентации.",
+                    InlineKeyboardMarkup(inline_keyboard=[[dialog.BACK_TO_SUMMARY]]))
+        await state.set_state(Gen.entering_topic)
+    elif action == "material":
+        rows = [[InlineKeyboardButton(text="🗑 Без материала — по теме", callback_data="mat:no")]] \
+            if dialog.has_material(data) else []
+        rows.append([dialog.BACK_TO_SUMMARY])
+        await _edit(call.message, _MATERIAL_PROMPT, InlineKeyboardMarkup(inline_keyboard=rows))
+        await state.set_state(Gen.entering_material)
+    elif action == "brief":
+        await _edit(call.message, _BRIEF_PROMPT, _kb_brief(True))
+        await state.set_state(Gen.entering_brief)
+    elif action in ("lang", "slides", "aud", "mode", "design", "type"):
+        text, kb = dialog.change_screen(action, data, data.get("plan", "free"))
+        await _edit(call.message, text, kb)
 
 
-@dp.callback_query(F.data.startswith("scheme:"))
-async def on_scheme(call: CallbackQuery, state: FSMContext):
-    scheme = call.data.split(":")[1]
-    if scheme == "locked":
+@dp.callback_query(F.data.startswith("set:"))
+async def on_set_param(call: CallbackQuery, state: FSMContext):
+    _, key, value = call.data.split(":", 2)
+    data = await state.get_data()
+    if key == "color_scheme" and (value == "locked" or not dialog.scheme_allowed(value, data.get("plan", "free"))):
         await call.answer("🔒 Доступно на платном плане. Используйте /plan", show_alert=True)
         return
-    await state.update_data(color_scheme=scheme, onboarding_index=0)
-    data = await state.get_data()
     await call.answer()
-    await _ask_onboarding_question(call.message, data, state)
+    if value not in dialog.SETTABLE.get(key, ()):
+        return
+    if not data.get("topic"):
+        await _restart(call.message, state)
+        return
+    update = {key: int(value) if key == "slide_count" else value}
+    if key == "presentation_type" and value == "pitch_deck" and dialog.has_material(data):
+        # Питч-дек не берёт материал: текст переходит в бриф, файл — нет (сводка это покажет)
+        if data.get("source_type") == "text" and not data.get("brief"):
+            update["brief"] = (data.get("raw_text") or "")[:BRIEF_MAX_CHARS]
+        update.update(_NO_MATERIAL)
+    await state.update_data(**update)
+    await _show_summary(call.message, state, call.from_user.id, edit=True)
 
 
-# ── Кнопка "Назад" на каждом шаге ───────────────────────────────────────────────
-# Единый обработчик: смотрит на ТЕКУЩИЙ FSM state и решает, куда вернуться.
-# Данные предыдущих шагов не сбрасываются (state.update_data только добавляет
-# ключи) — при возврате назад и повторном движении вперёд ничего не теряется.
+@dp.message(Gen.summary)
+async def on_summary_text(message: Message, state: FSMContext):
+    await message.answer("Параметры меняются кнопками в сводке выше. Чтобы сменить тему — «✏️ Сменить тему».")
+
+
+@dp.callback_query(F.data.regexp(r"^(aud|lang|scheme|oq|oq_skip):"))
+async def on_stale_button(call: CallbackQuery, state: FSMContext):
+    """Кнопки старого пошагового диалога в истории чата."""
+    await call.answer()
+    await _restart(call.message, state)
+
+
+# ── Кнопка "Назад" ───────────────────────────────────────────────────────────
+# Шаги до сводки: тип → тема → материал/бриф. После сводки «Назад» возвращает к ней.
 
 @dp.callback_query(F.data == "back")
 async def on_back(call: CallbackQuery, state: FSMContext):
     await call.answer()
     current = await state.get_state()
     data = await state.get_data()
-
-    async def _edit(text: str, reply_markup: InlineKeyboardMarkup) -> None:
-        try:
-            await call.message.edit_text(text, parse_mode="HTML", reply_markup=reply_markup)
-        except Exception:
-            await call.message.answer(text, parse_mode="HTML", reply_markup=reply_markup)
+    from_summary = bool(data.get("from_summary"))
 
     if current == Gen.choosing_type.state:
-        # Первый шаг онбординга — "Назад" ведёт в главное меню.
         await state.clear()
         await call.message.answer(MENU_TEXT, parse_mode="HTML", reply_markup=kb_reply_menu())
         return
 
+    if from_summary and current in (Gen.entering_topic.state, Gen.entering_material.state,
+                                    Gen.entering_brief.state, Gen.material_choice.state, Gen.summary.state):
+        await _show_summary(call.message, state, call.from_user.id, edit=True)
+        return
+
     if current == Gen.entering_topic.state:
-        await _edit("Выберите тип презентации:", kb_types())
+        await _edit(call.message, "Выберите тип презентации:", kb_types())
         await state.set_state(Gen.choosing_type)
         return
 
-    if current == Gen.choosing_audience.state:
-        ptype = data.get("presentation_type", "pitch_deck")
-        await _edit(_topic_prompt_text(ptype), kb_back())
+    if current in (Gen.material_choice.state, Gen.entering_brief.state):
+        await _edit(call.message, _topic_prompt_text(data.get("presentation_type", "doklad")), kb_back())
         await state.set_state(Gen.entering_topic)
         return
 
-    if current == Gen.choosing_language.state:
-        await _edit("Кто будет смотреть презентацию?", kb_audience())
-        await state.set_state(Gen.choosing_audience)
-        return
-
-    if current == Gen.choosing_scheme.state:
-        await _edit("На каком языке делаем презентацию?", kb_language())
-        await state.set_state(Gen.choosing_language)
-        return
-
-    if current == Gen.onboarding.state:
-        idx = data.get("onboarding_index", 0)
-        prev = _prev_asked_index(_onboarding_questions(data), data, idx)
-        if prev < 0:
-            user_plan = await _get_user_plan(call.from_user.id)
-            await _edit(
-                "🎨 <b>Выберите цветовую схему</b>\n\n"
-                "<i>Midnight, Forest и Ember доступны на платном плане</i>",
-                kb_scheme(user_plan),
-            )
-            await state.set_state(Gen.choosing_scheme)
-        else:
-            try:
-                await call.message.edit_reply_markup(reply_markup=None)
-            except Exception:
-                pass
-            await state.update_data(onboarding_index=prev)
-            data["onboarding_index"] = prev
-            await _ask_onboarding_question(call.message, data, state)
-        return
-
     if current == Gen.entering_material.state:
-        # has_material остаётся текущим вопросом — onboarding_index не двигали,
-        # когда уходили сюда (см. on_onboarding_choice), поэтому просто
-        # переспрашиваем тот же вопрос ещё раз.
-        try:
-            await call.message.edit_reply_markup(reply_markup=None)
-        except Exception:
-            pass
-        await _ask_onboarding_question(call.message, data, state)
+        await _edit(call.message, "📎 <b>Есть готовый текст или документ по теме?</b>", _kb_material_choice())
+        await state.set_state(Gen.material_choice)
         return
 
     # Неизвестное/устаревшее состояние — не оставляем пользователя в тупике.
-    await state.clear()
-    await call.message.answer("Выберите тип презентации:", reply_markup=kb_types())
-    await state.set_state(Gen.choosing_type)
-
-
-# ── Онбординг — генерический раннер по ONBOARDING_QUESTIONS ───────────────────
-
-def _onboarding_questions(data: dict) -> list[OnboardingQuestion]:
-    try:
-        ptype = PresentationType(data.get("presentation_type", "pitch_deck"))
-    except ValueError:
-        return []
-    return ONBOARDING_QUESTIONS.get(ptype, [])
-
-
-def _is_asked(q: OnboardingQuestion, data: dict) -> bool:
-    return q.ask_if is None or q.ask_if(data)
-
-
-def _prev_asked_index(questions: list[OnboardingQuestion], data: dict, idx: int) -> int:
-    """Индекс предыдущего вопроса, который реально задаётся; -1 — вопросов до idx нет."""
-    idx -= 1
-    while idx >= 0 and not _is_asked(questions[idx], data):
-        idx -= 1
-    return idx
-
-
-async def _get_saved_source_mode(user_id: int) -> str | None:
-    async with get_session() as session:
-        if session:
-            user = await get_or_create_user(session, user_id)
-            return user.source_mode
-    return None
-
-
-async def _save_source_mode(user_id: int, source_mode: str) -> None:
-    async with get_session() as session:
-        if session:
-            user = await get_or_create_user(session, user_id)
-            await update_user_source_mode(session, user, source_mode)
-
-
-async def _ask_onboarding_question(target: Message, data: dict, state: FSMContext) -> None:
-    questions = _onboarding_questions(data)
-    idx = data.get("onboarding_index", 0)
-
-    # Условные вопросы (ask_if) пропускаем, не показывая
-    skipped = idx
-    while idx < len(questions) and not _is_asked(questions[idx], data):
-        idx += 1
-    if idx != skipped:
-        data["onboarding_index"] = idx
-        await state.update_data(onboarding_index=idx)
-
-    if idx >= len(questions):
-        await _confirm_and_generate(target, data, state)
-        return
-
-    q = questions[idx]
-    choices = list(q.choices or [])
-    if q.key == "source_mode":
-        # Прошлый выбор из профиля — первым и с пометкой (ТЗ 3.2).
-        # target — сообщение в личном чате, chat.id = Telegram user id.
-        saved = await _get_saved_source_mode(target.chat.id)
-        if saved in SOURCE_MODE_LABELS:
-            choices.sort(key=lambda c: c[1] != saved)
-            choices = [
-                (f"{label} ✓ как в прошлый раз" if value == saved else label, value)
-                for label, value in choices
-            ]
-
-    rows: list[list[InlineKeyboardButton]] = []
-    if q.kind == "choice":
-        buttons = [
-            InlineKeyboardButton(text=label, callback_data=f"oq:{q.key}:{value}")
-            for label, value in choices
-        ]
-        rows = [buttons] if q.choices_in_row else [[b] for b in buttons]
-    elif q.skippable:
-        rows = [
-            [InlineKeyboardButton(text=q.skip_label, callback_data=f"oq_skip:{q.key}")],
-        ]
-    rows.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="back")])
-    kb = InlineKeyboardMarkup(inline_keyboard=rows)
-
-    await target.answer(q.prompt, parse_mode="HTML", reply_markup=kb)
-    await state.set_state(Gen.onboarding)
-
-
-@dp.callback_query(F.data.startswith("oq:"))
-async def on_onboarding_choice(call: CallbackQuery, state: FSMContext):
-    _, key, value = call.data.split(":", 2)
-    try:
-        await call.message.edit_reply_markup(reply_markup=None)
-    except Exception:
-        pass
-    await call.answer()
-
-    await state.update_data(**{key: value})
-
-    if key == "has_material" and value == "no":
-        # Пользователь мог прислать материал, вернуться «Назад» и передумать —
-        # старый материал не должен уйти в генерацию.
-        await state.update_data(
-            source_type="topic", raw_text=None, document_ref=None,
-            document_mime_type=None, source_mode=None, source_name=None,
-        )
-    elif key == "source_mode":
-        await _save_source_mode(call.from_user.id, value)
-
-    data = await state.get_data()
-
-    # DOKLAD: "есть готовый текст/документ?" -> да — уходим за материалом
-    # отдельным шагом, а не продолжаем список вопросов линейно.
-    if key == "has_material" and value == "yes":
-        await call.message.answer(
-            "📎 Пришлите текст сообщением, или документ файлом (.pdf, .docx, .pptx, .txt).",
-            reply_markup=kb_back(),
-        )
-        await state.set_state(Gen.entering_material)
-        return
-
-    data["onboarding_index"] = data.get("onboarding_index", 0) + 1
-    await state.update_data(onboarding_index=data["onboarding_index"])
-    await _ask_onboarding_question(call.message, data, state)
-
-
-@dp.callback_query(F.data.startswith("oq_skip:"))
-async def on_onboarding_skip(call: CallbackQuery, state: FSMContext):
-    _, key = call.data.split(":", 1)
-    try:
-        await call.message.edit_reply_markup(reply_markup=None)
-    except Exception:
-        pass
-    await call.answer()
-
-    await state.update_data(**{key: None})
-    data = await state.get_data()
-    data["onboarding_index"] = data.get("onboarding_index", 0) + 1
-    await state.update_data(onboarding_index=data["onboarding_index"])
-    await _ask_onboarding_question(call.message, data, state)
-
-
-@dp.message(Gen.onboarding)
-async def on_onboarding_text(message: Message, state: FSMContext):
-    data = await state.get_data()
-    questions = _onboarding_questions(data)
-    idx = data.get("onboarding_index", 0)
-
-    if idx >= len(questions) or questions[idx].kind != "text":
-        # Защитный случай (устаревшее состояние) — не блокируем пользователя.
-        await _confirm_and_generate(message, data, state)
-        return
-
-    q = questions[idx]
-    text = (message.text or "").strip()
-    if len(text) > 2000:
-        await message.answer("Слишком длинный текст. Сократите до 2000 символов.")
-        return
-
-    await state.update_data(**{q.key: text})
-    data[q.key] = text
-    data["onboarding_index"] = idx + 1
-    await state.update_data(onboarding_index=data["onboarding_index"])
-    await _ask_onboarding_question(message, data, state)
+    await _restart(call.message, state)
 
 
 # ── DOKLAD: приём готового текста/документа по теме ────────────────────────────
@@ -885,62 +669,59 @@ _MATERIAL_MIME_BY_EXT = {
 _MATERIAL_MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 МБ
 
 
+async def _store_document(message: Message, state: FSMContext) -> bool:
+    """Файл пользователя → временное хранилище (ссылка в FSM). False — файл не принят."""
+    doc = message.document
+    ext = doc.file_name.rsplit(".", 1)[-1].lower() if doc.file_name and "." in doc.file_name else ""
+    mime = _MATERIAL_MIME_BY_EXT.get(ext)
+    if not mime:
+        await message.answer(
+            "Поддерживаются только .pdf, .docx, .pptx, .txt. "
+            "Пришлите другой файл, или текст сообщением."
+        )
+        return False
+    if doc.file_size and doc.file_size > _MATERIAL_MAX_FILE_SIZE:
+        await message.answer("Файл слишком большой (максимум 20 МБ). Пришлите файл поменьше или текст сообщением.")
+        return False
+
+    file = await bot.get_file(doc.file_id)
+    buf = await bot.download_file(file.file_path)
+    try:
+        document_ref = await put_upload(buf.read(), mime)
+    except Exception:
+        logger.exception("Failed to store uploaded document")
+        await message.answer("Не удалось сохранить файл. Попробуйте прислать его ещё раз.")
+        return False
+
+    await state.update_data(
+        source_type="document",
+        document_ref=document_ref,
+        document_mime_type=mime,
+        source_name=(doc.file_name or "")[:255] or None,
+        raw_text=None,
+        last_short_text_error_msg_id=None,
+    )
+    return True
+
+
 @dp.message(Gen.entering_material)
 async def on_material(message: Message, state: FSMContext):
     data = await state.get_data()
 
     if message.document:
-        doc = message.document
-        ext = doc.file_name.rsplit(".", 1)[-1].lower() if doc.file_name and "." in doc.file_name else ""
-        mime = _MATERIAL_MIME_BY_EXT.get(ext)
-        if not mime:
-            await message.answer(
-                "Поддерживаются только .pdf, .docx, .pptx, .txt. "
-                "Пришлите другой файл, или текст сообщением."
-            )
+        if not await _store_document(message, state):
             return
-        if doc.file_size and doc.file_size > _MATERIAL_MAX_FILE_SIZE:
-            await message.answer("Файл слишком большой (максимум 20 МБ). Пришлите файл поменьше или текст сообщением.")
-            return
-
-        file = await bot.get_file(doc.file_id)
-        buf = await bot.download_file(file.file_path)
-        try:
-            document_ref = await put_upload(buf.read(), mime)
-        except Exception:
-            logger.exception("Failed to store uploaded document")
-            await message.answer("Не удалось сохранить файл. Попробуйте прислать его ещё раз.")
-            return
-
-        await state.update_data(
-            source_type="document",
-            document_ref=document_ref,
-            document_mime_type=mime,
-            source_name=(doc.file_name or "")[:255] or None,
-            raw_text=None,
-            last_short_text_error_msg_id=None,
-        )
     elif message.text:
         text = message.text.strip()
         if len(text) < 20:
             await _report_short_text_error(message, state, data)
             return
-        await state.update_data(
-            source_type="text",
-            raw_text=text[:15000],
-            source_name=None,
-            document_ref=None,
-            document_mime_type=None,
-            last_short_text_error_msg_id=None,
-        )
+        await state.update_data(**_text_material(text))
     else:
         await message.answer("Пришлите текст сообщением или документ файлом.")
         return
 
-    data = await state.get_data()
-    data["onboarding_index"] = data.get("onboarding_index", 0) + 1
-    await state.update_data(onboarding_index=data["onboarding_index"])
-    await _ask_onboarding_question(message, data, state)
+    await _show_summary(message, state, message.from_user.id, edit=False)
 
 
 # Повторная ошибка "слишком коротко" подряд — не спамим тем же текстом ещё раз,
@@ -1063,12 +844,21 @@ async def on_successful_payment(message: Message):
 
 # ── Подтверждение и запуск ────────────────────────────────────────────────────
 
-async def _confirm_and_generate(message: Message, data: dict, state: FSMContext):
-    ptype    = data["presentation_type"]
-    topic    = data["topic"]
-    audience = data["audience"]
-    lang     = data["language"]
+async def _generate_from_summary(call: CallbackQuery, state: FSMContext) -> None:
+    """«✅ Сгенерировать презентацию»: запоминаем выбор в профиль и запускаем."""
+    data = await state.get_data()
+    try:
+        await call.message.edit_reply_markup(reply_markup=None)  # повторное нажатие не поставит вторую задачу
+    except Exception:
+        pass
+    try:
+        await _save_last_choices(call.from_user.id, data)
+    except Exception:
+        logger.exception("Failed to save last choices")
+    await _confirm_and_generate(call.message, data, state)
 
+
+async def _confirm_and_generate(message: Message, data: dict, state: FSMContext):
     # Проверяем лимит
     async with get_session() as session:
         if session:
@@ -1088,27 +878,7 @@ async def _confirm_and_generate(message: Message, data: dict, state: FSMContext)
         else:
             watermark = True
 
-    extra_line = ""
-    if data.get("slide_count"):
-        extra_line += f"\n• Слайдов: <b>{data['slide_count']}</b>"
-    if data.get("brief"):
-        extra_line += "\n• <b>Бриф:</b> добавлен ✓"
-    elif _has_material(data):
-        if data.get("source_mode") == SourceMode.EXTEND.value:
-            extra_line += "\n• <b>Материал:</b> добавлен ✓ (дополним общими знаниями, числа — только из материала)"
-        else:
-            extra_line += "\n• <b>Материал:</b> добавлен ✓ (доклад соберём только по нему)"
-
-    await message.answer(
-        f"✅ <b>Создаю презентацию:</b>\n\n"
-        f"• Тип: <b>{TYPE_LABELS.get(ptype, ptype)}</b>\n"
-        f"• Тема: <b>{topic[:60]}{'...' if len(topic) > 60 else ''}</b>\n"
-        f"• Аудитория: <b>{AUDIENCE_LABELS.get(audience, audience)}</b>\n"
-        f"• Язык: <b>{lang.upper()}</b>"
-        f"{extra_line}\n\n"
-        f"⏳ Обычно занимает 60–90 секунд.",
-        parse_mode="HTML",
-    )
+    # Параметры пользователь только что видел в сводке — не повторяем их.
     await state.clear()
     await generate_and_send(message, data, watermark=watermark)
 
@@ -1124,7 +894,9 @@ BRIEF_TEMPLATE = load_template("brief.txt")
 
 
 async def generate_and_send(message: Message, data: dict, watermark: bool = True):
-    brief = data.get("brief")
+    ptype = data["presentation_type"]
+    # Бриф — только питч-деку (после «Сменить тип» в данных мог остаться)
+    brief = data.get("brief") if ptype == "pitch_deck" else None
     extra = None
     if brief:
         extra = BRIEF_TEMPLATE.substitute(brief=brief)
@@ -1135,7 +907,8 @@ async def generate_and_send(message: Message, data: dict, watermark: bool = True
     # UserRequest-валидатор требует raw_text сразу, как только source_type
     # != topic, так что собирать полноценный Pydantic-объект здесь, до
     # экстракции, нельзя — тот же капкан, что уже чинили в worker.py.
-    source_type = data.get("source_type") or "topic"
+    # Материал — только докладу; у питч-дека текст пользователя идёт брифом
+    source_type = (data.get("source_type") or "topic") if ptype == "doklad" else "topic"
     request_data = {
         "topic": data["topic"],
         "presentation_type": data["presentation_type"],
@@ -1143,11 +916,11 @@ async def generate_and_send(message: Message, data: dict, watermark: bool = True
         "language": data["language"],
         "extra_instructions": extra,
         "source_type": source_type,
-        "raw_text": data.get("raw_text"),
-        "content_volume": data.get("content_volume") or "medium",
-        # Раньше число слайдов не передавалось вовсе, и доклад всегда был из 9
-        # (_default_slide_count). None — тип без вопроса о числе слайдов.
-        "slide_count_hint": int(data["slide_count"]) if data.get("slide_count") else None,
+        "raw_text": data.get("raw_text") if source_type == "text" else None,
+        # Вопрос об объёме убран из диалога (D-023): объём задаёт число слайдов
+        "content_volume": "medium",
+        # У питч-дека число слайдов задаёт его структура — не передаём
+        "slide_count_hint": int(data["slide_count"]) if ptype == "doklad" and data.get("slide_count") else None,
         "source_mode": data.get("source_mode") if source_type != "topic" else None,
         # Имя файла — для подписи источника чисел «по данным: …» (postprocess.assign_sources)
         "source_name": data.get("source_name") if source_type == "document" else None,
@@ -1174,8 +947,8 @@ async def generate_and_send(message: Message, data: dict, watermark: bool = True
         user_id=message.chat.id,
         status_message_id=status_msg.message_id,
         request_data=request_data,
-        document_ref=data.get("document_ref"),
-        document_mime_type=data.get("document_mime_type"),
+        document_ref=data.get("document_ref") if source_type == "document" else None,
+        document_mime_type=data.get("document_mime_type") if source_type == "document" else None,
         urls=None,
         watermark=watermark,
         color_scheme=data.get("color_scheme", "light"),
