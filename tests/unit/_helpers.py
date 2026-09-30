@@ -27,7 +27,7 @@ class FakeLLM:
         prompt = kwargs["messages"][0]["content"]
         self.prompts.append(prompt)
         content = json.dumps(self.responder(prompt), ensure_ascii=False)
-        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=content))])
+        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=content), finish_reason="stop")])
 
 
 def deck(slides: list[dict], ptype: str = "doklad") -> dict:

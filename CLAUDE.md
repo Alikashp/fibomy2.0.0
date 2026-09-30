@@ -33,7 +33,9 @@ Fibonacci AI — Telegram-бот, который по теме, тексту и�
 
 - **Никогда не пушь в `main` и не мёржи PR сам.** Мёрж делает только владелец репозитория.
 - **Один PR на сессию.** Все задачи сессии — в одной ветке от свежего `main` и в одном PR, а не отдельный PR на каждую задачу. Имя ветки — понятное: `docs/prompt-review`, `fix/plan-command`, `spike/pptx` и т.п. Перед созданием ветки: `git checkout main && git pull`.
+- **Перед созданием PR все тесты должны проходить:** локально `python -m unittest discover -s tests/unit -t tests/unit`, после пуша — зелёный workflow «tests» в PR. Красный CI — не открывать PR на ревью (или сразу чинить в той же ветке).
 - **После пуша создай PR в `main`** и дай ссылку на него.
+- **Если в PR запускался workflow «golden»** (реальные генерации — PR меняет `prompts/` или `src/generation/`, либо ручной запуск), в описании PR — ссылка на его результат: комментарий бота с таблицей или страница запуска. Если golden пропущен (нет секрета `OPENAI_API_KEY`) — так и напиши.
 - **В описании каждого PR — раздел «Что проверить после деплоя»:** 3–5 конкретных действий в боте (что нажать или прислать и что должно получиться) и что сделать в Railway, если нужно (переменные, config path, порядок деплоя сервисов). Если после деплоя проверять нечего (например, PR только с документацией), так и напиши.
 - **Если задача зависит от ещё не смёрженного PR** — скажи об этом и подожди. Не делай ветку от чужой ветки.
 
@@ -41,4 +43,6 @@ Fibonacci AI — Telegram-бот, который по теме, тексту и�
 
 - Код: `src/`. Бот — `src/main.py`, воркер — `src/worker.py` (ARQ), генерация — `src/generation/`, схемы — `src/schemas/`, шаблоны — `src/templates/<тип>/template.html`.
 - Бот и воркер — два отдельных сервиса Railway из одного Docker-образа. Бот — `railway.toml` (CMD из `Dockerfile`), воркер — `railway.worker.toml` (`sh -c "cd src && arq worker.WorkerSettings"`). Все переменные окружения — в `.env.example`, читаются только через `src/config.py`.
+- CI — GitHub Actions: `.github/workflows/tests.yml` (юнит-тесты, снимок промптов относительно базы, `check_case.py` на `tests/fixtures/specs/`; без ключей) и `.github/workflows/golden.yml` (реальные генерации golden-корпуса через `tests/golden/run_golden.py`, комментарий в PR, артефакт `golden-decks`; нужен секрет `OPENAI_API_KEY`).
+- Параметры запроса и цены моделей LLM — `prompts/models.yaml` (код — `src/generation/llm_models.py`). Модель — `OPENAI_MODEL`, уровень рассуждений — `OPENAI_REASONING_EFFORT`.
 - Тесты: `python -m unittest discover -s tests/unit -t tests/unit` (стандартный unittest, LLM подменяется). Проверка колоды по golden-кейсу ТЗ 7.4 — `python tests/golden/check_case.py <deck.json> <G-01|G-02|G-03>`. Снимок собранных промптов до и после правки `prompts/` — `python tests/golden/prompt_snapshot.py <папка>`.

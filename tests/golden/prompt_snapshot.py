@@ -3,8 +3,14 @@
 Нужен для ТЗ 4.8.7: любой PR, меняющий prompts/, показывает, какие из
 собранных комбинаций изменились. Сеть и ключи не нужны.
 
-    python tests/golden/prompt_snapshot.py <папка>          # снять снимок
-    python tests/golden/prompt_snapshot.py --diff <до> <после>  # сравнить
+    python tests/golden/prompt_snapshot.py <папка>                  # снять снимок
+    python tests/golden/prompt_snapshot.py <папка> --root <checkout>  # снимок другой версии кода
+    python tests/golden/prompt_snapshot.py --diff <до> <после> [--show] [--md <файл>]
+
+--root — корень другой копии репозитория (например, базовой ветки PR): промпты
+собираются её кодом и её prompts/, материал — фикстура из текущей копии.
+--show печатает unified diff изменённых файлов, --md дописывает сводку в файл
+(в CI — $GITHUB_STEP_SUMMARY).
 
 Каждая комбинация — два файла: <имя>.system.txt и <имя>.user.txt.
 Дата зафиксирована, материал — фикстура G-01 (docx) и короткий текст.
@@ -17,7 +23,15 @@ from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "src"))
+
+
+def _arg(name: str) -> str | None:
+    return sys.argv[sys.argv.index(name) + 1] if name in sys.argv else None
+
+
+CODE_ROOT = Path(_arg("--root") or ROOT).resolve()
+sys.path.insert(0, str(CODE_ROOT / "src"))
+os.environ.pop("PROMPTS_DIR", None)  # промпты — из той же копии, что и код
 os.environ.setdefault("TELEGRAM_BOT_TOKEN", "x")
 os.environ.setdefault("OPENAI_API_KEY", "x")
 
@@ -95,18 +109,48 @@ def snapshot(out: Path) -> None:
     print(f"{len(_combos(docx_text))} комбинаций → {out}")
 
 
-def diff(before: Path, after: Path) -> None:
+def _read(path: Path) -> list[str]:
+    return path.read_text(encoding="utf-8").splitlines(keepends=True) if path.exists() else []
+
+
+def diff(before: Path, after: Path, show: bool = False, md: str | None = None,
+         max_lines_per_file: int = 80) -> list[str]:
     names = sorted({p.name for p in before.iterdir()} | {p.name for p in after.iterdir()})
-    changed = [n for n in names
-               if not (before / n).exists() or not (after / n).exists()
-               or (before / n).read_bytes() != (after / n).read_bytes()]
+    changed = [n for n in names if _read(before / n) != _read(after / n)]
     print(f"Изменилось {len(changed)} из {len(names)} файлов")
     for n in changed:
         print("  ", n)
 
+    if show:
+        seen: dict[str, str] = {}
+        for n in changed:
+            lines = list(difflib.unified_diff(_read(before / n), _read(after / n), f"до/{n}", f"после/{n}", n=1))
+            key = "".join(lines[2:])
+            if key in seen:  # одинаковая правка во многих комбинациях — печатаем один раз
+                print(f"\n=== {n}: тот же diff, что у {seen[key]}")
+                continue
+            seen[key] = n
+            print(f"\n=== {n}")
+            print("".join(lines[:max_lines_per_file]), end="")
+            if len(lines) > max_lines_per_file:
+                print(f"\n... ещё {len(lines) - max_lines_per_file} строк")
+
+    if md:
+        by_type: dict[str, list[str]] = {}
+        for n in changed:
+            by_type.setdefault(n.split("__")[0], []).append(n)
+        rows = [f"| {t} | {len(v)} |" for t, v in sorted(by_type.items())]
+        with open(md, "a", encoding="utf-8") as f:
+            f.write("## Снимок собранных промптов\n\n")
+            f.write(f"Изменилось **{len(changed)}** из {len(names)} файлов "
+                    f"({len(names) // 2} комбинаций). Diff — в логе шага.\n\n")
+            if rows:
+                f.write("| Тип | Изменённых файлов |\n|---|---|\n" + "\n".join(rows) + "\n\n")
+    return changed
+
 
 if __name__ == "__main__":
     if sys.argv[1] == "--diff":
-        diff(Path(sys.argv[2]), Path(sys.argv[3]))
+        diff(Path(sys.argv[2]), Path(sys.argv[3]), show="--show" in sys.argv, md=_arg("--md"))
     else:
         snapshot(Path(sys.argv[1]))

@@ -1,0 +1,77 @@
+# Параметры моделей LLM: какие параметры запроса модель принимает, запас токенов
+# на рассуждения и цены. Модель выбирается переменной окружения OPENAI_MODEL.
+# Код: src/generation/llm_models.py. Запись ищется по точному имени модели, затем
+# по самому длинному префиксу из models (так снимки вида gpt-6-luna-2026-09-22
+# попадают в gpt-6-luna). Нет записи — действуют defaults (как у gpt-4o).
+#
+# token_param     — max_tokens | max_completion_tokens. Модели с рассуждениями
+#                   принимают только max_completion_tokens (иначе 400).
+# reasoning       — у модели есть рассуждения: токены рассуждений входят в
+#                   max_completion_tokens и оплачиваются как вывод.
+# reasoning_efforts — допустимые значения reasoning_effort; null — не проверяем.
+# temperature     — always | effort_none | never. У gpt-6-luna температура
+#                   принимается только при reasoning_effort=none, иначе 400.
+# json_mode       — передавать response_format={"type": "json_object"}.
+# max_output_tokens — потолок max_completion_tokens (лимит модели).
+# price_rub_per_1m — ₽ за 1 млн токенов с НДС (ProxyAPI): input, cached_input, output.
+
+defaults:
+  token_param: max_tokens
+  reasoning: false
+  reasoning_efforts: null
+  temperature: always
+  json_mode: true
+  max_output_tokens: 16384
+  price_rub_per_1m: null
+
+models:
+  gpt-6-luna:
+    token_param: max_completion_tokens
+    reasoning: true
+    reasoning_efforts: [none, low, medium, high, xhigh, max]
+    temperature: effort_none
+    json_mode: true
+    max_output_tokens: 128000
+    price_rub_per_1m: {input: 30, cached_input: 3, output: 150}
+  # Остальные семейства с рассуждениями: max_tokens и temperature у них не
+  # принимаются. Значения reasoning_effort не проверяем — у моделей они разные.
+  gpt-6:
+    token_param: max_completion_tokens
+    reasoning: true
+    temperature: never
+    max_output_tokens: 128000
+  gpt-5:
+    token_param: max_completion_tokens
+    reasoning: true
+    temperature: never
+    max_output_tokens: 128000
+  o1:
+    token_param: max_completion_tokens
+    reasoning: true
+    temperature: never
+    max_output_tokens: 100000
+  o3:
+    token_param: max_completion_tokens
+    reasoning: true
+    temperature: never
+    max_output_tokens: 100000
+  o4:
+    token_param: max_completion_tokens
+    reasoning: true
+    temperature: never
+    max_output_tokens: 100000
+  gpt-4o: {}
+  gpt-4o-mini: {}
+
+# Запас max_completion_tokens на рассуждения сверх бюджета видимого ответа — по
+# уровню reasoning_effort. Потолок — это не расход: платим за фактические токены.
+# Без запаса рассуждения съедают лимит, и JSON обрезается.
+reasoning_reserve_tokens:
+  none: 0
+  minimal: 2000
+  low: 8000
+  medium: 16000
+  high: 32000
+  xhigh: 48000
+  max: 64000
+  default: 16000   # effort не передан — модель рассуждает на своём уровне по умолчанию

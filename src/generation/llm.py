@@ -14,6 +14,7 @@ from schemas.presentation import (
     _slide_has_required_content,
 )
 from generation import postprocess
+from generation.llm_models import completion_params, record_usage, track_usage
 from generation.prompts import (
     PROMPTS_VERSION, load_enum_map, load_template, load_template_map, load_text, load_yaml,
 )
@@ -352,14 +353,24 @@ def _other_titles(presentation: PresentationSchema, exclude_index: int) -> str:
 
 
 async def _ask_json(system_prompt: str, max_tokens: int) -> dict:
+    """Дозапрос. max_tokens — бюджет видимого ответа; параметры под модель
+    (max_completion_tokens, запас на рассуждения, temperature) — completion_params."""
     response = await client.chat.completions.create(
-        model=settings.openai_model,
-        temperature=0.7,
-        max_tokens=max_tokens,
-        response_format={"type": "json_object"},
+        **completion_params(max_tokens),
         messages=[{"role": "system", "content": system_prompt}],
     )
-    return json.loads(response.choices[0].message.content)
+    record_usage(response)
+    return json.loads(_response_text(response))
+
+
+def _response_text(response) -> str:
+    choice = response.choices[0]
+    content = choice.message.content
+    if not content:
+        # У моделей с рассуждениями пустой ответ с finish_reason=length значит,
+        # что рассуждения съели max_completion_tokens (см. prompts/models.yaml)
+        raise ValueError(f"empty LLM response (finish_reason={choice.finish_reason})")
+    return content
 
 
 def _patch_system_prompt(request: UserRequest, presentation: PresentationSchema, slide: Slide) -> str:
@@ -533,6 +544,7 @@ async def postprocess_presentation(request: UserRequest, presentation: Presentat
 async def generate_presentation_structure(request: UserRequest) -> PresentationSchema:
     system_prompt, user_prompt = build_prompts(request)
     mode = _material_mode(request)
+    params = completion_params(_max_tokens_for(_slide_count(request)))
 
     logger.info("Generating presentation", extra={
         "topic": request.topic[:50],
@@ -543,27 +555,34 @@ async def generate_presentation_structure(request: UserRequest) -> PresentationS
         "slide_count_hint": _slide_count(request),
         "source_type": request.source_type.value,
         "source_mode": mode.value if mode else None,
+        "reasoning_effort": params.get("extra_body", {}).get("reasoning_effort"),
+        "token_limit": params.get("max_tokens") or params.get("extra_body", {}).get("max_completion_tokens"),
     })
 
     response = await client.chat.completions.create(
-        model=settings.openai_model,
-        temperature=0.7,
+        **params,
         # 4500 хватало на старую структуру, но DOKLAD теперь пишет subtitle+icon
         # на КАЖДЫЙ bullet и лимиты полей выросли (bullets/metrics.source и
         # т.д.) — в json_object-режиме модель при нехватке бюджета не ломает
         # синтаксис, а тихо обрезает слайды/поля в конце, чтобы закрыть JSON
         # корректно. Из-за этого "строго 9 слайдов" превращалось в 8 без
         # ошибки парсинга — см. лог с slide_count=8. Для 12–15 слайдов
-        # бюджет растёт — см. _max_tokens_for.
-        max_tokens=_max_tokens_for(_slide_count(request)),
-        response_format={"type": "json_object"},
+        # бюджет растёт — см. _max_tokens_for. Для моделей с рассуждениями это
+        # бюджет видимого JSON: completion_params добавляет запас на рассуждения
+        # и передаёт его как max_completion_tokens.
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ],
     )
 
-    raw_json = response.choices[0].message.content
+    record_usage(response)
+    if response.choices[0].finish_reason == "length":
+        logger.warning("LLM response hit the token limit — JSON may be truncated", extra={
+            "limit": params.get("max_tokens") or params.get("extra_body", {}).get("max_completion_tokens"),
+            "usage": getattr(response, "usage", None) and response.usage.model_dump(),
+        })
+    raw_json = _response_text(response)
 
     try:
         data = json.loads(raw_json)

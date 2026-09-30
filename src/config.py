@@ -9,6 +9,11 @@ class Settings(BaseSettings):
     openai_api_key: str
     openai_base_url: str = "https://api.proxyapi.ru/openai/v1"
     openai_model: str = "gpt-4o"
+    # Уровень рассуждений для моделей с рассуждениями (gpt-6-luna: none, low,
+    # medium, high, xhigh, max). Без параметра модель работает на своём уровне
+    # по умолчанию (у gpt-6-luna — medium: медленнее и дороже). Моделям без
+    # рассуждений не передаётся — см. generation/llm_models.py, prompts/models.yaml.
+    openai_reasoning_effort: str = "low"
     # Явный таймаут одного запроса к LLM (ТЗ 4.6). Без него зависший запрос
     # ограничивал только job_timeout воркера.
     openai_timeout_seconds: float = 45.0

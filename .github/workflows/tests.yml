@@ -1,0 +1,70 @@
+# Автотесты без ключей и без вызовов модели: юнит-тесты, снимок собранных
+# промптов (что изменилось относительно базы) и check_case.py на сохранённых
+# колодах старого движка. Запускается на каждый PR и push в main.
+name: tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # Settings требует эти поля; в тестах модель не вызывается
+      TELEGRAM_BOT_TOKEN: ci-dummy
+      OPENAI_API_KEY: ci-dummy
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # нужна база для снимка промптов
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"   # как в образе прода (playwright/python:v1.44.0-jammy)
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Зависимости
+        run: pip install -r requirements.txt
+
+      - name: Юнит-тесты
+        run: python -m unittest discover -s tests/unit -t tests/unit -v
+
+      - name: Снимок собранных промптов (база → эта версия)
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          python tests/golden/prompt_snapshot.py "$RUNNER_TEMP/snap_head"
+          if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
+            echo "Базы для сравнения нет — снят только снимок текущей версии."
+            exit 0
+          fi
+          git worktree add -q "$RUNNER_TEMP/base" "$BASE_SHA"
+          if ! python tests/golden/prompt_snapshot.py "$RUNNER_TEMP/snap_base" --root "$RUNNER_TEMP/base"; then
+            echo "::warning::Снимок базы собрать не удалось (слишком старая база?) — сравнение пропущено."
+            exit 0
+          fi
+          python tests/golden/prompt_snapshot.py --diff "$RUNNER_TEMP/snap_base" "$RUNNER_TEMP/snap_head" \
+            --show --md "$GITHUB_STEP_SUMMARY"
+
+      - name: check_case.py на колодах из tests/fixtures/specs/
+        # Колоды старого движка заведомо с нарушениями (отчёт «до»): --no-fail
+        # пишет их в сводку, а шаг падает только при ошибке самого скрипта.
+        shell: bash
+        run: |
+          set -o pipefail
+          echo "## check_case.py на tests/fixtures/specs/ (колоды старого движка)" >> "$GITHUB_STEP_SUMMARY"
+          for pair in prodazhi_Q3:G-01 hakaton:G-02 prodazhi_topic_only:G-03; do
+            deck="tests/fixtures/specs/${pair%%:*}.json"; case="${pair##*:}"
+            python tests/golden/check_case.py "$deck" "$case" --md --no-fail | tee -a "$GITHUB_STEP_SUMMARY"
+          done
