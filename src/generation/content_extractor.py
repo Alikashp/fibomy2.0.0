@@ -44,22 +44,76 @@ def _truncate(text: str, source: str) -> str:
     return text
 
 
-def _extract_pdf(file_bytes: bytes) -> str:
-    import io
+def _rows_to_text(rows: list[list[str]], number: int) -> str:
+    """Строки таблицы → «[Таблица N]» + «ячейка | ячейка». Общий формат для
+    docx и pdf: промпт (prompts/source_material_*.txt) описывает именно его."""
+    lines = [" | ".join(row) for row in rows if any(row)]
+    if not lines:
+        return ""
+    return f"[Таблица {number}]\n" + "\n".join(lines)
+
+
+def _inside(obj: dict, bboxes: list[tuple]) -> bool:
+    cx = (obj["x0"] + obj["x1"]) / 2
+    cy = (obj["top"] + obj["bottom"]) / 2
+    return any(x0 <= cx <= x1 and top <= cy <= bottom for x0, top, x1, bottom in bboxes)
+
+
+def _extract_pdf_page(page, first_table_number: int) -> tuple[list[str], int]:
+    """Текст страницы с таблицами на своих местах. Таблицы — через
+    find_tables()/extract(), текст — без символов, попавших в таблицы, чтобы
+    числа не шли дважды. Возвращает куски текста и число найденных таблиц."""
+    tables = sorted(page.find_tables(), key=lambda t: t.bbox[1])
+    if not tables:
+        text = page.extract_text()
+        return ([text] if text else []), 0
+
+    bboxes = [t.bbox for t in tables]
+    text_page = page.filter(lambda obj: obj.get("object_type") != "char" or not _inside(obj, bboxes))
+    x0, top0, x1, bottom0 = page.bbox
+
+    def region(top: float, bottom: float) -> str | None:
+        top, bottom = max(top, top0), min(bottom, bottom0)
+        if bottom <= top:
+            return None
+        return text_page.crop((x0, top, x1, bottom)).extract_text() or None
 
     chunks: list[str] = []
+    cursor = top0
+    number = first_table_number
+    for table in tables:
+        _, t_top, _, t_bottom = table.bbox
+        chunks.append(region(cursor, t_top))
+        number += 1
+        rows = [[" ".join((cell or "").split()) for cell in row] for row in table.extract()]
+        chunks.append(_rows_to_text(rows, number))
+        chunks.append(region(max(cursor, t_top), t_bottom))  # текст сбоку от таблицы
+        cursor = max(cursor, t_bottom)
+    chunks.append(region(cursor, bottom0))
+    return [c for c in chunks if c and c.strip()], number - first_table_number
+
+
+def _extract_pdf(file_bytes: bytes) -> str:
+    """Текст и таблицы (ТЗ 3.1). Раньше был только extract_text(): строки
+    таблицы склеивались без разделителей колонок (PROMPT_REVIEW 4.2).
+    Страница без таблиц извлекается как раньше."""
+    import io
+
+    pages: list[str] = []
+    table_number = 0
     with pdfplumber_open(io.BytesIO(file_bytes)) as pdf:
         for page in pdf.pages[:MAX_PDF_PAGES]:
-            text = page.extract_text()
-            if text:
-                chunks.append(text)
-    return "\n\n".join(chunks)
+            chunks, found = _extract_pdf_page(page, table_number)
+            table_number += found
+            if chunks:
+                pages.append("\n".join(chunks))
+    return "\n\n".join(pages)
 
 
 def _docx_table_to_text(table, number: int) -> str:
     """Таблица → строки «ячейка | ячейка». Объединённая ячейка python-docx
     отдаёт несколько раз подряд — повторы в строке схлопываем."""
-    rows: list[str] = []
+    rows: list[list[str]] = []
     for row in table.rows:
         cells: list[str] = []
         prev = None
@@ -68,11 +122,8 @@ def _docx_table_to_text(table, number: int) -> str:
                 continue
             prev = cell._tc
             cells.append(" ".join(cell.text.split()))
-        if any(cells):
-            rows.append(" | ".join(cells))
-    if not rows:
-        return ""
-    return f"[Таблица {number}]\n" + "\n".join(rows)
+        rows.append(cells)
+    return _rows_to_text(rows, number)
 
 
 def _extract_docx(file_bytes: bytes) -> str:

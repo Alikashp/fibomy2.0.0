@@ -68,6 +68,7 @@ body{
 .ft{position:absolute;bottom:10px;left:24px;right:24px;display:flex;justify-content:space-between;z-index:5}
 .ftb{font-family:'Outfit',sans-serif;font-size:9px;font-weight:700;color:#B8B0A5}
 .ftn{font-size:9px;color:#B8B0A5}
+.ftnote{font-size:9px;color:var(--text-mute);text-align:center;flex:1;padding:0 12px}
 
 /* ══ TITLE ══ */
 .dk-title-wrap{display:flex;flex:1;min-height:0}
@@ -267,7 +268,7 @@ mermaid.initialize({
   {% endfor %}
 </div>
 {% endif %}
-<div class="ft"><div class="ftb">Fibonacci.</div><div class="ftn">{{ slide.index }} / {{ slides|length }}</div></div>
+<div class="ft"><div class="ftb">Fibonacci.</div>{% if slide.footnote %}<div class="ftnote">{{ slide.footnote }}</div>{% endif %}<div class="ftn">{{ slide.index }} / {{ slides|length }}</div></div>
 
 {% elif slide.layout.value == 'metrics' %}
 <div class="dk-m-head">
@@ -306,7 +307,7 @@ mermaid.initialize({
   </div>
   {% endfor %}
 </div>
-<div class="ft"><div class="ftb">Fibonacci.</div><div class="ftn">{{ slide.index }} / {{ slides|length }}</div></div>
+<div class="ft"><div class="ftb">Fibonacci.</div>{% if slide.footnote %}<div class="ftnote">{{ slide.footnote }}</div>{% endif %}<div class="ftn">{{ slide.index }} / {{ slides|length }}</div></div>
 
 {% elif slide.layout.value == 'two_column' %}
 <div class="dk-tc-head">
@@ -336,7 +337,7 @@ mermaid.initialize({
   </div>
 </div>
 {% endif %}
-<div class="ft"><div class="ftb">Fibonacci.</div><div class="ftn">{{ slide.index }} / {{ slides|length }}</div></div>
+<div class="ft"><div class="ftb">Fibonacci.</div>{% if slide.footnote %}<div class="ftnote">{{ slide.footnote }}</div>{% endif %}<div class="ftn">{{ slide.index }} / {{ slides|length }}</div></div>
 
 {% elif slide.layout.value == 'diagram' %}
 <div class="dk-d-head">
@@ -345,7 +346,7 @@ mermaid.initialize({
 </div>
 <div class="dk-d-canvas">{% if slide.mermaid_code %}<div class="mermaid">{{ slide.mermaid_code }}</div>{% endif %}</div>
 {% if slide.body_text %}<div class="dk-d-caption">{{ slide.body_text }}</div>{% endif %}
-<div class="ft"><div class="ftb">Fibonacci.</div><div class="ftn">{{ slide.index }} / {{ slides|length }}</div></div>
+<div class="ft"><div class="ftb">Fibonacci.</div>{% if slide.footnote %}<div class="ftnote">{{ slide.footnote }}</div>{% endif %}<div class="ftn">{{ slide.index }} / {{ slides|length }}</div></div>
 
 {% elif slide.layout.value == 'quote' %}
 <div class="dk-q-label">ГЛАВНАЯ МЫСЛЬ</div>
@@ -354,7 +355,7 @@ mermaid.initialize({
   <div class="dk-q-div"></div>
   {% if slide.subtitle %}<div class="dk-q-sub">{{ slide.subtitle }}</div>{% endif %}
 </div>
-<div class="ft"><div class="ftb">Fibonacci.</div><div class="ftn">{{ slide.index }} / {{ slides|length }}</div></div>
+<div class="ft"><div class="ftb">Fibonacci.</div>{% if slide.footnote %}<div class="ftnote">{{ slide.footnote }}</div>{% endif %}<div class="ftn">{{ slide.index }} / {{ slides|length }}</div></div>
 
 {% elif slide.layout.value == 'timeline' %}
 <div class="dk-tl-head">
@@ -374,7 +375,7 @@ mermaid.initialize({
   </div>
   {% endfor %}
 </div>
-<div class="ft"><div class="ftb">Fibonacci.</div><div class="ftn">{{ slide.index }} / {{ slides|length }}</div></div>
+<div class="ft"><div class="ftb">Fibonacci.</div>{% if slide.footnote %}<div class="ftnote">{{ slide.footnote }}</div>{% endif %}<div class="ftn">{{ slide.index }} / {{ slides|length }}</div></div>
 
 {% elif slide.layout.value == 'image_full' %}
 <div class="dk-if-wrap">
@@ -402,7 +403,7 @@ mermaid.initialize({
   <div class="dk-if-img"><img src="{{ slide.image_url }}" alt=""></div>
   {% endif %}
 </div>
-<div class="ft"><div class="ftb">Fibonacci.</div><div class="ftn">{{ slide.index }} / {{ slides|length }}</div></div>
+<div class="ft"><div class="ftb">Fibonacci.</div>{% if slide.footnote %}<div class="ftnote">{{ slide.footnote }}</div>{% endif %}<div class="ftn">{{ slide.index }} / {{ slides|length }}</div></div>
 
 {% elif slide.layout.value == 'image_hero' %}
 {% if slide.image_url %}
@@ -436,7 +437,7 @@ mermaid.initialize({
   {% endfor %}
 </div>
 {% endif %}
-<div class="ft"><div class="ftb">Fibonacci.</div><div class="ftn">{{ slide.index }} / {{ slides|length }}</div></div>
+<div class="ft"><div class="ftb">Fibonacci.</div>{% if slide.footnote %}<div class="ftnote">{{ slide.footnote }}</div>{% endif %}<div class="ftn">{{ slide.index }} / {{ slides|length }}</div></div>
 
 {% elif slide.layout.value == 'closing' %}
 <div class="dk-c-wrap">
@@ -480,7 +481,7 @@ mermaid.initialize({
   </div>
   {% endif %}
 </div>
-<div class="ft"><div class="ftb">Fibonacci.</div><div class="ftn">{{ slide.index }} / {{ slides|length }}</div></div>
+<div class="ft"><div class="ftb">Fibonacci.</div>{% if slide.footnote %}<div class="ftnote">{{ slide.footnote }}</div>{% endif %}<div class="ftn">{{ slide.index }} / {{ slides|length }}</div></div>
 
 {% endif %}
 </div>

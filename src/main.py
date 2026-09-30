@@ -812,7 +812,7 @@ async def on_onboarding_choice(call: CallbackQuery, state: FSMContext):
         # старый материал не должен уйти в генерацию.
         await state.update_data(
             source_type="topic", raw_text=None, document_ref=None,
-            document_mime_type=None, source_mode=None,
+            document_mime_type=None, source_mode=None, source_name=None,
         )
     elif key == "source_mode":
         await _save_source_mode(call.from_user.id, value)
@@ -916,6 +916,7 @@ async def on_material(message: Message, state: FSMContext):
             source_type="document",
             document_ref=document_ref,
             document_mime_type=mime,
+            source_name=(doc.file_name or "")[:255] or None,
             raw_text=None,
             last_short_text_error_msg_id=None,
         )
@@ -927,6 +928,7 @@ async def on_material(message: Message, state: FSMContext):
         await state.update_data(
             source_type="text",
             raw_text=text[:15000],
+            source_name=None,
             document_ref=None,
             document_mime_type=None,
             last_short_text_error_msg_id=None,
@@ -1147,6 +1149,8 @@ async def generate_and_send(message: Message, data: dict, watermark: bool = True
         # (_default_slide_count). None — тип без вопроса о числе слайдов.
         "slide_count_hint": int(data["slide_count"]) if data.get("slide_count") else None,
         "source_mode": data.get("source_mode") if source_type != "topic" else None,
+        # Имя файла — для подписи источника чисел «по данным: …» (postprocess.assign_sources)
+        "source_name": data.get("source_name") if source_type == "document" else None,
     }
 
     job_id = uuid.uuid4().hex[:12]

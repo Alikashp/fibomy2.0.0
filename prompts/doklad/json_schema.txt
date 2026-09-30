@@ -1,0 +1,22 @@
+{
+  "meta": {
+    "title": "string", "subtitle": "string|null", "author": "string|null",
+    "company": "string|null", "date": "string|null", "language": "ru|en|uz|kk|es|ar|zh|de",
+    "presentation_type": "doklad",
+    "audience": "investors|clients|students|colleagues|management|general|schoolkids|friends",
+    "color_scheme": "default",
+    "source_genre": "report|task|plan|article|null (жанр МАТЕРИАЛА; без материала — null)"
+  },
+  "slides": [{
+    "index": 1,
+    "layout": "title|bullets|metrics|two_column|timeline|diagram|quote|image_full|image_hero|closing",
+    "title": "string (обязателен на каждом слайде)", "subtitle": "string|null", "body_text": "string|null",
+    "bullets": [{"text": "string", "subtitle": "string|null", "icon": "string|null (из списка допустимых иконок)", "emphasis": false}],
+    "metrics": [{"value": "string", "label": "string", "trend": "string|null"}],
+    "timeline_items": [{"date": "string|null", "title": "string", "description": "string|null"}],
+    "two_column": {"left_title": "string|null", "left_text": "string|null", "left_bullets": [{"text": "string", "emphasis": false}], "right_title": "string|null", "right_text": "string|null", "right_bullets": [{"text": "string", "emphasis": false}], "right_preferred": false},
+    "image_query": "string|null (ВСЕГДА на английском)",
+    "mermaid_code": "string|null",
+    "speaker_notes": "string|null"
+  }]
+}

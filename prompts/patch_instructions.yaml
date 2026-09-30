@@ -1,12 +1,12 @@
 # Дозаполнение пустого слайда: что заполнить (instruction) и форма ответа (example). Ключ — SlideLayout.
 bullets:
-  instruction: 'Заполни "bullets": 3-4 пункта. У каждого: "text" — информационное предложение с конкретикой, "subtitle" — название пункта (1-3 слова), "icon" — одна из: file-text, list, check, alert-triangle, clock, calendar, users, user, coin, chart-bar, target, bulb, search, settings, lock, message-circle, folder, arrow-up, arrow-right, help-circle, star, bolt, shield, refresh, link.'
+  instruction: 'Заполни "bullets": 2-4 пункта, каждый — мысль, которой нет на остальных слайдах. У каждого: "text" — информационное предложение с конкретным фактом, "subtitle" — название пункта (1-3 слова), "icon" — одна из: file-text, list, check, alert-triangle, clock, calendar, users, user, coin, chart-bar, target, bulb, search, settings, lock, message-circle, folder, arrow-up, arrow-right, help-circle, star, bolt, shield, refresh, link.'
   example: '{"bullets": [{"text": "...", "subtitle": "...", "icon": "..."}]}'
 why_now:
   instruction: 'Заполни "bullets": 3-4 пункта, каждый — одно законченное предложение.'
   example: '{"bullets": [{"text": "..."}]}'
 metrics:
-  instruction: 'Заполни "metrics": 2-3 показателя. У каждого: "value" (например "44%"), "label" (2-4 слова), "trend" (короткое пояснение к цифре). Используй правдоподобные для темы цифры, не выдумывай абсурдные значения.'
+  instruction: 'Заполни "metrics": 2-3 показателя. У каждого: "value" (например "44%"), "label" (2-4 слова), "trend" (короткое пояснение к цифре). Числа — только по правилу чисел выше. Подходящих чисел нет — верни пустой список "metrics".'
   example: '{"metrics": [{"value": "...", "label": "...", "trend": "..."}]}'
 two_column:
   instruction: 'Заполни "two_column": "left_title", "right_title" (название каждой стороны сравнения) и по 3 пункта в "left_bullets"/"right_bullets" — каждый пункт объект {"text": "..."}.'
@@ -18,7 +18,7 @@ quote:
   instruction: Заполни "body_text" — сильный тезис одним предложением. "subtitle" — одно предложение, поясняющее, почему это так.
   example: '{"body_text": "...", "subtitle": "..."}'
 timeline:
-  instruction: 'Заполни "timeline_items": 4 этапа. У каждого: "date" (период), "title" (2-4 слова), "description" (одно предложение).'
+  instruction: 'Заполни "timeline_items": столько этапов, сколько дат в источнике, до 5. У каждого: "date" — дословно из источника (нет даты — null), "title" (2-4 слова), "description" (одно предложение).'
   example: '{"timeline_items": [{"date": "...", "title": "...", "description": "..."}]}'
 image_full:
   instruction: 'Заполни "image_query" (на английском, для поиска фото) и "two_column" с двумя сопоставленными блоками: "left_title"/"left_text" и "right_title"/"right_text".'
