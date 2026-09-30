@@ -35,6 +35,7 @@ from config import settings
 from schemas.presentation import UserRequest, PresentationType, SlideLayout, SourceMode, _slide_has_required_content
 from generation.content_extractor import extract_from_document, extract_from_url
 from generation.llm import generate_presentation_structure, _default_slide_count
+from generation.llm_models import track_usage
 from generation.image_fetcher import fetch_images_for_slides
 from generation.template_engine import render_presentation
 from generation.pdf_renderer import html_to_pdf, get_renderer, shutdown_renderer
@@ -126,8 +127,10 @@ async def generate_presentation_job(
         request = UserRequest.model_validate(request_data)
 
         await _status("⚙️ Пишу текст слайдов...")
-        with stage("llm", timings):
+        with stage("llm", timings), track_usage() as usage:
             presentation = await generate_presentation_structure(request)
+        # Токены и стоимость по колоде (ТЗ 4.7); рассуждения входят в output_tokens
+        logger.info("LLM usage", extra={"model": settings.openai_model, **usage.as_dict()})
 
         if request.presentation_type == PresentationType.DOKLAD:
             # Диагностика написана прямо в тексте сообщения — это осталось с

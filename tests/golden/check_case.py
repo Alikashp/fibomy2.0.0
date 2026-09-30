@@ -1,11 +1,12 @@
 """Проверка JSON колоды по ожиданиям golden-кейса (ТЗ 7.4).
 
-    python tests/golden/check_case.py <deck.json> <G-01|G-02|G-03> [--md]
+    python tests/golden/check_case.py <deck.json> <G-01|G-02|G-03> [--md] [--no-fail]
 
 На выходе — список нарушений (обязательные числа с подписями, запрещённые
 утверждения и числа, даты в таймлайне, слайды без заголовка, выдуманные
 source) и предупреждений (эвристики, которые стоит проверить глазами).
-Код возврата 1, если есть нарушения.
+Код возврата 1, если есть нарушения (с --no-fail — 0: так в CI падает только
+ошибка самого скрипта, а нарушения идут в отчёт).
 
 Проверки детерминированные и намеренно простые: регулярные выражения по
 «единицам текста» слайда (заголовок, пункт, метрика, этап таймлайна…).
@@ -156,6 +157,8 @@ CHANNELS = {"продажи в зале": r"зал", "доставка": r"до�
 CITIES = {"Санкт-Петербург": r"петербург|спб", "Петрозаводск": r"петрозаводск",
           "Мурманск": r"мурманск", "Архангельск": r"архангельск"}
 CHANNEL_ANY = "|".join(CHANNELS.values())
+# Приоритет «две новые точки в Санкт-Петербурге», а не «две точки» Архангельска из таблицы городов
+TWO_NEW_POINTS = r"(откры\w*|запуст\w*) дв\w* (нов\w+ )?(точ|кофе)|дв\w* нов\w+ (точ|кофе)|дв\w* (точ|кофе)\w* в (санкт|спб|петербург)"
 
 
 def check_g01(deck: dict, r: Report) -> None:
@@ -187,7 +190,7 @@ def check_g01(deck: dict, r: Report) -> None:
     r.check(bool(re.search(r"гост|трафик", text)), "рост обеспечен числом гостей, а не ценой")
     r.check(bool(re.search(r"предзаказ", text)) and bool(re.search(r"обогна|опереди", text)),
             "предзаказ запущен в июле и обогнал корпоративные заказы")
-    r.check(bool(re.search(r"лояльност", text)) and bool(re.search(r"дв\w* (нов\w+ )?(точ|кофе)", text))
+    r.check(bool(re.search(r"лояльност", text)) and bool(re.search(TWO_NEW_POINTS, text))
             and bool(re.search(r"корпоратив\w* (клиент|предложен)|предложени\w* для корпоратив", text)),
             "три приоритета IV квартала")
 
@@ -208,7 +211,7 @@ def check_g01(deck: dict, r: Report) -> None:
     for s in content_slides(deck):
         head = norm(f"{s.get('title')} {s.get('subtitle')}")
         n = len(s.get("timeline_items") or []) or len(s.get("bullets") or [])
-        if re.search(r"iv квартал|план|приоритет", head) and n > 3:
+        if re.search(r"iv квартал|приоритет|планы? на", head) and n > 3:  # не «превысил план»
             extra.append(f"слайд {s['index']}: {n} пунктов")
     extra += [quote(u, 60) for u in find(units, r"анализ результатов|оценка эффективности")]
     r.check(not extra, "не больше трёх приоритетов IV квартала", "; ".join(extra))
@@ -229,7 +232,7 @@ def check_g01(deck: dict, r: Report) -> None:
     repeats = []
     for label, p in (("47,3 млн", r"47[,.]3"), ("+41%", num(r"41\s?%")), ("112%", num(r"112")),
                      ("87%", num(r"87\s?%")), ("программа лояльности", r"лояльност"),
-                     ("две новые точки", r"дв\w* (нов\w+ )?(точ|кофе)")):
+                     ("две новые точки", TWO_NEW_POINTS)):
         slides = {s["index"] for s in content_slides(deck) if re.search(p, slide_text(s))}
         if len(slides) > 1:
             repeats.append(f"{label} — слайды {', '.join(map(str, sorted(slides)))}")
@@ -257,7 +260,8 @@ def check_g02(deck: dict, r: Report) -> None:
             and bool(re.search(r"визуализ|генерац\w* слайд", text)), "три бизнес-задачи сервиса")
     five = find(units, num(r"5\s?мин"))
     r.check(bool(five), "«5 минут» есть в колоде")
-    not_limit = [u for u in five if not re.search(r"не более|не дольше|не больше|до 5|максимум|огранич|лимит|предел", u.text)]
+    not_limit = [u for u in five if not re.search(
+        r"не более|не дольше|не больше|до 5|максимум|огранич|лимит|предел|превыша|не должн|не может|уложит", u.text)]
     r.check(bool(five) and not not_limit, "«5 минут» — с подписью ограничения", "; ".join(quote(u) for u in not_limit))
     r.check(bool(find(units, r"(3|три|трех|трёх)\s+вариант")), "требование трёх вариантов вёрстки")
     r.check(bool(re.search(r"не видел|незнаком|неизвестн|произвольн", text)),
@@ -288,8 +292,16 @@ def check_g02(deck: dict, r: Report) -> None:
     as_result = list({(u.slide, u.text): u for u in as_result}.values())
     r.check(not as_result, "«5 минут» и «3 варианта» не выданы за результат", "; ".join(quote(u, 70) for u in as_result))
 
+    # Запрещены заголовки-рамки «Что сделано», «Результаты (работы)» и т.п.; слово
+    # «результат» внутри заголовка-вывода («…с проверкой результата») — только предупреждение
+    frame = r"^(что сделано|результаты?( работы| проекта)?|измеримые показатели\w*( успеха)?|эффективность сервиса)\W*$"
     bad_titles = [f"слайд {s['index']}: «{s['title']}»" for s in content_slides(deck)
-                  if re.search(r"что сделано|результат|измеримые показатели|эффективность сервиса", norm(s.get("title")))]
+                  if re.search(frame, norm(s.get("title")).strip())]
+    for s in content_slides(deck):
+        t = norm(s.get("title"))
+        if "результат" in t and not re.search(frame, t.strip()):
+            r.warnings.append(f"слайд {s['index']}: «{s['title']}» — слово «результат» в заголовке, "
+                              f"проверить, не выдано ли требование за результат")
     r.check(not bad_titles, "нет слайдов «Что сделано», «Результаты» и т.п.", "; ".join(bad_titles))
 
     # краткие причастия: «разработаны», «создана»; «создания», «проведение» не считаются
@@ -385,7 +397,7 @@ def main(argv: list[str]) -> int:
             print(f"предупреждение: {w}")
         print(f"итого: нарушений {len(report.violations)}, предупреждений {len(report.warnings)}, "
               f"пройдено {len(report.passed)}")
-    return 1 if report.violations else 0
+    return 1 if report.violations and "--no-fail" not in argv else 0
 
 
 if __name__ == "__main__":

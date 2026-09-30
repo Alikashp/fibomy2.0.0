@@ -1,0 +1,9 @@
+{
+  "report": "tests/golden/reports/2026-09-30-before.md",
+  "note": "Нарушения check_case.py на колодах старого движка (tests/fixtures/specs/), промпты 2026-09-26",
+  "violations": {
+    "G-01": 15,
+    "G-02": 11,
+    "G-03": 6
+  }
+}
