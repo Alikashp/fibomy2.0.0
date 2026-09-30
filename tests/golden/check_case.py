@@ -258,7 +258,8 @@ def check_g02(deck: dict, r: Report) -> None:
             and bool(re.search(r"визуализ|генерац\w* слайд", text)), "три бизнес-задачи сервиса")
     five = find(units, num(r"5\s?мин"))
     r.check(bool(five), "«5 минут» есть в колоде")
-    not_limit = [u for u in five if not re.search(r"не более|не дольше|не больше|до 5|максимум|огранич|лимит|предел", u.text)]
+    not_limit = [u for u in five if not re.search(
+        r"не более|не дольше|не больше|до 5|максимум|огранич|лимит|предел|превыша|не должн|не может|уложит", u.text)]
     r.check(bool(five) and not not_limit, "«5 минут» — с подписью ограничения", "; ".join(quote(u) for u in not_limit))
     r.check(bool(find(units, r"(3|три|трех|трёх)\s+вариант")), "требование трёх вариантов вёрстки")
     r.check(bool(re.search(r"не видел|незнаком|неизвестн|произвольн", text)),
@@ -289,8 +290,16 @@ def check_g02(deck: dict, r: Report) -> None:
     as_result = list({(u.slide, u.text): u for u in as_result}.values())
     r.check(not as_result, "«5 минут» и «3 варианта» не выданы за результат", "; ".join(quote(u, 70) for u in as_result))
 
+    # Запрещены заголовки-рамки «Что сделано», «Результаты (работы)» и т.п.; слово
+    # «результат» внутри заголовка-вывода («…с проверкой результата») — только предупреждение
+    frame = r"^(что сделано|результаты?( работы| проекта)?|измеримые показатели\w*( успеха)?|эффективность сервиса)\W*$"
     bad_titles = [f"слайд {s['index']}: «{s['title']}»" for s in content_slides(deck)
-                  if re.search(r"что сделано|результат|измеримые показатели|эффективность сервиса", norm(s.get("title")))]
+                  if re.search(frame, norm(s.get("title")).strip())]
+    for s in content_slides(deck):
+        t = norm(s.get("title"))
+        if "результат" in t and not re.search(frame, t.strip()):
+            r.warnings.append(f"слайд {s['index']}: «{s['title']}» — слово «результат» в заголовке, "
+                              f"проверить, не выдано ли требование за результат")
     r.check(not bad_titles, "нет слайдов «Что сделано», «Результаты» и т.п.", "; ".join(bad_titles))
 
     # краткие причастия: «разработаны», «создана»; «создания», «проведение» не считаются

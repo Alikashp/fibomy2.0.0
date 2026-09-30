@@ -12,6 +12,7 @@ on:
     paths:
       - "prompts/**"
       - "src/generation/**"
+      - "tests/golden/**"
   workflow_dispatch:
 
 permissions:

@@ -120,6 +120,7 @@ async def _run_one(case: Case, n: int, out: Path) -> dict:
 
     spec = presentation.model_dump(mode="json")
     (out / f"{run_name}.json").write_text(json.dumps(spec, ensure_ascii=False, indent=2), encoding="utf-8")
+    _print_deck(run_name, spec)
 
     try:
         html = render_presentation(presentation, image_urls={}, watermark=False, color_scheme="light")
@@ -133,6 +134,18 @@ async def _run_one(case: Case, n: int, out: Path) -> dict:
         report = check_case.check(spec, case.case)
         result.update(violations=report.violations, warnings=report.warnings, passed=len(report.passed))
     return result
+
+
+def _print_deck(run_name: str, spec: dict) -> None:
+    """Текст колоды в лог job'а: артефакты бывают недоступны, а лог читается
+    через API GitHub — по нему разбираем нарушения check_case."""
+    import check_case
+    print(f"--- {run_name}: {len(spec['slides'])} слайдов, жанр {spec['meta'].get('source_genre')}")
+    for slide in spec["slides"]:
+        print(f"  #{slide['index']} [{slide['layout']}] {slide.get('title')!r}")
+        for unit in check_case.units_of(slide):
+            if unit.kind != "title":
+                print(f"      {unit.kind}: {unit.text[:200]}")
 
 
 def _fmt_tokens(u: dict | None) -> str:
