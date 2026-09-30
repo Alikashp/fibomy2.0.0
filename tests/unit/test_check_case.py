@@ -38,5 +38,52 @@ class OldDecks(unittest.TestCase):
         self.assertNotIn("сентябр", " ".join(g01.violations))
 
 
+class GoldenRunFalsePositives(unittest.TestCase):
+    """Фразы из реальных колод gpt-6-luna (golden, PR #75), на которых check_case ошибался."""
+
+    def _deck(self, slides):
+        body = [{"index": 1, "layout": "title", "title": "Т"}]
+        body += [dict(s, index=i) for i, s in enumerate(slides, start=2)]
+        body.append({"index": len(body) + 1, "layout": "closing", "title": "Спасибо"})
+        return {"slides": body}
+
+    def test_cities_slide_is_not_q4_priorities_and_two_points_of_arkhangelsk(self):
+        deck = self._deck([
+            {"layout": "bullets", "title": "Санкт-Петербург превысил план, Мурманск — нет", "bullets": [
+                {"text": "Санкт-Петербург 9 точек принесли 26,6 млн руб.; план 112%"},
+                {"text": "Петрозаводск 4 точки, план 104%"},
+                {"text": "Мурманск 3 точки, план 87% из-за ремонта торгового центра"},
+                {"text": "Архангельск две точки принесли 4,7 млн руб., план 98%"}]},
+            {"layout": "bullets", "title": "В IV квартале — три приоритета", "bullets": [
+                {"text": "Запускается программа лояльности"},
+                {"text": "В Санкт-Петербурге планируется открыть две точки"},
+                {"text": "Новое предложение для корпоративных клиентов"}]},
+        ])
+        r = check_case.check(deck, "G-01")
+        joined = " | ".join(r.violations)
+        self.assertNotIn("приоритетов IV квартала", joined)
+        self.assertNotIn("две новые точки", joined)
+        self.assertIn("три приоритета IV квартала", r.passed)
+
+    def test_real_q4_extra_priority_still_found(self):
+        deck = self._deck([{"layout": "bullets", "title": "Планы на IV квартал", "bullets": [
+            {"text": "а"}, {"text": "б"}, {"text": "в"}, {"text": "Анализ результатов"}]}])
+        self.assertIn("не больше трёх приоритетов", " | ".join(check_case.check(deck, "G-01").violations))
+
+    def test_constraint_wording_and_conclusion_title(self):
+        deck = self._deck([
+            {"layout": "two_column", "title": "Решение должно укладываться в ограничения",
+             "two_column": {"left_bullets": [{"text": "Генерация одной колоды должна занимать не более 5 минут."}],
+                            "right_bullets": [{"text": "Время генерации не должно превышать 5 минут."}]}},
+            {"layout": "diagram", "title": "Пайплайн связывает разбор шаблона с проверкой результата",
+             "mermaid_code": "graph LR"},
+        ])
+        r = check_case.check(deck, "G-02")
+        joined = " | ".join(r.violations)
+        self.assertNotIn("с подписью ограничения", joined)
+        self.assertNotIn("«Что сделано»", joined)
+        self.assertTrue(any("результат" in w for w in r.warnings))
+
+
 if __name__ == "__main__":
     unittest.main()

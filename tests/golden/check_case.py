@@ -157,6 +157,8 @@ CHANNELS = {"продажи в зале": r"зал", "доставка": r"до�
 CITIES = {"Санкт-Петербург": r"петербург|спб", "Петрозаводск": r"петрозаводск",
           "Мурманск": r"мурманск", "Архангельск": r"архангельск"}
 CHANNEL_ANY = "|".join(CHANNELS.values())
+# Приоритет «две новые точки в Санкт-Петербурге», а не «две точки» Архангельска из таблицы городов
+TWO_NEW_POINTS = r"(откры\w*|запуст\w*) дв\w* (нов\w+ )?(точ|кофе)|дв\w* нов\w+ (точ|кофе)|дв\w* (точ|кофе)\w* в (санкт|спб|петербург)"
 
 
 def check_g01(deck: dict, r: Report) -> None:
@@ -188,7 +190,7 @@ def check_g01(deck: dict, r: Report) -> None:
     r.check(bool(re.search(r"гост|трафик", text)), "рост обеспечен числом гостей, а не ценой")
     r.check(bool(re.search(r"предзаказ", text)) and bool(re.search(r"обогна|опереди", text)),
             "предзаказ запущен в июле и обогнал корпоративные заказы")
-    r.check(bool(re.search(r"лояльност", text)) and bool(re.search(r"дв\w* (нов\w+ )?(точ|кофе)", text))
+    r.check(bool(re.search(r"лояльност", text)) and bool(re.search(TWO_NEW_POINTS, text))
             and bool(re.search(r"корпоратив\w* (клиент|предложен)|предложени\w* для корпоратив", text)),
             "три приоритета IV квартала")
 
@@ -209,7 +211,7 @@ def check_g01(deck: dict, r: Report) -> None:
     for s in content_slides(deck):
         head = norm(f"{s.get('title')} {s.get('subtitle')}")
         n = len(s.get("timeline_items") or []) or len(s.get("bullets") or [])
-        if re.search(r"iv квартал|план|приоритет", head) and n > 3:
+        if re.search(r"iv квартал|приоритет|планы? на", head) and n > 3:  # не «превысил план»
             extra.append(f"слайд {s['index']}: {n} пунктов")
     extra += [quote(u, 60) for u in find(units, r"анализ результатов|оценка эффективности")]
     r.check(not extra, "не больше трёх приоритетов IV квартала", "; ".join(extra))
@@ -230,7 +232,7 @@ def check_g01(deck: dict, r: Report) -> None:
     repeats = []
     for label, p in (("47,3 млн", r"47[,.]3"), ("+41%", num(r"41\s?%")), ("112%", num(r"112")),
                      ("87%", num(r"87\s?%")), ("программа лояльности", r"лояльност"),
-                     ("две новые точки", r"дв\w* (нов\w+ )?(точ|кофе)")):
+                     ("две новые точки", TWO_NEW_POINTS)):
         slides = {s["index"] for s in content_slides(deck) if re.search(p, slide_text(s))}
         if len(slides) > 1:
             repeats.append(f"{label} — слайды {', '.join(map(str, sorted(slides)))}")
