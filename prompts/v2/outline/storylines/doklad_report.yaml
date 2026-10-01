@@ -1,7 +1,7 @@
 genre: report
 title: "report — отчёт: что сделано и что получилось"
 blocks:
-  - {id: goal,       role: goal,       priority: 1, hint: "цель работы, проблема или период, о котором отчёт"}
+  - {id: goal,       role: goal,       priority: 1, hint: "цель работы, проблема или период, о котором отчёт, и масштаб: срок, участники, число объектов — с числами"}
   - {id: done,       role: results,    priority: 2, hint: "что сделано; этапы — process"}
   - {id: numbers,    role: results,    priority: 1, hint: "результаты с числами: ряды — chart_series / chart_share, отдельные числа — metrics"}
   - {id: negative,   role: problem,    priority: 2, hint: "что хуже плана или в минус — обязательно, если есть"}
