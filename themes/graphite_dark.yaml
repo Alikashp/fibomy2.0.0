@@ -1,11 +1,11 @@
 # Тема оформления (docs/design/05_LAYOUTS.md, 6; контракт — 04_CONTRACTS.md, 6.2).
-# Токены утверждены; выбор в сводке бота — сессия 3 (docs/design/09_PLAN.md).
+# Выбор в сводке бота — с сессии 2.
 id: graphite_dark
 name: {ru: "Графит тёмная", en: "Graphite dark"}
 mode: dark
 tags: [business, tech]
 free: true                  # фаза 1: все темы всем (вопрос 12)
-enabled: false               # доступна в боте
+enabled: true               # доступна в боте (с сессии 2)
 fonts: {heading: Arial, body: Arial}
 colors:
   bg: "#121821"

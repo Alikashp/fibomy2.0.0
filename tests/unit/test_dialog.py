@@ -23,7 +23,7 @@ class Defaults(unittest.TestCase):
     def test_new_user(self):
         p = dialog.default_params({}, "en-US", "free")
         self.assertEqual(p, {"language": "en", "slide_count": 9, "audience": "general",
-                             "color_scheme": "light", "source_mode": "strict"})
+                             "color_scheme": "graphite_light", "source_mode": "strict"})
 
     def test_unsupported_telegram_language_falls_back_to_ru(self):
         self.assertEqual(dialog.default_params({}, "de", "free")["language"], "ru")
@@ -31,13 +31,16 @@ class Defaults(unittest.TestCase):
 
     def test_last_choice_wins(self):
         profile = {"last_language": "kk", "last_slide_count": 12, "last_audience": "students",
-                   "last_color_scheme": "forest", "source_mode": "extend"}
-        p = dialog.default_params(profile, "en", "pro")
+                   "last_color_scheme": "azure_coral", "source_mode": "extend"}
+        p = dialog.default_params(profile, "en", "free")
         self.assertEqual(p, {"language": "kk", "slide_count": 12, "audience": "students",
-                             "color_scheme": "forest", "source_mode": "extend"})
+                             "color_scheme": "azure_coral", "source_mode": "extend"})
 
-    def test_paid_scheme_not_restored_on_free_plan(self):
-        self.assertEqual(dialog.default_params({"last_color_scheme": "forest"}, None, "free")["color_scheme"], "light")
+    def test_legacy_scheme_becomes_theme(self):
+        """Профиль со схемой старого движка: light → graphite_light, forest → fresh_green (04_CONTRACTS.md, 8.2)."""
+        for old, theme in (("light", "graphite_light"), ("dark", "graphite_dark"), ("forest", "fresh_green"),
+                           ("ember", "azure_coral"), ("???", "graphite_light"), (None, "graphite_light")):
+            self.assertEqual(dialog.default_params({"last_color_scheme": old}, None, "free")["color_scheme"], theme)
 
     def test_last_choices_by_type(self):
         base = {"language": "en", "audience": "clients", "color_scheme": "light", "slide_count": 7,
@@ -76,11 +79,15 @@ class SummaryScreen(unittest.TestCase):
         self.assertNotIn("sum:material", kb)
         self.assertEqual(kb[-1], "sum:go")
 
-    def test_design_locked_on_free(self):
-        _, kb = dialog.change_screen("design", self.DATA, "free")
-        self.assertEqual(callbacks(kb).count("set:color_scheme:locked"), 3)
-        _, kb = dialog.change_screen("design", self.DATA, "pro")
-        self.assertIn("set:color_scheme:forest", callbacks(kb))
+    def test_four_themes_free(self):
+        """Все четыре темы доступны на бесплатном тарифе (вопрос 12), текущая отмечена."""
+        _, kb = dialog.change_screen("design", {**self.DATA, "color_scheme": "graphite_dark"}, "free")
+        cbs = callbacks(kb)
+        for theme in ("graphite_light", "graphite_dark", "azure_coral", "fresh_green"):
+            self.assertIn(f"set:color_scheme:{theme}", cbs)
+        self.assertNotIn("set:color_scheme:locked", cbs)
+        labels = [b.text for row in kb.inline_keyboard for b in row]
+        self.assertIn("✓ 🌙 Графит тёмная", labels)
 
     def test_every_change_screen_returns_to_summary(self):
         for param in ("lang", "slides", "aud", "mode", "design", "type"):
@@ -246,7 +253,7 @@ class Flow(unittest.TestCase):
                    ("lang", "set:language:uz", "O'zbek"),
                    ("aud", "set:audience:students", "Студенты"),
                    ("slides", "set:slide_count:5", "Слайдов: <b>5</b>"),
-                   ("design", "set:color_scheme:light", "Classic Light")]
+                   ("design", "set:color_scheme:fresh_green", "Свежая зелёная")]
 
         async def change():
             for param, choice, expected in changes:
@@ -254,10 +261,10 @@ class Flow(unittest.TestCase):
                 self.assertNotIn("Проверьте параметры", summary.body)   # экран выбора в том же сообщении
                 await main.on_set_param(chat.call(choice, summary), self.state)
                 self.assertIn(expected, summary.body)
-            # закрытая схема — alert, сводка не меняется
+            # неизвестная тема — alert, сводка не меняется
             await main.on_summary_action(chat.call("sum:design", summary), self.state)
-            await main.on_set_param(chat.call("set:color_scheme:locked", summary), self.state)
             await main.on_set_param(chat.call("set:color_scheme:forest", summary), self.state)
+            await main.on_set_param(chat.call("set:color_scheme:locked", summary), self.state)
             await main.on_summary_action(chat.call("sum:back", summary), self.state)
             # тема текстом — новая сводка
             await main.on_summary_action(chat.call("sum:topic", summary), self.state)
@@ -265,7 +272,7 @@ class Flow(unittest.TestCase):
         self.run_(change())
         self.assertEqual(len(chat.alerts), 2)
         data = self.run_(self.state.get_data())
-        self.assertEqual(data["color_scheme"], "light")
+        self.assertEqual(data["color_scheme"], "fresh_green")
         self.assertEqual(data["source_type"], "document")        # материал не потерялся
         self.assertIn("Итоги 2025 года", chat.last.body)
         self.assertIn("Проверьте параметры", chat.last.body)
@@ -325,20 +332,41 @@ class GenerateRequest(unittest.TestCase):
         jobs = []
 
         class Pool:
-            async def enqueue_job(self, name, **kw):
-                jobs.append(kw)
+            async def enqueue_job(self, name, *args, **kw):
+                jobs.append((name, args, kw))
+
+        rows, uploads = [], []
+
+        async def create(deck_id, payload, user_id, parent_deck_id=None):
+            rows.append(payload)
+            return True
+
+        async def put(data, mime=None):
+            uploads.append((data, mime))
+            return "redis:abc"
 
         chat = Chat()
-        base = {"topic": "Т", "audience": "general", "language": "ru", "color_scheme": "light", "slide_count": 12,
-                "source_type": "text", "raw_text": "материал " * 10, "source_mode": "extend", "brief": "бриф"}
-        with mock.patch.object(main, "arq_pool", Pool()):
+        base = {"topic": "Тема", "audience": "general", "language": "ru", "color_scheme": "graphite_dark",
+                "slide_count": 12, "source_type": "text", "raw_text": "материал " * 10, "source_mode": "extend",
+                "brief": "бриф"}
+        with mock.patch.object(main, "arq_pool", Pool()), mock.patch.object(main.deck_store, "create_deck", side_effect=create), \
+                mock.patch.object(main, "put_upload", side_effect=put):
             asyncio.run(main.generate_and_send(FakeMessage(chat), {**base, "presentation_type": "doklad"}))
             asyncio.run(main.generate_and_send(FakeMessage(chat), {**base, "presentation_type": "pitch_deck"}))
-        doklad, pitch = jobs[0]["request_data"], jobs[1]["request_data"]
-        self.assertEqual((doklad["source_type"], doklad["slide_count_hint"], doklad["source_mode"]), ("text", 12, "extend"))
-        self.assertIsNone(doklad["extra_instructions"])
+        # доклад с текстом — новый движок, текст — ссылкой на временное хранилище
+        self.assertEqual(jobs[0][0], "generate_deck_job")
+        material = rows[0]["input"]["material"]
+        self.assertEqual((material["kind"], material["ref"]), ("text", "redis:abc"))
+        self.assertEqual(uploads[0], (("материал " * 10).encode(), "text/plain"))
+        self.assertEqual((rows[0]["source_mode"], rows[0]["slides_count"], rows[0]["theme_id"]),
+                         ("extend", 12, "graphite_dark"))
+        # питч-дек — старый движок до сессии 3, тема → его схема
+        name, _, pitch_kw = jobs[1]
+        self.assertEqual(name, "generate_presentation_job")
+        pitch = pitch_kw["request_data"]
         self.assertEqual((pitch["source_type"], pitch["slide_count_hint"], pitch["raw_text"]), ("topic", None, None))
         self.assertIn("бриф", pitch["extra_instructions"])
+        self.assertEqual(pitch_kw["color_scheme"], "dark")
 
 
 if __name__ == "__main__":

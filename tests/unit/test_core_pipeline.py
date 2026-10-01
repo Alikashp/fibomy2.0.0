@@ -186,7 +186,7 @@ class WorkerJob(unittest.TestCase):
         bot = FakeBot()
         fake = FakeOpenAI()
 
-        async def gen(deck_id, req, progress):
+        async def gen(deck_id, req, progress, material=None):
             await progress("outline")
             await progress("content", done=1, total=7)
             with mock.patch.object(pipeline, "pptx_to_pdf", side_effect=Pipeline._fake_pdf):
@@ -217,7 +217,7 @@ class WorkerJob(unittest.TestCase):
         bot = FakeBot()
         failed = []
 
-        async def gen(deck_id, req, progress):
+        async def gen(deck_id, req, progress, material=None):
             raise pipeline.DeckError("OUTLINE_FAILED")
 
         async def fail(deck_id, code, **kw):
@@ -231,6 +231,47 @@ class WorkerJob(unittest.TestCase):
         self.assertEqual(bot.albums, [])
 
 
+    def test_material_job_reads_and_deletes_upload(self):
+        import worker
+        bot = FakeBot()
+        seen, deleted = [], []
+        req = request(client={"user_id": 1, "chat_id": 1, "status_message_id": 10}).model_dump(mode="json")
+        req["input"]["material"] = {"kind": "document", "ref": "redis:abc", "mime": "application/pdf", "name": "scan.pdf"}
+        req["source_mode"] = "strict"
+
+        async def get(ref):
+            return b"%PDF-bytes"
+
+        async def delete(ref):
+            deleted.append(ref)
+
+        async def gen(deck_id, r, progress, material=None):
+            seen.append(material)
+            raise pipeline.DeckError("SCAN_WITHOUT_TEXT")
+
+        async def fail(deck_id, code, **kw):
+            pass
+        with mock.patch.object(worker, "generate_deck", side_effect=gen), \
+                mock.patch.object(worker, "get_upload", side_effect=get), \
+                mock.patch.object(worker, "delete_upload", side_effect=delete), \
+                mock.patch.object(worker.deck_store, "fail", side_effect=fail):
+            out = asyncio.run(worker.generate_deck_job({"bot": bot}, "dk_01J00000000000000000ABCDEF", request=req))
+        self.assertEqual(seen, [b"%PDF-bytes"])
+        self.assertEqual(deleted, ["redis:abc"])          # файл пользователя не храним (ТЗ 6.5)
+        self.assertEqual(out["error_code"], "SCAN_WITHOUT_TEXT")
+        self.assertIn("похоже на скан", bot.edits[-1])
+        self.assertNotIn("dk_", " ".join(bot.edits))
+
+    def test_unknown_error_shows_short_code(self):
+        from bot import delivery
+        text = delivery.error_text("RENDER_FAILED", "dk_01J00000000000000000ABCDEF")
+        self.assertIn("Код для поддержки: ABCDEF", text)
+        self.assertNotIn("dk_", text)
+        notes = delivery.material_notes(["slides_short:7/9", "truncated:40000/62000"])
+        self.assertEqual(notes, ["В материале хватило на 7 слайдов из 9 — добавьте текст, если нужно больше.",
+                                 "Вошло начало документа: 40 000 знаков из 62 000."])
+
+
 # ── Бот: маршрутизация между движками (D-038) ───────────────────────────────
 
 class Routing(unittest.TestCase):
@@ -241,21 +282,21 @@ class Routing(unittest.TestCase):
     def test_engine_for(self):
         import dialog
         self.assertEqual(dialog.engine_for({**self.BASE, "presentation_type": "doklad"}), "new")
-        self.assertEqual(dialog.engine_for({**self.BASE, "presentation_type": "doklad", "source_type": "text"}), "old")
-        self.assertEqual(dialog.engine_for({**self.BASE, "presentation_type": "doklad", "source_type": "document"}), "old")
+        self.assertEqual(dialog.engine_for({**self.BASE, "presentation_type": "doklad", "source_type": "text"}), "new")
+        self.assertEqual(dialog.engine_for({**self.BASE, "presentation_type": "doklad", "source_type": "document"}), "new")
         self.assertEqual(dialog.engine_for({**self.BASE, "presentation_type": "pitch_deck"}), "old")
 
     def test_summary_for_new_engine(self):
         import dialog
         data = {**self.BASE, "presentation_type": "doklad"}
         text = dialog.summary_text(data, "free")
-        self.assertIn("Графит светлая", text)
+        self.assertIn("Графит тёмная", text)      # dark из старого профиля → graphite_dark
         self.assertIn("PPTX + PDF", text)
         kb = [b.callback_data for row in dialog.summary_keyboard(data).inline_keyboard for b in row]
-        self.assertNotIn("sum:design", kb)
+        self.assertIn("sum:design", kb)
         self.assertIn("sum:slides", kb)
-        old = {**data, "source_type": "text", "raw_text": "x" * 300}
-        self.assertIn("sum:design", [b.callback_data for row in dialog.summary_keyboard(old).inline_keyboard for b in row])
+        pitch = {**data, "presentation_type": "pitch_deck"}
+        self.assertIn("Файлы: <b>PDF</b>", dialog.summary_text(pitch, "free"))
 
     def test_pitch_deck_has_no_slide_count_button(self):
         import dialog
@@ -266,9 +307,10 @@ class Routing(unittest.TestCase):
     def test_theme_mapping(self):
         import dialog
         self.assertEqual(dialog.theme_for("light"), "graphite_light")
-        self.assertEqual(dialog.theme_for("dark"), "graphite_light")    # тёмная ещё не включена
-        self.assertEqual(dialog.theme_for("dark", ["graphite_light", "graphite_dark"]), "graphite_dark")
-        self.assertEqual(dialog.theme_for("forest"), "graphite_light")
+        self.assertEqual(dialog.theme_for("dark"), "graphite_dark")
+        self.assertEqual(dialog.theme_for("azure_coral"), "azure_coral")
+        self.assertEqual(dialog.theme_for("forest"), "fresh_green")
+        self.assertEqual(dialog.theme_for("fresh_green", ["graphite_light"]), "graphite_light")
 
     def test_topic_threshold_200(self):
         import dialog
@@ -301,10 +343,11 @@ class Routing(unittest.TestCase):
         payload = rows[0][1]
         req = DeckRequest.model_validate(payload)
         self.assertEqual((req.input.topic, req.theme_id, req.slides_count, req.watermark, req.audience),
-                         ("Как работает фотосинтез", "graphite_light", 9, True, "students"))
+                         ("Как работает фотосинтез", "graphite_dark", 9, True, "students"))
+        self.assertIsNone(req.input.material)
         self.assertEqual(req.client.chat_id, chat.id)
         self.assertEqual(req.client.status_message_id, chat.sent[0].message_id)
-        self.assertIn(deck_id, chat.sent[0].body)
+        self.assertNotIn("dk_", chat.sent[0].body)   # внутренний номер пользователю не показываем
 
     def test_without_db_request_goes_into_job(self):
         import main

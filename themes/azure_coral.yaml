@@ -1,11 +1,11 @@
 # Тема оформления (docs/design/05_LAYOUTS.md, 6; контракт — 04_CONTRACTS.md, 6.2).
-# Яркая: синяя с коралловым акцентом. Выбор в сводке бота — сессия 3.
+# Яркая: синяя с коралловым акцентом. Выбор в сводке бота — с сессии 2.
 id: azure_coral
 name: {ru: "Лазурь", en: "Azure"}
 mode: light
 tags: [bright, education, business]
 free: true                  # фаза 1: все темы всем (вопрос 12)
-enabled: false               # доступна в боте
+enabled: true               # доступна в боте (с сессии 2)
 fonts: {heading: Arial, body: Arial}
 colors:
   bg: "#FFFFFF"

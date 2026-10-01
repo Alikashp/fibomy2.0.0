@@ -157,8 +157,8 @@ class Themes(unittest.TestCase):
             for a, b in itertools.combinations(t.chart[:5], 2):
                 self.assertGreaterEqual(delta_e2000(a, b), 20, (tid, a, b))
 
-    def test_only_graphite_light_enabled_in_session_1(self):
-        self.assertEqual([t for t in all_theme_ids() if load_theme(t).enabled], ["graphite_light"])
+    def test_all_themes_enabled_since_session_2(self):
+        self.assertTrue(all(load_theme(t).enabled for t in all_theme_ids()))
 
 
 def delta_e2000(a: str, b: str) -> float:
