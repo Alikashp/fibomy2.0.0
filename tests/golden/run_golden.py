@@ -217,7 +217,7 @@ async def _run_old(case: Case, n: int, out: Path) -> dict:
     import check_case
 
     run_name = f"{case.run_id}-{n}" if case.repeat > 1 else case.run_id
-    result = {"run": run_name, "case": case.case, "title": case.title, "status": "ok"}
+    result = {"run": run_name, "case": case.case, "title": case.title, "status": "ok", "engine": "old"}
     data = dict(case.request)
     if case.file:
         path = FIXTURES / case.file

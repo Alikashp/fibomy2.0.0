@@ -22,7 +22,7 @@ from core.models.digest import Analysis, SourceDigest
 from core.models.layout import variants_of
 from core.models.outline import CONTENT_KINDS, OutlineResponse, PlannedSlide, outline_schema
 from core.models.request import DeckRequest
-from core.planning.datasets import DatasetError, resolve
+from core.planning.datasets import coverage_remarks, DatasetError, resolve
 
 logger = logging.getLogger(__name__)
 
@@ -159,6 +159,8 @@ def plan_remarks(resp: OutlineResponse, request: DeckRequest, digest: SourceDige
                 if key in used:
                     out.append(f"слайды {used[key]} и {i}: одна колонка {key[0]}:{key[1]} на двух диаграммах")
                 used[key] = i
+    if request.mode != "topic" and any(k in CHART_KINDS for k in available_kinds(request)):
+        out += coverage_remarks({k[0] for k in used}, digest)
     return out
 
 
@@ -241,6 +243,9 @@ async def plan_deck(request: DeckRequest, digest: SourceDigest, client: LLMClien
         attempts=OUTLINE_ATTEMPTS, usage=usage, validate=lambda r: plan_errors(r, request, n),
         soft=lambda r: plan_remarks(r, request, digest),
     )
+    if request.mode == "topic" and resp.analysis.genre != "topic":
+        degrade(f"genre:{resp.analysis.genre}->topic")
+        resp.analysis.genre = "topic"
     digest.analysis = Analysis(genre=resp.analysis.genre,
                                theses=[t.model_dump() for t in resp.analysis.theses],
                                asks=[a.model_dump() for a in resp.analysis.asks],

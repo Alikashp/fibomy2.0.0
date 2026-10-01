@@ -23,7 +23,7 @@ from core import i18n
 from core.checks.facts import slide_errors, source_numbers, strip_unknown
 from core.content.fill import fallback_content, fill_slide, system_prompt, FALLBACK_VARIANT
 from core.ingest import IngestError, ingest
-from core.planning.datasets import legend
+from core.planning.datasets import legend, related_columns
 from core.fitting.fitter import fit_deck
 from core.llm import prompts as P
 from core.llm.client import DeckUsage, LLMClient, LLMError, get_client
@@ -187,7 +187,8 @@ async def generate_deck(deck_id: str, request: DeckRequest, progress: Progress |
     async def one(i: int, planned, choice, data):
         nonlocal done_count
         result = await fill_slide(client, usage, system, planned, choice.kind, choice.variant, choice.items,
-                                  index=i, total=total, slide_id=slide_id(i), data=data, language=request.language)
+                                  index=i, total=total, slide_id=slide_id(i), data=data, language=request.language,
+                                  related=related_columns(data, digest) if data else None)
         done_count += 1
         await progress("content", done=done_count, total=len(plan))
         return result
@@ -316,7 +317,8 @@ async def _check_facts(slides: list[Slide], digest: SourceDigest, request: DeckR
         content, variant, reason = await fill_slide(
             client, usage, system, slide.plan, slide.kind, slide.variant, choice.items,
             index=slide.index, total=total, slide_id=slide.id, data=slide.data, extra=extra,
-            language=request.language, stage="fit", attempts=1)
+            language=request.language, stage="fit", attempts=1,
+            related=related_columns(slide.data, digest) if slide.data else None)
         return None if reason else content
 
     results = await asyncio.gather(*(fix(s, e) for s, e in targets), return_exceptions=True)

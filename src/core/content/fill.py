@@ -220,7 +220,7 @@ def content_errors(kind: str, parsed: BaseModel, layout: LayoutSpec, n: int | No
     return errors
 
 
-def data_block(data: dict | None, language: str = "ru") -> str:
+def data_block(data: dict | None, language: str = "ru", related: list[dict] | None = None) -> str:
     """Данные диаграммы для задания CONTENT: модель пишет вывод по ним, а числа ставит код."""
     if not data:
         return ""
@@ -231,6 +231,13 @@ def data_block(data: dict | None, language: str = "ru") -> str:
         values = ", ".join(f"{c['row']} {c['label']} — " + ("—" if v is None else format_number(v, language))
                            for c, v in zip(data["categories"], s_["values"]))
         lines.append(f"- {s_['name']}{unit}: {values}")
+    if related:
+        lines.append("ДРУГИЕ КОЛОНКИ ЭТОЙ ТАБЛИЦЫ по тем же строкам (на диаграмме их нет; главные значения — "
+                     "рост, падение, выполнение плана, причина — назови в выводе, как в источнике):")
+        for col in related:
+            unit = f", {col['unit']}" if col.get("unit") else ""
+            values = ", ".join(f"{c['label']} — {raw or '—'}" for c, raw in zip(data["categories"], col["raw"]))
+            lines.append(f"- {col['name']}{unit}: {values}")
     return "\n".join(lines)
 
 
@@ -253,7 +260,8 @@ def system_prompt(request: DeckRequest, digest: SourceDigest, subtitle: str, pla
 
 
 def task_prompt(planned: PlannedSlide, index: int, total: int, kind: str, capacity_lines: list[str],
-                data: dict | None = None, extra: str | None = None, language: str = "ru") -> str:
+                data: dict | None = None, extra: str | None = None, language: str = "ru",
+                related: list[dict] | None = None) -> str:
     text = P.render(
         "content/task.txt", index=index, total=total, kind=kind, role=planned.role, title=planned.title,
         key_message=planned.key_message, refs=", ".join(planned.refs) or "—",
@@ -261,7 +269,7 @@ def task_prompt(planned: PlannedSlide, index: int, total: int, kind: str, capaci
         capacity=P.render("content/capacity.txt", lines="\n".join(capacity_lines)),
     )
     if data:
-        text += "\n\n" + data_block(data, language)
+        text += "\n\n" + data_block(data, language, related)
     if extra:
         text += "\n\n" + extra
     return text
@@ -278,14 +286,15 @@ def fallback_content(planned: PlannedSlide) -> dict:
 async def fill_slide(client: LLMClient, usage: DeckUsage, system: str, planned: PlannedSlide, kind: str,
                      variant: str, items: int | None, index: int, total: int, slide_id: str,
                      data: dict | None = None, extra: str | None = None, language: str = "ru",
-                     stage: str = "content", attempts: int = CONTENT_ATTEMPTS) -> tuple[dict, str, str | None]:
+                     stage: str = "content", attempts: int = CONTENT_ATTEMPTS,
+                     related: list[dict] | None = None) -> tuple[dict, str, str | None]:
     """→ (content, variant, причина деградации или None). extra — блок «ошибки проверки» (FIT)."""
     layout = load_layouts()[variant]
     schema, cap_lines = content_schema(kind, layout, items)
     try:
         parsed = await client.structured(
             stage=stage, system=system,
-            user=task_prompt(planned, index, total, kind, cap_lines, data, extra, language),
+            user=task_prompt(planned, index, total, kind, cap_lines, data, extra, language, related),
             schema_name=f"slide_{kind}", schema=schema, model_cls=MODELS[kind],
             visible_tokens=CONTENT_VISIBLE_TOKENS, timeout=CONTENT_TIMEOUT, attempts=attempts,
             usage=usage, validate=lambda p: content_errors(kind, p, layout, items),

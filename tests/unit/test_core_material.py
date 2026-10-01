@@ -22,7 +22,7 @@ from core.llm.client import LLMClient
 from core.models.deck import Slide
 from core.models.outline import OutlineResponse, PlannedDataset, PlannedSlide
 from core.models.request import DeckRequest
-from core.planning.datasets import DatasetError, legend, resolve
+from core.planning.datasets import DatasetError, coverage_remarks, legend, related_columns, resolve
 from core.planning.outline import diversity_remarks, normalize_plan, plan_remarks, available_kinds
 
 NAV = (FIXTURES / "navigator_pilot.txt").read_bytes()
@@ -186,6 +186,28 @@ class ChartData(unittest.TestCase):
         self.assertEqual(datas[0]["series"][0]["values"], [112, 104, 87, 98])
         self.assertTrue(any(r.startswith("chart_share->chart_series") for r in reasons))
 
+    def test_related_columns_in_task(self):
+        """Вывод диаграммы получает остальные колонки таблицы: рост и выполнение плана (G-01)."""
+        from core.content.fill import data_block
+        data = resolve(planned("chart_series", "ds3", ("c3",)), self.docx, "chart_series")
+        related = related_columns(data, self.docx)
+        self.assertEqual([c["column"] for c in related], ["c2", "c4"])
+        block = data_block(data, "ru", related)
+        self.assertIn("ДРУГИЕ КОЛОНКИ", block)
+        self.assertIn("Выполнение плана, %: Санкт-Петербург — 112", block)
+        self.assertEqual(related_columns({"dataset_id": "ds9", "series": [], "categories": []}, self.docx), [])
+
+    def test_coverage_remarks(self):
+        """Доли и ряд по времени без диаграммы → замечание; использованные наборы — без замечаний."""
+        remarks = coverage_remarks(set(), self.nav)
+        self.assertTrue(any("ds1" in r and "chart_series" in r for r in remarks))
+        self.assertTrue(any("ds2" in r and "chart_share" in r for r in remarks))
+        self.assertEqual(coverage_remarks({"ds1", "ds2"}, self.nav), [])
+        # ряд из трёх месяцев — не замечание; доли каналов — замечание
+        remarks = coverage_remarks(set(), self.docx)
+        self.assertFalse(any("ds1" in r for r in remarks))
+        self.assertTrue(any("ds2" in r for r in remarks))
+
 
 class Facts(unittest.TestCase):
 
@@ -243,13 +265,16 @@ class Diversity(unittest.TestCase):
         remarks = plan_remarks(resp, req, nav)
         self.assertTrue(any("одна колонка ds1:c2 на двух диаграммах" in r for r in remarks))
         self.assertTrue(any("подряд" in r for r in remarks))
+        self.assertTrue(any("ds2" in r and "chart_share" in r for r in remarks))
+        topic = DeckRequest(input={"topic": "Тема"})
+        self.assertFalse(any("набор" in r for r in plan_remarks(resp, topic, nav)))
 
     def test_soft_remarks_retry_then_accept(self):
         """Замечание о разнообразии → повтор; на последней попытке план принимается."""
         settings_model = settings.openai_model
         settings.openai_model = "gpt-6-luna"
         try:
-            monotone = fake_outline(kinds=["bullets"] * 6 + ["conclusion"])
+            monotone = fake_outline(kinds=["bullets"] * 6 + ["conclusion"], genre="report")
             fake = FakeOpenAI(outline=monotone)
             req = DeckRequest(input={"topic": "Как устроен город"}, slides_count=9)
             with mock.patch.object(pipeline, "pptx_to_pdf", side_effect=_pdf):
@@ -259,6 +284,9 @@ class Diversity(unittest.TestCase):
             self.assertEqual(len(outline_calls), 2)
             self.assertIn("bullets на 6 слайдах", outline_calls[1]["messages"][-1]["content"])
             self.assertTrue(any(d.reason.startswith("plan_diversity") for d in res.spec.degradations))
+            # доклад по теме — всегда жанр topic, даже если модель ответила иначе (G-03)
+            self.assertEqual(res.spec.meta.genre, "topic")
+            self.assertTrue(any(d.reason == "genre:report->topic" for d in res.spec.degradations))
         finally:
             settings.openai_model = settings_model
 

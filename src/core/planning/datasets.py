@@ -82,6 +82,44 @@ def resolve(planned: PlannedSlide, digest: SourceDigest, kind: str, language: st
     return data
 
 
+def related_columns(data: dict, digest: SourceDigest) -> list[dict]:
+    """Остальные числовые колонки той же таблицы по тем же строкам (рост, выполнение плана…):
+    модель может назвать их в выводе диаграммы — это числа источника."""
+    ds = next((d for d in digest.datasets if d.id == data.get("dataset_id")), None)
+    if ds is None:
+        return []
+    shown = {s["column"] for s in data["series"]}
+    by_id = {r.id: r for r in ds.rows}
+    rows = [by_id[c["row"]] for c in data["categories"] if c["row"] in by_id]
+    out = []
+    for col in ds.columns:
+        if col.id in shown or col.type not in ("number", "percent", "text"):
+            continue
+        raws = [r.cells[col.id].raw if col.id in r.cells else "" for r in rows]
+        if any(raw.strip() for raw in raws):
+            out.append({"column": col.id, "name": col.name, "unit": col.unit, "raw": raws})
+    return out
+
+
+def coverage_remarks(used: set[str], digest: SourceDigest) -> list[str]:
+    """Ряды и доли источника, которые не попали ни на одну диаграмму плана."""
+    out = []
+    for ds in digest.datasets:
+        if ds.id in used:
+            continue
+        rows = [r for r in ds.rows if not r.is_total]
+        shares = [cid for cid, total in ds.sums.items()
+                  if SHARE_MIN <= total <= SHARE_MAX and any(c.id == cid and c.type == "percent" for c in ds.columns)]
+        name = f"{ds.id}" + (f" «{ds.title}»" if ds.title else "")
+        if shares and len(rows) >= 2:
+            out.append(f"набор {name} — доли одного целого (сумма ≈100%), но в плане нет его диаграммы: "
+                       f"покажи его слайдом chart_share")
+        elif ds.axis == "time" and len(rows) >= 4:
+            out.append(f"набор {name} — ряд по времени ({len(rows)} точек), но в плане нет его диаграммы: "
+                       f"покажи его слайдом chart_series")
+    return out
+
+
 def share_sum(planned: PlannedSlide, digest: SourceDigest) -> float | None:
     try:
         return resolve(planned, digest, "chart_share").get("share_sum")
