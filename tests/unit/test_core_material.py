@@ -348,6 +348,15 @@ class NavigatorDeck(unittest.TestCase):
         donut = next(c for c in charts if c.name == "chart:donut").chart
         self.assertFalse(donut.has_title)
         self.assertIn('val="60"', donut._chartSpace.xml.split("holeSize")[1][:20])
+        # golden-проверка G-04 по DeckSpec (tests/golden/check_case.py)
+        import sys
+        sys.path.insert(0, str(_helpers.ROOT / "tests" / "golden"))
+        import check_case
+        report = check_case.check(spec.model_dump(mode="json"), "G-04")
+        self.assertEqual(report.violations, [])
+        bad = spec.model_dump(mode="json")
+        bad["slides"][-2], bad["slides"][-3] = bad["slides"][-3], bad["slides"][-2]   # запрос не последний
+        self.assertTrue(any("последний содержательный" in v for v in check_case.check(bad, "G-04").violations))
 
     def test_ask_added_when_model_forgets(self):
         plan = fake_outline(n=7, genre="report", kinds=["statement", "metrics", "chart_series", "chart_share",

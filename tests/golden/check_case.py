@@ -1,6 +1,11 @@
-"""Проверка JSON колоды по ожиданиям golden-кейса (ТЗ 7.4).
+"""Проверка колоды по ожиданиям golden-кейса (ТЗ 7.4).
 
-    python tests/golden/check_case.py <deck.json> <G-01|G-02|G-03> [--md] [--no-fail]
+    python tests/golden/check_case.py <deck.json> <G-01|…|G-05> [--md] [--no-fail]
+
+Читает и DeckSpec нового движка (есть schema_version и meta.versions), и JSON
+старого движка (tests/fixtures/specs/). DeckSpec приводится к «единицам текста»
+старого формата (from_deckspec), поверх добавляются проверки по структуре
+DeckSpec: роль ask, данные диаграмм, роль definition, тема на титуле, сноски.
 
 На выходе — список нарушений (обязательные числа с подписями, запрещённые
 утверждения и числа, даты в таймлайне, слайды без заголовка, выдуманные
@@ -28,8 +33,69 @@ Q4_MONTHS = r"(октябр|ноябр|декабр)"
 CASES = {
     "G-01": {"title": "Отчёт о продажах сети кофеен (docx)", "material": True},
     "G-02": {"title": "ТЗ хакатона VK (pdf)", "material": True},
-    "G-03": {"title": "Отчёт о продажах по теме, без файла", "material": False},
+    "G-03": {"title": "Отчёт о продажах по теме, без файла", "material": False, "topic": "Итоги продаж за квартал"},
+    "G-04": {"title": "Итоги пилота «Навигатор» (текст)", "material": True},
+    "G-05": {"title": "Требования стейкхолдеров по теме, студенты", "material": False,
+             "topic": "Управление требованиями стейкхолдеров в ИТ-стартапе"},
 }
+
+
+# ── DeckSpec нового движка → формат старого ─────────────────────────────────
+
+LAYOUT_BY_KIND = {"title": "title", "closing": "closing", "statement": "quote", "bullets": "bullets",
+                  "conclusion": "bullets", "process": "diagram", "comparison": "two_column", "metrics": "metrics",
+                  "chart_series": "metrics", "chart_share": "metrics"}
+
+
+def is_deckspec(deck: dict) -> bool:
+    return "schema_version" in deck and "versions" in (deck.get("meta") or {})
+
+
+def _fmt(value) -> str:
+    if value is None:
+        return ""
+    return (f"{value:g}" if isinstance(value, float) else str(value)).replace(".", ",")
+
+
+def from_deckspec(spec: dict) -> dict:
+    """DeckSpec → колода в формате старого движка: те же единицы текста для регулярок."""
+    slides = []
+    for sl in spec["slides"]:
+        c = sl.get("content") or {}
+        out = {"index": sl["index"], "layout": LAYOUT_BY_KIND.get(sl["kind"], sl["kind"]), "title": sl.get("title"),
+               "footnote": sl.get("footnote"), "kind": sl["kind"], "role": sl.get("role"), "data": sl.get("data")}
+        kind = sl["kind"]
+        if kind == "title":
+            out["subtitle"] = c.get("subtitle")
+        elif kind == "statement":
+            out["body_text"] = c.get("body")
+        elif kind in ("bullets", "conclusion"):
+            out["bullets"] = [{"subtitle": it.get("heading"), "text": it.get("text")} for it in c.get("items") or []]
+        elif kind == "process":
+            out["bullets"] = [{"subtitle": it.get("label"), "text": it.get("text")} for it in c.get("steps") or []]
+        elif kind == "comparison":
+            left, right = c.get("left") or {}, c.get("right") or {}
+            out["two_column"] = {"left_title": left.get("header"), "right_title": right.get("header"),
+                                 "left_bullets": [{"text": p} for p in left.get("points") or []],
+                                 "right_bullets": [{"text": p} for p in right.get("points") or []]}
+        elif kind == "metrics":
+            out["metrics"] = [{"value": " ".join(x for x in (it.get("value"), it.get("unit")) if x),
+                               "label": " ".join(x for x in (it.get("tag"), it.get("label")) if x)}
+                              for it in c.get("items") or []]
+            out["body_text"] = c.get("body")
+        elif kind in ("chart_series", "chart_share"):
+            data = sl.get("data") or {}
+            metrics = []
+            for series in data.get("series") or []:
+                unit = series.get("unit") or ""
+                pct = "%" if unit == "%" else ""
+                for cat, v in zip(data.get("categories") or [], series.get("values") or []):
+                    metrics.append({"value": _fmt(v) + pct, "label": f"{cat.get('label')} {series.get('name')}"
+                                                                     + (f" {unit}" if unit and not pct else "")})
+            out["metrics"] = metrics
+            out["body_text"] = c.get("insight")
+        slides.append(out)
+    return {"meta": {"title": spec["meta"]["title"], "source_genre": spec["meta"].get("genre")}, "slides": slides}
 
 
 # ── Текст колоды ─────────────────────────────────────────────────────────────
@@ -328,19 +394,44 @@ def check_g02(deck: dict, r: Report) -> None:
     r.check(not steps, "нет придуманных «следующих шагов»", "; ".join(quote(u, 60) for u in steps))
 
 
-# ── G-03 ─────────────────────────────────────────────────────────────────────
+# ── Доклад по теме (G-03, G-05; ТЗ 3.3.3 в редакции 01.10.2026) ────────────
 
-def check_g03(deck: dict, r: Report) -> None:
+SURVEY_STATS = (r"по (данным|результатам) (опрос|исследован)|опрос\w* \d{4}|исследовани\w* (показал|выявил)|"
+                r"\d+([.,]\d+)?\s?% (компаний|проектов|стартап|клиентов|респондентов|опрошенных|пользователей|команд)")
+
+
+def check_topic(deck: dict, r: Report, case: str) -> None:
+    """Общие правила доклада по теме: сноска у чисел, нет ссылок на отчёты и выдуманной статистики,
+    нет диаграмм; для DeckSpec — тема на титуле дословно и определение вторым слайдом."""
     units = all_units(deck)
     slides = content_slides(deck)
-
     missing = [s["index"] for s in slides if re.search(r"\d", slide_text(s)) and s.get("footnote") != ESTIMATE_FOOTNOTE]
     r.check(not missing, "у каждого слайда с числом — сноска «Оценочные данные — проверьте перед показом»",
             f"нет сноски: слайд {', '.join(map(str, missing))}")
-
-    refs = find(units, r"отчет|отчет\w*|по данным|исследовани|данн\w+ компании|росстат|отдел\w* маркетинг")
+    refs = find(units, r"отчет\w*|по данным|данн\w+ компании|росстат|отдел\w* маркетинг|mckinsey|gartner|standish")
     r.check(not refs, "нет ссылок на конкретные отчёты и организации", "; ".join(quote(u, 70) for u in refs))
+    stats = find(units, SURVEY_STATS)
+    r.check(not stats, "нет выдуманной статистики исследований и опросов", "; ".join(quote(u, 70) for u in stats))
+    charts = [s["index"] for s in slides if s.get("kind") in ("chart_series", "chart_share")]
+    r.check(not charts, "нет диаграмм по теме (ТЗ 3.3.3)", f"слайды {charts}")
+    if "kind" not in (slides[0] if slides else {}):
+        return  # колода старого движка: дальше — проверки по структуре DeckSpec
+    topic = CASES[case].get("topic")
+    title = deck["slides"][0].get("title") or ""
+    norm_q = lambda t: re.sub(r"\s+", " ", re.sub(r"[«»\"'„“”]", "", t or "")).strip().lower()  # noqa: E731
+    r.check(norm_q(title) == norm_q(topic), "заголовок титула — тема пользователя дословно (G-05)", f"«{title}»")
+    first = slides[0] if slides else {}
+    if case == "G-05":
+        r.check(first.get("role") == "definition", "второй слайд — определение темы и её происхождение",
+                f"слайд {first.get('index')}: role={first.get('role')}, «{first.get('title')}»")
+    elif first.get("role") != "definition":
+        r.warnings.append(f"слайд {first.get('index')}: не определение темы (role={first.get('role')}) — "
+                          f"проверить, применимо ли определение к теме")
 
+
+def check_g03(deck: dict, r: Report) -> None:
+    check_topic(deck, r, "G-03")
+    units = all_units(deck)
     indicators = {"новые клиенты": r"нов\w* клиент", "средний чек": r"средн\w* чек",
                   "объём продаж": r"объ[её]м\w* продаж|рост\w* продаж"}
     contradictions = []
@@ -353,20 +444,69 @@ def check_g03(deck: dict, r: Report) -> None:
             contradictions.append(f"{name}: " + ", ".join(f"{v} (слайд {', '.join(map(str, sorted(s)))})"
                                                         for v, s in sorted(values.items())))
     r.check(not contradictions, "один показатель — одно число на всех слайдах", "; ".join(contradictions))
-
-    specifics = []
-    for s in slides:
-        if s.get("footnote") == ESTIMATE_FOOTNOTE:
-            continue
-        specifics += [quote(u, 70) for u in units_of(s)
-                      if re.search(r"электроник|\d+\s+человек|\d+([.,]\d+)?\s*(млн|миллион|млрд)", u.text)]
-    r.check(not specifics, "нет конкретики, выданной за факт, без пометки оценки", "; ".join(specifics))
+    specifics = [quote(u, 70) for u in find(units, r"электроник")]
+    r.check(not specifics, "нет конкретики, которой нет в запросе (категория товара)", "; ".join(specifics))
 
 
-CHECKS = {"G-01": check_g01, "G-02": check_g02, "G-03": check_g03}
+def check_g05(deck: dict, r: Report) -> None:
+    check_topic(deck, r, "G-05")
+
+
+# ── G-04 ─────────────────────────────────────────────────────────────────────
+
+MONTHS6 = ["январ", "феврал", "март", "апрел", "ма[йя]", "июн"]
+
+
+def check_g04(deck: dict, r: Report) -> None:
+    units = all_units(deck)
+    slides = content_slides(deck)
+    structured = bool(slides) and "kind" in slides[0]
+
+    if structured:
+        last = slides[-1]
+        r.check(last.get("role") == "ask" and re.search(r"4[,.]5", slide_text(last)) is not None,
+                "слайд-запрос «утвердить бюджет 4,5 млн руб.» — последний содержательный",
+                f"последний: слайд {last.get('index')} role={last.get('role')} «{last.get('title')}»")
+        shares = [s for s in slides if s.get("kind") == "chart_share"]
+        share_ok = [s for s in shares if sorted(v for ser in s["data"]["series"] for v in ser["values"]) == [9, 18, 27, 46]]
+        r.check(len(shares) == 1 and len(share_ok) == 1, "структура запросов 46 / 27 / 18 / 9% — одна диаграмма долей, все четыре",
+                f"диаграмм долей: {len(shares)}, со всеми долями: {len(share_ok)}")
+        series = [s for s in slides if s.get("kind") == "chart_series"]
+        growth = [s for s in series if [v for v in s["data"]["series"][0]["values"]] == [310, 720, 1150, 1540, 1820, 2050]]
+        r.check(len(growth) == 1, "рост пользователей январь–июнь — один слайд-диаграмма, все 6 точек",
+                f"диаграмм ряда: {len(series)}, с полным рядом: {len(growth)}")
+        split = [s["index"] for s in slides if s.get("kind") != "chart_series"
+                 and sum(bool(re.search(m, slide_text(s))) for m in MONTHS6) >= 3 and re.search(r"310|720|1 ?150", slide_text(s))]
+        r.check(not split, "ряд январь–июнь не разложен по другим слайдам", f"слайды {split}")
+    else:
+        r.check(bool(find(units, r"4[,.]5\s?млн")), "запрос 4,5 млн руб. есть в колоде")
+
+    r.check(bool(find(units, r"2 ?400", r"сотрудник")), "2 400 — сотрудников в пилоте")
+    eight = find(units, r"8 ?000")
+    r.check(bool(eight), "8 000 — цель на 2027 год")
+    wrong8 = [u for u in eight if not re.search(r"цел|2027|план", u.text)]
+    r.check(not wrong8, "8 000 — с подписью «цель 2027», а не как достигнутое", "; ".join(quote(u) for u in wrong8))
+    budget_as_cost = [u for u in find(units, r"4[,.]5\s?млн") if re.search(r"в год|стоимост\w* (навигатор|решени)", u.text)]
+    r.check(not budget_as_cost, "4,5 млн — бюджет масштабирования, а не годовая стоимость",
+            "; ".join(quote(u) for u in budget_as_cost))
+    invented = find(units, r"6[,.]6\s?раз|561\s?%|74\s?%|3[,.]8\s?раз|(?<![\d,.])85\s?%|окупаем")
+    r.check(not invented, "нет чисел, посчитанных моделью (рост «в N раз», «на N%», окупаемость)",
+            "; ".join(quote(u, 70) for u in invented))
+    dates = find(units, r"(октябр|ноябр|декабр)\w* 2026|2027\W+(запуск|подключ)|запуск\w*[^.]{0,30}2027")
+    r.check(not dates, "нет дат следующих шагов, которых нет в источнике", "; ".join(quote(u, 70) for u in dates))
+    if structured:
+        has_ask = any(s.get("role") == "ask" for s in slides)
+        team = [s["index"] for s in slides if s.get("role") == "team" or re.search(r"команд\w* проекта|соколов|даниленко", slide_text(s))]
+        r.check(has_ask or not team, "нет слайда о команде при отсутствующем запросе", f"слайды {team}")
+
+
+CHECKS = {"G-01": check_g01, "G-02": check_g02, "G-03": check_g03, "G-04": check_g04, "G-05": check_g05}
 
 
 def check(deck: dict, case: str) -> Report:
+    """deck — DeckSpec нового движка или JSON старого."""
+    if is_deckspec(deck):
+        deck = from_deckspec(deck)
     r = Report()
     check_common(deck, case, r)
     CHECKS[case](deck, r)

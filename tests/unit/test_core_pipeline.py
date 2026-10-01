@@ -73,6 +73,14 @@ class Pipeline(unittest.TestCase):
         for stage in ("ingest", "outline", "select", "content", "fit", "render", "convert", "total"):
             self.assertIn(stage, res.durations_ms)
         self.assertEqual(spec.meta.versions.prompts, open(_helpers.ROOT / "prompts/v2/VERSION").read().strip())
+        # golden-проверка G-05 по DeckSpec: тема дословно, определение вторым слайдом, сноски, нет диаграмм
+        import sys
+        sys.path.insert(0, str(_helpers.ROOT / "tests" / "golden"))
+        import check_case
+        self.assertEqual(check_case.check(spec.model_dump(mode="json"), "G-05").violations, [])
+        no_def = spec.model_dump(mode="json")
+        no_def["slides"][1]["role"] = "context"
+        self.assertTrue(any("определение" in v for v in check_case.check(no_def, "G-05").violations))
 
     def test_structured_outputs_request_and_shared_prefix(self):
         fake = FakeOpenAI()
