@@ -1,0 +1,11 @@
+genre: requirements
+title: "requirements — задание, ТЗ, положение: что нужно сделать, условия и как оценивают"
+blocks:
+  - {id: task,        role: context,      priority: 1, hint: "задача и зачем она нужна"}
+  - {id: what_to_do,  role: requirements, priority: 1, hint: "что нужно сделать — требования (статус requirement, не результат)"}
+  - {id: conditions,  role: requirements, priority: 2, hint: "условия и рамки решения"}
+  - {id: constraints, role: constraints,  priority: 1, hint: "ограничения («не более…», «только…») — статус constraint"}
+  - {id: criteria,    role: criteria,     priority: 1, hint: "критерии оценки — отдельный слайд, если они есть в источнике"}
+  - {id: deadlines,   role: plan,         priority: 2, hint: "сроки и формат сдачи — только из источника; этапы — process"}
+  - {id: conclusion,  role: conclusion,   priority: 3, hint: "что важно не упустить"}
+  - {id: ask,         role: ask,          priority: 0, position: last, hint: "запрос к аудитории, если он есть"}

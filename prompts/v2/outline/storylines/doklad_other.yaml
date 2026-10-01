@@ -1,0 +1,7 @@
+genre: other
+title: "other — прочее: следуй структуре источника"
+blocks:
+  - {id: main,       role: context,    priority: 1, hint: "главная мысль источника"}
+  - {id: parts,      role: details,    priority: 1, hint: "разделы источника по порядку"}
+  - {id: conclusion, role: conclusion, priority: 2, hint: "выводы"}
+  - {id: ask,        role: ask,        priority: 0, position: last, hint: "запрос к аудитории, если он есть"}

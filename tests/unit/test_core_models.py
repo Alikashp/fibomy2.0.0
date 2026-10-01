@@ -92,11 +92,14 @@ class Schemas(unittest.TestCase):
 
 class Layouts(unittest.TestCase):
 
-    def test_session_1_catalog(self):
+    def test_catalog_session_2(self):
         ids = set(load_layouts())
         self.assertEqual(ids, {"title.cover_center", "statement.big_quote", "bullets.cards_grid",
-                               "conclusion.numbered_takeaways", "closing.thanks_center"})
-        for kind in ("title", "statement", "bullets", "conclusion", "closing"):
+                               "conclusion.numbered_takeaways", "closing.thanks_center", "metrics.kpi_cards",
+                               "chart_series.column_chart", "chart_series.line_chart", "chart_share.donut",
+                               "comparison.two_columns", "process.vertical_steps"})
+        for kind in ("title", "statement", "bullets", "conclusion", "closing", "metrics", "chart_series",
+                     "chart_share", "comparison", "process"):
             self.assertTrue(any(v.fallback for v in variants_of(kind)), kind)
 
     def test_capacity_matches_design_tables(self):
@@ -154,8 +157,8 @@ class Themes(unittest.TestCase):
             for a, b in itertools.combinations(t.chart[:5], 2):
                 self.assertGreaterEqual(delta_e2000(a, b), 20, (tid, a, b))
 
-    def test_only_graphite_light_enabled_in_session_1(self):
-        self.assertEqual([t for t in all_theme_ids() if load_theme(t).enabled], ["graphite_light"])
+    def test_all_themes_enabled_since_session_2(self):
+        self.assertTrue(all(load_theme(t).enabled for t in all_theme_ids()))
 
 
 def delta_e2000(a: str, b: str) -> float:

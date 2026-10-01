@@ -39,14 +39,21 @@ AUDIENCES = {
 }
 DEFAULT_AUDIENCE = "general"
 
-# (подпись, доступна на бесплатном тарифе)
-SCHEMES = {
-    "light":  ("⬜ Classic Light", True),
-    "dark":   ("🌑 Midnight", False),
-    "forest": ("🌿 Forest", False),
-    "ember":  ("🔥 Ember", False),
+# Темы оформления нового движка (themes/<id>.yaml, D-037). В фазе 1 все темы всем (D-040).
+# В данных сводки и в профиле (users.last_color_scheme) хранится id темы.
+THEMES = {
+    "graphite_light": "☀️ Графит светлая",
+    "graphite_dark":  "🌙 Графит тёмная",
+    "azure_coral":    "🌊 Лазурь",
+    "fresh_green":    "🌿 Свежая зелёная",
 }
-DEFAULT_SCHEME = "light"
+DEFAULT_THEME = "graphite_light"
+# Цветовые схемы старого движка (до 01.10.2026) → темы (04_CONTRACTS.md, 8.2)
+THEME_BY_LEGACY_SCHEME = {"light": "graphite_light", "dark": "graphite_dark", "forest": "fresh_green",
+                          "ember": "azure_coral"}
+# Питч-дек до сессии 3 рисует старый движок: тема → его цветовая схема
+LEGACY_SCHEME_BY_THEME = {"graphite_light": "light", "graphite_dark": "dark", "azure_coral": "light",
+                          "fresh_green": "forest"}
 
 # Число слайдов доклада. Границы — UserRequest.slide_count_hint (5–20).
 DOKLAD_SLIDE_COUNTS = (5, 7, 9, 12, 15)
@@ -62,38 +69,30 @@ DEFAULT_SOURCE_MODE = "strict"
 # Сообщение длиннее — это не тема, а текст для презентации (вопрос 8, D-039;
 # DeckRequest.input.topic ≤ 200)
 TOPIC_MAX_CHARS = 200
-MATERIAL_MAX_CHARS = 15000
+MATERIAL_MAX_CHARS = 30000  # ТЗ 3.1: текст в сообщении — до 30 000 знаков
 
 
 def has_material(data: dict) -> bool:
     return data.get("source_type") in ("text", "document")
 
 
-# ── Маршрутизация между движками (временная, D-038) ──────────────────────────
-# Новый движок (src/core) пока умеет только доклад по теме: материал — сессия 2,
-# питч-дек — сессия 3 (docs/design/09_PLAN.md). Остальное — в старый движок.
-
-NEW_ENGINE_THEME = "graphite_light"
-NEW_ENGINE_THEME_LABEL = "☀️ Графит светлая"
-# Старые схемы → темы нового движка (04_CONTRACTS.md, 8.2). Тема, которая ещё не
-# включена в боте (enabled: false), заменяется темой по умолчанию.
-THEME_BY_SCHEME = {"light": "graphite_light", "dark": "graphite_dark"}
-
+# ── Движок (D-038) ───────────────────────────────────────────────────────────
+# Доклад — по теме и по материалу — новый движок (PPTX + PDF). Питч-дек — старый
+# движок до сессии 3, где появляется его сюжет (docs/design/08_MIGRATION.md, 2.1).
 
 def engine_for(data: dict) -> str:
     """«new» — колода нового движка (PPTX + PDF), «old» — старый HTML → PDF."""
-    if data.get("presentation_type", "doklad") == "doklad" and not has_material(data):
-        return "new"
-    return "old"
+    return "new" if data.get("presentation_type", "doklad") == "doklad" else "old"
 
 
-def theme_for(scheme: str | None, enabled: list[str] | tuple[str, ...] = (NEW_ENGINE_THEME,)) -> str:
-    theme = THEME_BY_SCHEME.get(scheme or "", NEW_ENGINE_THEME)
-    return theme if theme in enabled else NEW_ENGINE_THEME
+def theme_for(value: str | None, enabled: list[str] | tuple[str, ...] | None = None) -> str:
+    """id темы из сводки или профиля; старые схемы переводятся, неизвестное — тема по умолчанию."""
+    theme = value if value in THEMES else THEME_BY_LEGACY_SCHEME.get(value or "", DEFAULT_THEME)
+    return theme if enabled is None or theme in enabled else DEFAULT_THEME
 
 
-def scheme_allowed(scheme: str, plan: str) -> bool:
-    return scheme in SCHEMES and (SCHEMES[scheme][1] or plan != "free")
+def theme_allowed(theme: str, plan: str) -> bool:
+    return theme in THEMES  # фаза 1: все темы всем (вопрос 12, D-040)
 
 
 # ── Значения по умолчанию ────────────────────────────────────────────────────
@@ -120,7 +119,7 @@ def default_params(profile: dict, telegram_lang: str | None, plan: str) -> dict:
         "slide_count": slides if slides in DOKLAD_SLIDE_COUNTS else DOKLAD_DEFAULT_SLIDE_COUNT,
         "audience": audience if audience in AUDIENCES else DEFAULT_AUDIENCE,
         # Платная схема у пользователя, который вернулся на бесплатный тариф, — не подставляем
-        "color_scheme": scheme if scheme and scheme_allowed(scheme, plan) else DEFAULT_SCHEME,
+        "color_scheme": theme_for(scheme),
         "source_mode": mode if mode in SOURCE_MODES else DEFAULT_SOURCE_MODE,
     }
 
@@ -186,13 +185,8 @@ def summary_text(data: dict, plan: str) -> str:
     else:
         lines.append(f"🔢 Слайдов: <b>{PITCH_SLIDE_COUNT}</b> (структура питч-дека)")
     lines.append(f"👥 Аудитория: <b>{AUDIENCES.get(data.get('audience'), data.get('audience'))}</b>")
-    if engine_for(data) == "new":
-        lines.append(f"🎨 Дизайн: <b>{NEW_ENGINE_THEME_LABEL}</b>")
-        lines.append("📦 Файлы: <b>PPTX + PDF</b>")
-    else:
-        scheme = data.get("color_scheme", DEFAULT_SCHEME)
-        lines.append(f"🎨 Дизайн: <b>{SCHEMES.get(scheme, (scheme,))[0]}</b>")
-        lines.append("📦 Файлы: <b>PDF</b>")
+    lines.append(f"🎨 Дизайн: <b>{THEMES[theme_for(data.get('color_scheme'))]}</b>")
+    lines.append("📦 Файлы: <b>PPTX + PDF</b>" if engine_for(data) == "new" else "📦 Файлы: <b>PDF</b>")
     if has_material(data) and ptype == "doklad" and data.get("source_mode") == "strict":
         lines += ["", "<i>Если материала мало, слайдов будет меньше выбранного — бот скажет, сколько вышло.</i>"]
     return "\n".join(lines)
@@ -222,11 +216,7 @@ def summary_keyboard(data: dict) -> InlineKeyboardMarkup:
     if ptype == "doklad":
         lang_row.append(_btn("🔢 Сменить число слайдов", "sum:slides"))
     rows.append(lang_row)
-    aud_row = [_btn("👥 Сменить аудиторию", "sum:aud")]
-    if engine_for(data) == "old":
-        # У нового движка пока одна тема; выбор тем — сессия 3
-        aud_row.append(_btn("🎨 Сменить дизайн", "sum:design"))
-    rows.append(aud_row)
+    rows.append([_btn("👥 Сменить аудиторию", "sum:aud"), _btn("🎨 Сменить дизайн", "sum:design")])
     rows.append([_btn("✅ Сгенерировать презентацию", "sum:go")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -261,14 +251,10 @@ def change_screen(param: str, data: dict, plan: str) -> tuple[str, InlineKeyboar
                 "🧠 Дополнить общими знаниями — добавим пояснения и контекст, "
                 "но числа, даты и источники — только из вашего материала.</i>"), _grid(buttons, 1)
     if param == "design":
-        buttons = []
-        for key, (label, free) in SCHEMES.items():
-            if scheme_allowed(key, plan):
-                buttons.append(_btn(_mark(label, data.get("color_scheme") == key), f"set:color_scheme:{key}"))
-            else:
-                buttons.append(_btn(f"{label}  🔒", "set:color_scheme:locked"))
-        return ("🎨 <b>Выберите дизайн</b>\n\n<i>Midnight, Forest и Ember доступны на платном плане</i>",
-                _grid(buttons, 1))
+        current = theme_for(data.get("color_scheme"))
+        buttons = [_btn(_mark(label, current == key), f"set:color_scheme:{key}") for key, label in THEMES.items()]
+        return ("🎨 <b>Выберите дизайн</b>\n\n<i>Графит — сдержанные светлая и тёмная, Лазурь и Свежая зелёная — "
+                "яркие. Все темы доступны бесплатно.</i>"), _grid(buttons, 2)
     if param == "type":
         buttons = [_btn(_mark(l, data.get("presentation_type") == k), f"set:presentation_type:{k}")
                    for k, l in TYPE_BUTTONS.items()]
@@ -288,6 +274,6 @@ SETTABLE = {
     "slide_count": {str(n) for n in DOKLAD_SLIDE_COUNTS},
     "audience": set(AUDIENCES),
     "source_mode": set(SOURCE_MODES),
-    "color_scheme": set(SCHEMES),
+    "color_scheme": set(THEMES),
     "presentation_type": set(TYPE_BUTTONS),
 }

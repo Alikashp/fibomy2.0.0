@@ -24,12 +24,28 @@ STAGE_TEXT = {
     "convert": "📑 Делаю PDF",
 }
 
+# Код для поддержки — короткий хвост номера колоды (полный dk_… — в логах): пользователю
+# внутренний номер не показываем (замечание владельца 01.10.2026)
 ERROR_TEXT = {
     "OUTLINE_FAILED": "❌ Не удалось составить план презентации. Попробуйте ещё раз: /new",
-    "RENDER_FAILED": "❌ Что-то пошло не так при сборке файла. Мы уже разбираемся. Номер: {deck_id}",
+    "RENDER_FAILED": "❌ Что-то пошло не так при сборке файла. Мы уже разбираемся. Код для поддержки: {code}",
     "BAD_REQUEST": "❌ Не получилось разобрать параметры. Начните заново: /new",
+    "SCAN_WITHOUT_TEXT": ("❌ В PDF нет текста — похоже на скан. Пришлите файл с текстом или вставьте текст "
+                          "сообщением: /new"),
+    "BAD_FILE": "❌ Не получилось прочитать файл. Сохраните его заново или пришлите текст сообщением: /new",
+    "PARSE_TIMEOUT": "❌ Файл читается слишком долго. Пришлите файл поменьше или текст сообщением: /new",
+    "FILE_UNSUPPORTED": "❌ Такой формат не поддерживается. Пришлите .pdf, .docx, .pptx или .txt: /new",
+    "UPLOAD_EXPIRED": "❌ Файл устарел — пришлите его ещё раз через /new",
 }
-DEFAULT_ERROR = "❌ Что-то пошло не так. Попробуйте ещё раз через /new. Номер: {deck_id}"
+DEFAULT_ERROR = "❌ Что-то пошло не так. Попробуйте ещё раз через /new. Код для поддержки: {code}"
+
+
+def support_code(deck_id: str) -> str:
+    return deck_id[-6:]
+
+
+def error_text(code: str | None, deck_id: str) -> str:
+    return ERROR_TEXT.get(code or "", DEFAULT_ERROR).format(code=support_code(deck_id))
 
 
 def kb_after_delivery() -> InlineKeyboardMarkup:
@@ -52,7 +68,7 @@ class StatusMessage:
         line = STAGE_TEXT.get(stage, "⏳ Работаю")
         if stage == "content" and total:
             line += f": {done or 0} из {total}"
-        return f"{line}…\n\n<code>{self.deck_id}</code>"
+        return f"{line}…"
 
     async def __call__(self, stage: str, done: int | None = None, total: int | None = None) -> None:
         if self.chat_id is None or self.message_id is None:
@@ -89,6 +105,20 @@ def safe_filename(title: str, ext: str) -> str:
 
 def _escape(text: str) -> str:
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def material_notes(warnings: list[str]) -> list[str]:
+    """Предупреждения колоды → строки подписи (02_CJM.md, 1.2, шаг 8)."""
+    notes = []
+    for w in warnings:
+        kind, _, value = w.partition(":")
+        if kind == "slides_short":
+            got, wanted = value.split("/")
+            notes.append(f"В материале хватило на {got} слайдов из {wanted} — добавьте текст, если нужно больше.")
+        elif kind == "truncated":
+            used, total = value.split("/")
+            notes.append(f"Вошло начало документа: {int(used):,} знаков из {int(total):,}.".replace(",", " "))
+    return notes
 
 
 def caption(title: str, slides: int, theme_name: str, watermark: bool, pdf_missing: bool,

@@ -11,8 +11,8 @@ aiogram-хендлера в main.py и блокировала бота на 60-9
 Запуск: arq worker.WorkerSettings
 
 Две задачи (docs/design/08_MIGRATION.md, 2):
-- generate_deck_job(deck_id) — новый движок (src/core): PPTX + PDF. Сейчас —
-  доклад по теме; материал и питч-дек идут в старый движок до сессий 2 и 3 (D-038);
+- generate_deck_job(deck_id) — новый движок (src/core): PPTX + PDF, доклад по теме
+  и по материалу; питч-дек идёт в старый движок до сессии 3 (D-038);
 - generate_presentation_job — старый движок (HTML → PDF), удаляется в сессии 5.
 
 Пайплайн старой задачи:
@@ -345,18 +345,29 @@ async def generate_deck_job(ctx: dict, deck_id: str, request: dict | None = None
 
     await deck_store.mark_processing(deck_id)
     started = time.perf_counter()
+    material_ref = req.input.material.ref if req.input.material else None
     try:
-        result = await generate_deck(deck_id, req, progress)
+        material = None
+        if material_ref:
+            try:
+                material = await get_upload(material_ref)
+            except UploadNotFound:
+                raise DeckError("UPLOAD_EXPIRED", "uploaded material expired")
+        result = await generate_deck(deck_id, req, progress, material=material)
     except DeckError as e:
         logger.error("Deck failed", extra={"error_code": e.code, "error": str(e)})
         await deck_store.fail(deck_id, e.code)
-        await status.show(delivery.ERROR_TEXT.get(e.code, delivery.DEFAULT_ERROR).format(deck_id=deck_id))
+        await status.show(delivery.error_text(e.code, deck_id))
         return {"status": "failed", "deck_id": deck_id, "error_code": e.code}
     except Exception as e:
         logger.exception("Deck crashed", extra={"error": str(e)})
         await deck_store.fail(deck_id, "INTERNAL")
-        await status.show(delivery.DEFAULT_ERROR.format(deck_id=deck_id))
+        await status.show(delivery.error_text(None, deck_id))
         raise
+    finally:
+        # Файлы пользователя не храним дольше обработки (ТЗ 6.5)
+        if material_ref:
+            await delete_upload(material_ref)
 
     spec = result.spec
     await deck_store.finish(
@@ -365,11 +376,7 @@ async def generate_deck_job(ctx: dict, deck_id: str, request: dict | None = None
         degradations=[d.model_dump() for d in spec.degradations],
     )
 
-    notes = []
-    for w in result.warnings:
-        if w.startswith("slides_short:"):
-            got, wanted = w.split(":", 1)[1].split("/")
-            notes.append(f"Получилось {got} слайдов из {wanted}.")
+    notes = delivery.material_notes(result.warnings) if req.mode == "material" else []
     text = delivery.caption(spec.meta.title, len(spec.slides), load_theme(spec.meta.theme_id).name.get("ru", ""),
                             req.watermark, result.pdf is None, notes)
     if chat_id is not None:
@@ -463,7 +470,7 @@ async def shutdown(ctx: dict) -> None:
 
 
 class WorkerSettings:
-    # generate_presentation_job (старый движок) — для материала и питч-дека до сессий 2–3
+    # generate_presentation_job (старый движок) — для питч-дека до сессии 3
     # и для задач, поставленных до деплоя (08_MIGRATION.md, 2)
     functions = [generate_deck_job, generate_presentation_job]
     on_startup = startup

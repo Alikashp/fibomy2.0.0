@@ -4,11 +4,13 @@ INGEST → OUTLINE → SELECT → CONTENT (параллельно) → FIT → R
 DELIVER (отправка файлов) делает адаптер: бот / API. Здесь же — запись
 результата в decks (run_deck).
 
-Сессия 1: только режим «по теме» (материал — сессия 2), без картинок
-(сессия 4); CONVERT упал — PPTX отдаётся без PDF (отдельная задача PDF — сессия 4).
+Без картинок (сессия 4); CONVERT упал — PPTX отдаётся без PDF (отдельная задача PDF —
+сессия 4). Материал: INGEST → SourceDigest с datasets, диаграммы из таблиц кодом,
+проверка чисел по источнику после CONTENT.
 """
 
 import asyncio
+import copy
 import hashlib
 import logging
 import random
@@ -18,7 +20,10 @@ from typing import Awaitable, Callable
 
 from config import settings
 from core import i18n
+from core.checks.facts import slide_errors, source_numbers, strip_unknown
 from core.content.fill import fallback_content, fill_slide, system_prompt, FALLBACK_VARIANT
+from core.ingest import IngestError, ingest
+from core.planning.datasets import legend, related_columns
 from core.fitting.fitter import fit_deck
 from core.llm import prompts as P
 from core.llm.client import DeckUsage, LLMClient, LLMError, get_client
@@ -70,25 +75,52 @@ def _theme_version(theme_id: str) -> str:
     return f"{theme_id}-{hashlib.sha1(raw).hexdigest()[:8]}"
 
 
-def ingest(request: DeckRequest) -> SourceDigest:
-    if request.mode == "topic":
-        return SourceDigest.for_topic(request.input.topic)
-    # Материал — сессия 2; до неё бот отправляет такие запросы в старый движок (D-038)
-    raise DeckError("BAD_REQUEST", "material input is not supported by the new engine yet")
-
-
 def _has_digits(slide: Slide) -> bool:
+    if slide.data:
+        return True
     parts = [slide.title]
-    for value in slide.content.values():
+
+    def walk(value):
         if isinstance(value, str):
             parts.append(value)
+        elif isinstance(value, dict):
+            for k, v in value.items():
+                if k not in ("source_ref", "icon", "status", "tag"):
+                    walk(v)
         elif isinstance(value, list):
-            parts.extend(str(v) for item in value for v in (item.values() if isinstance(item, dict) else [item]))
+            for v in value:
+                walk(v)
+
+    walk(slide.content)
     return any(ch.isdigit() for ch in " ".join(parts))
 
 
+def _apply_chart_content(slide: Slide, language: str) -> None:
+    """Короткие подписи категорий и подпись оси от модели → снимок данных; легенда кольца."""
+    data = slide.data
+    if not data:
+        return
+    short = {c.get("row"): c.get("label") for c in (slide.content.get("category_labels") or [])
+             if c.get("row") and c.get("label")}
+    for cat in data["categories"]:
+        if short.get(cat["row"]):
+            cat["label"] = short[cat["row"]]
+    if slide.content.get("value_axis_title"):
+        data["value_axis_title"] = slide.content["value_axis_title"]
+    if slide.kind == "chart_share":
+        slide.content["legend"] = legend(data, language)
+
+
+def _footnote_source(request: DeckRequest) -> str:
+    material = request.input.material
+    name = material.name if material and material.kind == "document" and material.name else None
+    return i18n.text(i18n.FOOTNOTE_SOURCE_FILE, request.language).format(name=name) if name \
+        else i18n.text(i18n.FOOTNOTE_SOURCE_TEXT, request.language)
+
+
 async def generate_deck(deck_id: str, request: DeckRequest, progress: Progress | None = None,
-                        client: LLMClient | None = None) -> DeckResult:
+                        client: LLMClient | None = None, material: bytes | None = None) -> DeckResult:
+    """material — байты присланного файла или текста (адаптер забирает их из uploads)."""
     progress = progress or _noop_progress
     client = client or get_client()
     usage = DeckUsage()
@@ -104,13 +136,16 @@ async def generate_deck(deck_id: str, request: DeckRequest, progress: Progress |
     # 1 INGEST
     await progress("ingest")
     with log_stage("ingest", timings):
-        digest = ingest(request)
+        try:
+            digest = await ingest(request, material)
+        except IngestError as e:
+            raise DeckError(e.code, str(e)) from e
 
     # 2 OUTLINE
     await progress("outline")
     with log_stage("outline", timings):
         try:
-            outline, plan = await plan_deck(request, digest, client, usage, degrade("outline"))
+            outline, plan, datas = await plan_deck(request, digest, client, usage, degrade("outline"))
         except LLMError as e:
             raise DeckError("OUTLINE_FAILED", str(e)) from e
 
@@ -118,7 +153,11 @@ async def generate_deck(deck_id: str, request: DeckRequest, progress: Progress |
     with log_stage("select", timings):
         total = len(plan) + 2
         needs = [SlideNeed(slide_id(1), "title", "other", title=request.input.topic)]
-        needs += [SlideNeed(slide_id(i), p.kind, p.role, p.items_planned, p.title) for i, p in enumerate(plan, 2)]
+        for i, (p, data) in enumerate(zip(plan, datas), 2):
+            needs.append(SlideNeed(
+                slide_id(i), p.kind, p.role, p.items_planned, p.title,
+                points=len(data["categories"]) if data else None, series=len(data["series"]) if data else None,
+                axis=data.get("axis") if data else None, share_sum=data.get("share_sum") if data else None))
         needs.append(SlideNeed(slide_id(total), "closing", "other"))
         choices = select_deck(needs, seed)
         for need, choice in zip(needs, choices):
@@ -136,10 +175,20 @@ async def generate_deck(deck_id: str, request: DeckRequest, progress: Progress |
     system = system_prompt(request, digest, outline.deck.subtitle, plan)
     done_count = 0
 
-    async def one(i: int, planned, choice):
+    def chart_data(data: dict | None, choice) -> dict | None:
+        if not data or choice.kind not in ("chart_series", "chart_share"):
+            return None
+        data = copy.deepcopy(data)
+        data["chart"] = {"chart_series.line_chart": "line", "chart_share.donut": "donut"}.get(choice.variant, "column")
+        return data
+
+    slide_datas = [chart_data(d, c) for d, c in zip(datas, choices[1:-1])]
+
+    async def one(i: int, planned, choice, data):
         nonlocal done_count
         result = await fill_slide(client, usage, system, planned, choice.kind, choice.variant, choice.items,
-                                  index=i, total=total, slide_id=slide_id(i))
+                                  index=i, total=total, slide_id=slide_id(i), data=data, language=request.language,
+                                  related=related_columns(data, digest) if data else None)
         done_count += 1
         await progress("content", done=done_count, total=len(plan))
         return result
@@ -151,7 +200,8 @@ async def generate_deck(deck_id: str, request: DeckRequest, progress: Progress |
             return await one(*args)
 
     with log_stage("content", timings):
-        tasks = [asyncio.create_task(limited(i, p, c)) for i, (p, c) in enumerate(zip(plan, choices[1:-1]), 2)]
+        tasks = [asyncio.create_task(limited(i, p, c, d))
+                 for i, (p, c, d) in enumerate(zip(plan, choices[1:-1], slide_datas), 2)]
         budget = max(5.0, deadline - time.monotonic() - RESERVE_SECONDS)
         finished, pending = await asyncio.wait(tasks, timeout=budget)
         for task in pending:
@@ -159,7 +209,7 @@ async def generate_deck(deck_id: str, request: DeckRequest, progress: Progress |
         if pending:
             await asyncio.gather(*pending, return_exceptions=True)
 
-    for i, (planned, choice, task) in enumerate(zip(plan, choices[1:-1], tasks), 2):
+    for i, (planned, choice, task, data) in enumerate(zip(plan, choices[1:-1], tasks, slide_datas), 2):
         kind, variant = choice.kind, choice.variant
         if task in finished and not task.cancelled() and task.exception() is None:
             content, variant, reason = task.result()
@@ -168,11 +218,19 @@ async def generate_deck(deck_id: str, request: DeckRequest, progress: Progress |
                 logger.error("CONTENT task crashed", exc_info=task.exception(), extra={"slide_id": slide_id(i)})
             content, variant, reason = fallback_content(planned), FALLBACK_VARIANT, "content_deadline"
         if variant == FALLBACK_VARIANT and kind != "statement":
-            kind = "statement"
+            kind, data = "statement", None
         if reason:
             degradations.append(("content", slide_id(i), reason))
-        slides.append(Slide(id=slide_id(i), index=i, kind=kind, role=planned.role, variant=variant,
-                            plan=planned, title=planned.title, content=content))
+        slide = Slide(id=slide_id(i), index=i, kind=kind, role=planned.role, variant=variant,
+                      plan=planned, title=planned.title, content=content, data=data)
+        _apply_chart_content(slide, request.language)
+        slides.append(slide)
+
+    # 6a FIT: числа — из источника (режим «по материалу», ТЗ 3.3.3)
+    if request.mode == "material":
+        with log_stage("facts", timings):
+            await _check_facts(slides[1:], digest, request, client, usage, system, total, choices, degradations,
+                               deadline)
 
     slides.append(Slide(
         id=slide_id(total), index=total, kind="closing", variant=choices[-1].variant,
@@ -180,11 +238,11 @@ async def generate_deck(deck_id: str, request: DeckRequest, progress: Progress |
         content={"title": i18n.text(i18n.THANKS, request.language), "body": None, "author": author},
     ))
 
-    # Сноска «Оценочные данные…» у слайдов с числами «по теме» (ТЗ 3.3.3)
-    if request.mode == "topic":
-        for s in slides[1:-1]:
-            if _has_digits(s):
-                s.footnote = i18n.text(i18n.FOOTNOTE_ESTIMATE, request.language)
+    # Сноска у слайдов с числами: «по теме» — оценка (ТЗ 3.3.3), по материалу — источник (D-017, D-025)
+    note = i18n.text(i18n.FOOTNOTE_ESTIMATE, request.language) if request.mode == "topic" else _footnote_source(request)
+    for s in slides[1:-1]:
+        if _has_digits(s):
+            s.footnote = note
 
     spec = DeckSpec(
         id=deck_id,
@@ -231,9 +289,50 @@ async def generate_deck(deck_id: str, request: DeckRequest, progress: Progress |
     warnings = []
     if request.slides_count and len(spec.slides) < request.slides_count:
         warnings.append(f"slides_short:{len(spec.slides)}/{request.slides_count}")
+    if digest.source and digest.source.truncated:
+        warnings.append(f"truncated:{digest.source.chars_used}/{digest.source.chars_total}")
     timings["total"] = int((time.monotonic() - started) * 1000)
     logger.info("Deck generated", extra={
         "slides": len(spec.slides), "seed": seed, "degradations": len(spec.degradations),
         "cost_rub": usage.cost_rub, "durations_ms": timings,
     })
     return DeckResult(spec=spec, pptx=pptx, pdf=pdf, durations_ms=timings, usage=usage, warnings=warnings)
+
+
+async def _check_facts(slides: list[Slide], digest: SourceDigest, request: DeckRequest, client: LLMClient,
+                       usage: DeckUsage, system: str, total: int, choices, degradations: list, deadline: float) -> None:
+    """Числа не из источника: 1 перегенерация слайда с перечнем ошибок, затем — числа убираются,
+    metrics без чисел становятся утверждением из плана (03_ARCHITECTURE.md, 6)."""
+    known = source_numbers(digest)
+    targets = [(s, slide_errors(s, digest, known)) for s in slides if s.kind not in ("closing",) and s.plan]
+    targets = [(s, e) for s, e in targets if e]
+    if not targets:
+        return
+
+    async def fix(slide: Slide, errors: list[str]):
+        if deadline - time.monotonic() < RESERVE_SECONDS + 10:
+            return None
+        extra = P.render("fit/fix_facts.txt", errors="\n".join(f"- {e}" for e in errors))
+        choice = choices[slide.index - 1]
+        content, variant, reason = await fill_slide(
+            client, usage, system, slide.plan, slide.kind, slide.variant, choice.items,
+            index=slide.index, total=total, slide_id=slide.id, data=slide.data, extra=extra,
+            language=request.language, stage="fit", attempts=1,
+            related=related_columns(slide.data, digest) if slide.data else None)
+        return None if reason else content
+
+    results = await asyncio.gather(*(fix(s, e) for s, e in targets), return_exceptions=True)
+    for (slide, errors), fixed in zip(targets, results):
+        if isinstance(fixed, dict):
+            slide.content = fixed
+            _apply_chart_content(slide, request.language)
+        left = slide_errors(slide, digest, known)
+        if not left:
+            degradations.append(("fit", slide.id, "facts_fixed"))
+            continue
+        strip_unknown(slide, digest, known)
+        degradations.append(("fit", slide.id, "facts_stripped:" + "; ".join(left)[:200]))
+        if slide.kind == "metrics" and len(slide.content.get("items") or []) < 2:
+            slide.kind, slide.variant, slide.data = "statement", FALLBACK_VARIANT, None
+            slide.content = fallback_content(slide.plan)
+            degradations.append(("fit", slide.id, "metrics->statement"))

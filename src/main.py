@@ -594,8 +594,8 @@ async def on_summary_action(call: CallbackQuery, state: FSMContext):
 async def on_set_param(call: CallbackQuery, state: FSMContext):
     _, key, value = call.data.split(":", 2)
     data = await state.get_data()
-    if key == "color_scheme" and (value == "locked" or not dialog.scheme_allowed(value, data.get("plan", "free"))):
-        await call.answer("🔒 Доступно на платном плане. Используйте /plan", show_alert=True)
+    if key == "color_scheme" and not dialog.theme_allowed(value, data.get("plan", "free")):
+        await call.answer("Такой темы нет", show_alert=True)
         return
     await call.answer()
     if value not in dialog.SETTABLE.get(key, ()):
@@ -962,19 +962,20 @@ async def generate_and_send(message: Message, data: dict, watermark: bool = True
         document_mime_type=data.get("document_mime_type") if source_type == "document" else None,
         urls=None,
         watermark=watermark,
-        color_scheme=data.get("color_scheme", "light"),
+        color_scheme=dialog.LEGACY_SCHEME_BY_THEME.get(dialog.theme_for(data.get("color_scheme")), "light"),
         _job_id=job_id,
     )
 
 
 def deck_request(data: dict, *, user_id: int, chat_id: int, status_message_id: int | None,
-                 watermark: bool, plan: str, author: dict | None) -> DeckRequest:
+                 watermark: bool, plan: str, author: dict | None, material: dict | None = None) -> DeckRequest:
     """Параметры сводки → DeckRequest нового движка (04_CONTRACTS.md, 2)."""
     return DeckRequest(
         client={"kind": "bot", "user_id": user_id, "plan": plan if plan in ("free", "starter", "pro", "team") else "free",
                 "chat_id": chat_id, "status_message_id": status_message_id},
         presentation_type=data["presentation_type"],
-        input={"topic": data["topic"][:dialog.TOPIC_MAX_CHARS]},
+        input={"topic": data["topic"][:dialog.TOPIC_MAX_CHARS], "material": material},
+        source_mode=(data.get("source_mode") or dialog.DEFAULT_SOURCE_MODE) if material else None,
         language=data["language"],
         audience=data["audience"],
         slides_count=int(data["slide_count"]) if data.get("slide_count") else None,
@@ -994,12 +995,24 @@ async def _author(user_id: int) -> dict | None:
     return None
 
 
+async def _material(data: dict) -> dict | None:
+    """Материал сводки → DeckRequest.input.material: текст кладётся во временное хранилище
+    (как файл, D-008), в задачу и в decks уходит только ссылка."""
+    if data.get("source_type") == "document" and data.get("document_ref"):
+        return {"kind": "document", "ref": data["document_ref"], "mime": data.get("document_mime_type"),
+                "name": data.get("source_name")}
+    if data.get("source_type") == "text" and data.get("raw_text"):
+        ref = await put_upload(data["raw_text"].encode("utf-8"), "text/plain")
+        return {"kind": "text", "ref": ref, "mime": "text/plain", "name": None}
+    return None
+
+
 async def generate_deck(message: Message, data: dict, watermark: bool, plan: str = "free") -> None:
-    """Новый движок: строка decks + задача generate_deck_job(deck_id) (D-034)."""
+    """Новый движок: строка decks + задача generate_deck_job(deck_id) (D-034).
+    Номер колоды пользователю не показываем — он в логах и в тексте ошибки как короткий код."""
     deck_id = new_deck_id()
     status_msg = await message.answer(
-        f"⏳ <b>В очереди.</b> Обычно занимает около минуты — пришлю PPTX и PDF сюда же.\n\n"
-        f"<code>{deck_id}</code>",
+        "⏳ <b>В очереди.</b> Обычно занимает около минуты — пришлю PPTX и PDF сюда же.",
         parse_mode="HTML",
     )
     if arq_pool is None:
@@ -1009,7 +1022,7 @@ async def generate_deck(message: Message, data: dict, watermark: bool, plan: str
     try:
         request = deck_request(data, user_id=message.chat.id, chat_id=message.chat.id,
                                status_message_id=status_msg.message_id, watermark=watermark, plan=plan,
-                               author=await _author(message.chat.id))
+                               author=await _author(message.chat.id), material=await _material(data))
     except Exception:
         logger.exception("Bad deck request", extra={"deck_id": deck_id})
         await status_msg.edit_text("❌ Не получилось разобрать параметры. Начните заново: /new")

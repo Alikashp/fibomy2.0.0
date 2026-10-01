@@ -24,7 +24,11 @@ def outline(**kw) -> OutlineResponse:
 class PlanChecks(unittest.TestCase):
 
     def test_kinds_by_mode_and_catalog(self):
-        self.assertEqual(available_kinds(TOPIC), ("statement", "bullets", "conclusion"))
+        self.assertEqual(available_kinds(TOPIC), ("statement", "bullets", "comparison", "process", "metrics",
+                                                  "conclusion"))
+        material = DeckRequest(input={"topic": "Тема", "material": {"kind": "text", "ref": "redis:x"}})
+        self.assertIn("chart_series", available_kinds(material))
+        self.assertIn("chart_share", available_kinds(material))
         self.assertEqual(content_slide_count(TOPIC), 7)
 
     def test_valid_plan_has_no_errors(self):
@@ -49,7 +53,7 @@ class PlanFixes(unittest.TestCase):
         self.reasons = []
 
     def fix(self, resp, n=7, request=TOPIC):
-        return normalize_plan(resp, request, n, available_kinds(request), self.reasons.append)
+        return normalize_plan(resp, request, n, available_kinds(request), self.reasons.append)[0]
 
     def test_chart_in_topic_becomes_bullets(self):
         resp = outline(n=7)
@@ -62,9 +66,11 @@ class PlanFixes(unittest.TestCase):
         resp = outline(n=7)
         resp.deck.slides[1].items_planned = 9
         resp.deck.slides[-1].items_planned = 1
+        resp.deck.slides[4].items_planned = 1      # metrics: 2–4
         slides = self.fix(resp)
-        self.assertEqual((slides[1].items_planned, slides[-1].items_planned), (6, 2))
+        self.assertEqual((slides[1].items_planned, slides[-1].items_planned, slides[4].items_planned), (6, 2, 2))
         self.assertIsNone(slides[0].items_planned)  # statement
+        self.assertIsNone(slides[3].items_planned)  # comparison
 
     def test_ask_moved_last(self):
         resp = outline(n=7)
@@ -88,7 +94,9 @@ class Prompts(unittest.TestCase):
         system, user = build_prompts(TOPIC, SourceDigest.for_topic(TOPIC.input.topic), 7, available_kinds(TOPIC))
         self.assertIn("ровно 7 содержательных", system)
         self.assertIn("ДОКЛАД ПО ТЕМЕ", system)
-        self.assertNotIn("chart_series", system)
+        self.assertNotIn("chart_series —", system)
+        self.assertIn("определение темы", system)
+        self.assertIn("не больше 40%", system)
         self.assertNotIn("$", system + user)
         self.assertIn("<topic>Как устроен городской транспорт</topic>", user)
 
