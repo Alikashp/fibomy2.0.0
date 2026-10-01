@@ -135,8 +135,8 @@ def units_of(slide: dict) -> list[Unit]:
     tc = slide.get("two_column") or {}
     for side in ("left", "right"):
         add("column", tc.get(f"{side}_title"), tc.get(f"{side}_text"))
-        for b in tc.get(f"{side}_bullets") or []:
-            add("column", b.get("text"))
+        for b in tc.get(f"{side}_bullets") or []:  # пункт читается вместе с названием своей стороны
+            add("column", tc.get(f"{side}_title"), b.get("text"))
     return out
 
 
