@@ -1,7 +1,9 @@
 # Реальные генерации golden-корпуса (ТЗ 4.8.7, 7.4) на новом движке: G-01 docx ×2,
 # G-02 pdf ×2, G-03 по теме, G-04 «Навигатор» ×3, G-05 по теме; питч-дек — старый
 # движок до сессии 3. Каждая колода проверяется check_case.py по DeckSpec и по PPTX;
-# итог — комментарий в PR, DeckSpec, PPTX и PDF — артефакт.
+# итог — комментарий в PR, DeckSpec, PPTX и PDF — артефакт. Плюс одна генерация через
+# REST API end-to-end (tests/golden/run_api_e2e.py): процессы api и воркера, Postgres и
+# Redis — сервисы job'а; раздел «API end-to-end» в том же комментарии.
 # Ручной запуск: поле outline_effort — уровень рассуждений OUTLINE (сравнение low /
 # medium, вопрос 13); у каждого уровня свой комментарий в PR.
 #
@@ -16,6 +18,8 @@ on:
       - "prompts/**"
       - "src/generation/**"
       - "src/core/**"
+      - "src/api/**"
+      - "src/worker.py"
       - "layouts/**"
       - "themes/**"
       - "tests/golden/**"
@@ -62,7 +66,20 @@ jobs:
     # jammy, как образ прода (playwright/python:v1.44.0-jammy): на 24.04
     # `playwright install --with-deps` 1.44 падает на пакете libasound2
     runs-on: ubuntu-22.04
-    timeout-minutes: 30
+    timeout-minutes: 35
+    # Для шага «API end-to-end»: БД и очередь, как у сервисов api и worker в Railway
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: golden
+          POSTGRES_DB: fibonacci
+        ports: ["5432:5432"]
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+        options: --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       # Дефолты — как в проде; переопределяются переменными репозитория
@@ -111,6 +128,14 @@ jobs:
           EOF
           fi
           exit "$code"
+
+      - name: API end-to-end (POST → опрос статуса → скачивание, webhook)
+        if: always()
+        env:
+          DATABASE_URL: postgresql://postgres:golden@127.0.0.1:5432/fibonacci
+          REDIS_URL: redis://127.0.0.1:6379/0
+          NO_PROXY: 127.0.0.1,localhost
+        run: python tests/golden/run_api_e2e.py --out golden_out
 
       - name: Сводка в Summary
         if: always() && hashFiles('golden_out/summary.md') != ''

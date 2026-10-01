@@ -1,5 +1,6 @@
 # Автотесты без ключей и без вызовов модели: юнит-тесты (с конвертацией PPTX → PDF
-# через LibreOffice), снимок собранных
+# через LibreOffice), отдельным шагом — тесты REST API (контракт второго бота:
+# эндпоинты, авторизация, лимиты, обратная совместимость схемы), снимок собранных
 # промптов (что изменилось относительно базы) и check_case.py на сохранённых
 # колодах старого движка. Запускается на каждый PR и push в main.
 name: tests
@@ -33,10 +34,12 @@ jobs:
         with:
           python-version: "3.10"   # как в образе прода (playwright/python:v1.44.0-jammy)
           cache: pip
-          cache-dependency-path: requirements.txt
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
 
       - name: Зависимости
-        run: pip install -r requirements.txt
+        run: pip install -r requirements.txt -r requirements-dev.txt
 
       - name: LibreOffice и шрифты (конвертация PPTX → PDF в тестах нового движка)
         run: |
@@ -45,6 +48,11 @@ jobs:
 
       - name: Юнит-тесты
         run: python -m unittest discover -s tests/unit -t tests/unit -v
+
+      # Те же тесты API ещё раз отдельным шагом — чтобы в PR было видно: API для второго
+      # бота не сломан (CLAUDE.md). Снимок схемы — tests/unit/api_contract_v1.json.
+      - name: API-тесты (контракт второго бота)
+        run: python -m unittest discover -s tests/unit -t tests/unit -p "test_api*.py" -v
 
       - name: Снимок собранных промптов (база → эта версия)
         env:

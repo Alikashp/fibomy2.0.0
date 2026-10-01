@@ -5,8 +5,11 @@ class Settings(BaseSettings):
     """Все настройки — только отсюда. os.getenv в обход Settings не используем.
     Полный список переменных окружения — в .env.example в корне репозитория."""
 
-    telegram_bot_token: str
-    openai_api_key: str
+    # Пустые значения допустимы на уровне Settings: сервису «api» не нужны ни Telegram,
+    # ни LLM. Бот падает на старте без токена (aiogram проверяет формат), воркер —
+    # без ключа LLM (worker.startup).
+    telegram_bot_token: str = ""
+    openai_api_key: str = ""
     openai_base_url: str = "https://api.proxyapi.ru/openai/v1"
     openai_model: str = "gpt-4o"
     # Уровень рассуждений для моделей с рассуждениями (gpt-6-luna: none, low,
@@ -48,12 +51,20 @@ class Settings(BaseSettings):
     unsplash_access_key: str = ""
     pexels_api_key: str = ""
 
-    # ── S3 / MinIO — хранилище готовых PDF ──────────────────────────────────
-    s3_endpoint_url: str = ""       # пусто = MinIO/S3 не настроен, worker пропустит загрузку
+    # ── S3-совместимое хранилище: файлы пользователя, PDF старого движка, файлы
+    # колод API (D-042, D-058). Пусто — не используется: файлы — в Redis с TTL.
+    s3_endpoint_url: str = ""
     s3_access_key: str = ""
     s3_secret_key: str = ""
     s3_bucket: str = "fibonacci-presentations"
     s3_region: str = "us-east-1"
+
+    # ── REST API (src/api, отдельный сервис Railway «api», docs/API.md) ───────
+    # Публичный адрес API (https://api-….up.railway.app) — для ссылок на файлы в
+    # webhook. Пусто — в ответах API адрес из запроса, в webhook — относительные пути.
+    api_public_url: str = ""
+    # Максимальный размер файла материала, МБ (как в боте)
+    api_max_file_mb: int = 20
 
     class Config:
         env_file = ".env"

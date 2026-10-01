@@ -25,3 +25,4 @@ Thumbs.db
 *.log
 /out/
 /tmp/
+dump.rdb

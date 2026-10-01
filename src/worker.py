@@ -10,10 +10,13 @@ aiogram-хендлера в main.py и блокировала бота на 60-9
 
 Запуск: arq worker.WorkerSettings
 
-Две задачи (docs/design/08_MIGRATION.md, 2):
+Задачи (docs/design/08_MIGRATION.md, 2):
 - generate_deck_job(deck_id) — новый движок (src/core): PPTX + PDF, доклад по теме
-  и по материалу; питч-дек идёт в старый движок до сессии 3 (D-038);
-- generate_presentation_job — старый движок (HTML → PDF), удаляется в сессии 5.
+  и по материалу; колоды бота (файлы — в Telegram) и REST API (файлы — в хранилище
+  core.storage.files, статус и скачивание — через API); питч-дек идёт в старый
+  движок до сессии 5 (D-038, D-054);
+- deliver_webhook_job(deck_id) — webhook колоды API (api.webhook);
+- generate_presentation_job — старый движок (HTML → PDF), удаляется в сессии 6.
 
 Пайплайн старой задачи:
   extract_content (если source_type != TOPIC)
@@ -54,6 +57,10 @@ from core.models.request import DeckRequest
 from core.models.theme import load_theme
 from core.pipeline import DeckError, generate_deck
 from core.storage import decks as deck_store
+from core.storage import files as deck_files
+from core.storage.progress import set_progress
+from core.storage.redis import close_redis
+from api.webhook import deliver_webhook_job
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -337,11 +344,22 @@ async def generate_deck_job(ctx: dict, deck_id: str, request: dict | None = None
     status = delivery.StatusMessage(bot, chat_id, req.client.status_message_id, deck_id)
     stage_seen: set[str] = set()
 
+    is_api = req.client.kind == "api"
+
     async def progress(stage_name: str, done: int | None = None, total: int | None = None) -> None:
         if stage_name not in stage_seen:
             stage_seen.add(stage_name)
             await deck_store.set_stage(deck_id, stage_name)
+        if is_api and total:
+            await set_progress(deck_id, done or 0, total)
         await status(stage_name, done, total)
+
+    async def webhook() -> None:
+        if is_api and req.webhook_url and ctx.get("redis") is not None:
+            try:
+                await ctx["redis"].enqueue_job("deliver_webhook_job", deck_id)
+            except Exception as e:
+                logger.warning("Webhook not enqueued", extra={"error": str(e)})
 
     await deck_store.mark_processing(deck_id)
     started = time.perf_counter()
@@ -358,11 +376,13 @@ async def generate_deck_job(ctx: dict, deck_id: str, request: dict | None = None
         logger.error("Deck failed", extra={"error_code": e.code, "error": str(e)})
         await deck_store.fail(deck_id, e.code)
         await status.show(delivery.error_text(e.code, deck_id))
+        await webhook()
         return {"status": "failed", "deck_id": deck_id, "error_code": e.code}
     except Exception as e:
         logger.exception("Deck crashed", extra={"error": str(e)})
         await deck_store.fail(deck_id, "INTERNAL")
         await status.show(delivery.error_text(None, deck_id))
+        await webhook()
         raise
     finally:
         # Файлы пользователя не храним дольше обработки (ТЗ 6.5)
@@ -370,11 +390,29 @@ async def generate_deck_job(ctx: dict, deck_id: str, request: dict | None = None
             await delete_upload(material_ref)
 
     spec = result.spec
+    warnings = list(result.warnings) + (["pdf_failed"] if result.pdf is None else [])
+    files = None
+    if is_api:
+        # Файлы колоды API — в хранилище: клиент скачивает их через API (D-058)
+        try:
+            with stage("store_files", result.durations_ms):
+                files = await deck_files.put_deck_files(deck_id, {"pptx": result.pptx, "pdf": result.pdf})
+        except Exception as e:
+            logger.exception("Deck files not stored", extra={"error": str(e)})
+            await deck_store.fail(deck_id, "STORAGE_FAILED", durations_ms=result.durations_ms,
+                                  usage=result.usage.as_dict(), cost_rub=result.usage.cost_rub,
+                                  degradations=[d.model_dump() for d in spec.degradations])
+            await webhook()
+            return {"status": "failed", "deck_id": deck_id, "error_code": "STORAGE_FAILED"}
     await deck_store.finish(
         deck_id, status="done", spec=spec.model_dump(mode="json"), durations_ms=result.durations_ms,
         usage=result.usage.as_dict(), cost_rub=result.usage.cost_rub,
-        degradations=[d.model_dump() for d in spec.degradations],
+        degradations=[d.model_dump() for d in spec.degradations], files=files, warnings=warnings,
     )
+    if is_api:
+        # Колода API готова, как только файлы в хранилище; лимит API — по строкам decks (api.store)
+        await deck_store.mark_counted(deck_id)
+        await webhook()
 
     notes = delivery.material_notes(result.warnings) if req.mode == "material" else []
     text = delivery.caption(spec.meta.title, len(spec.slides), load_theme(spec.meta.theme_id).name.get("ru", ""),
@@ -433,6 +471,8 @@ async def _extract_raw_text(
 async def startup(ctx: dict) -> None:
     # CLI arq после импорта модуля ставит свой текстовый хендлер — переопределяем
     setup_logging()
+    if not settings.openai_api_key or not settings.telegram_bot_token:
+        raise RuntimeError("OPENAI_API_KEY и TELEGRAM_BOT_TOKEN обязательны для воркера")
     ctx["bot"] = Bot(token=settings.telegram_bot_token)
     await init_db()
     await get_renderer()
@@ -462,6 +502,7 @@ async def _warmup_libreoffice() -> None:
 async def shutdown(ctx: dict) -> None:
     await shutdown_renderer()
     await close_uploads()
+    await close_redis()
     await close_db()
     bot: Bot | None = ctx.get("bot")
     if bot is not None:
@@ -470,9 +511,9 @@ async def shutdown(ctx: dict) -> None:
 
 
 class WorkerSettings:
-    # generate_presentation_job (старый движок) — для питч-дека до сессии 3
+    # generate_presentation_job (старый движок) — для питч-дека до сессии 5
     # и для задач, поставленных до деплоя (08_MIGRATION.md, 2)
-    functions = [generate_deck_job, generate_presentation_job]
+    functions = [generate_deck_job, deliver_webhook_job, generate_presentation_job]
     on_startup = startup
     on_shutdown = shutdown
     redis_settings = RedisSettings.from_dsn(settings.redis_url)

@@ -7,6 +7,7 @@
 - payments    — платежи через Telegram Stars
 - decks, deck_revisions — колоды нового движка (docs/design/04_CONTRACTS.md, 8);
   presentations перестаёт пополняться с переходом бота на новый движок
+- api_clients — клиенты REST API (src/api, D-055): ключ хэшем, лимиты, водяной знак
 
 Решения:
 - Схема меняется только миграциями Alembic (src/db/migrations). После правки
@@ -140,7 +141,7 @@ class Deck(Base):
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True)
     user_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.user_id"))
-    api_client_id: Mapped[str | None] = mapped_column(String(32))
+    api_client_id: Mapped[str | None] = mapped_column(String(32), ForeignKey("api_clients.id"))
     idempotency_key: Mapped[str | None] = mapped_column(String(128))
     parent_deck_id: Mapped[str | None] = mapped_column(String(32))
     # queued | processing | done | done_pdf_pending | failed
@@ -155,6 +156,8 @@ class Deck(Base):
     usage: Mapped[dict | None] = mapped_column(JsonColumn)
     cost_rub: Mapped[float | None] = mapped_column(Numeric(10, 4))
     degradations: Mapped[list | None] = mapped_column(JsonColumn)
+    # ["slides_short:7/9", "truncated:40000/62000", "pdf_failed"] — для статуса API
+    warnings: Mapped[list | None] = mapped_column(JsonColumn)
     error_code: Mapped[str | None] = mapped_column(String(32))
     counted: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -174,3 +177,23 @@ class DeckRevision(Base):
     spec: Mapped[dict] = mapped_column(JsonColumn)
     cost_rub: Mapped[float | None] = mapped_column(Numeric(10, 4))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ApiClient(Base):
+    """Клиент REST API (04_CONTRACTS.md, 8.3; D-056). Ключ — только хэш SHA-256;
+    webhook_secret хранится как есть: им подписывается тело webhook (HMAC)."""
+    __tablename__ = "api_clients"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)        # ac_<ULID>
+    name: Mapped[str] = mapped_column(String(128))
+    key_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    key_prefix: Mapped[str] = mapped_column(String(16))                  # «fib_AbCd1234» — узнать ключ в списке
+    webhook_secret: Mapped[str] = mapped_column(String(64))
+    daily_limit: Mapped[int] = mapped_column(Integer, default=100, server_default="100")
+    rate_limit_per_min: Mapped[int] = mapped_column(Integer, default=120, server_default="120")
+    decks_per_min: Mapped[int] = mapped_column(Integer, default=10, server_default="10")
+    watermark: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    plan: Mapped[str] = mapped_column(String(16), default="free", server_default="free")
+    active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
