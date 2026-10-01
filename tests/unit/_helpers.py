@@ -42,19 +42,25 @@ def deck(slides: list[dict], ptype: str = "doklad") -> dict:
 
 # ── Новый движок (src/core) ─────────────────────────────────────────────────
 
-def fake_outline(n: int = 7, subtitle: str = "Как свет превращается в сахар", asks=None, kinds=None) -> dict:
-    """Ответ OUTLINE: n содержательных слайдов, последний — выводы."""
-    kinds = kinds or (["statement"] + ["bullets"] * (n - 2) + ["conclusion"])
+TOPIC_KINDS = ["statement", "bullets", "process", "comparison", "metrics", "bullets", "conclusion"]
+
+
+def fake_outline(n: int = 7, subtitle: str = "Как свет превращается в сахар", asks=None, kinds=None,
+                 datasets=None, genre="topic") -> dict:
+    """Ответ OUTLINE: n содержательных слайдов разной формы, последний — выводы.
+    datasets — {номер слайда с 0: {"id", "label_column", "value_columns", "rows"}} для диаграмм."""
+    kinds = kinds or (TOPIC_KINDS if n == 7 else (["statement"] + ["bullets", "process"] * n)[:n - 1] + ["conclusion"])
+    items = {"bullets": 4, "conclusion": 3, "process": 3, "metrics": 3}
     slides = []
     for i, kind in enumerate(kinds[:n]):
         slides.append({
-            "kind": kind, "role": "conclusion" if kind == "conclusion" else "details",
+            "kind": kind, "role": "definition" if i == 0 else "conclusion" if kind == "conclusion" else "details",
             "title": f"Заголовок-вывод «{'абвгдежзиклмнопрс'[i]}» о теме доклада",
             "key_message": f"Мысль слайда {i + 1}",
-            "items_planned": {"bullets": 4, "conclusion": 3}.get(kind), "refs": [], "dataset": None,
+            "items_planned": items.get(kind), "refs": [], "dataset": (datasets or {}).get(i),
             "image_query": None,
         })
-    return {"analysis": {"genre": "topic", "theses": [], "asks": asks or [], "missing": []},
+    return {"analysis": {"genre": genre, "theses": [], "asks": asks or [], "missing": []},
             "deck": {"subtitle": subtitle, "slides": slides}}
 
 
@@ -68,6 +74,16 @@ def fake_content(schema_name: str, user: str = "") -> dict:
                            "icon": "bulb"} for i in range(1, 5)]}
     if kind == "conclusion":
         return {"items": [{"text": f"Вывод {i}: что следует из фактов колоды."} for i in range(1, 4)]}
+    if kind == "process":
+        return {"steps": [{"label": f"Шаг {i}", "text": "Что происходит на этом шаге."} for i in range(1, 4)]}
+    if kind == "comparison":
+        return {"left": {"header": "Было", "points": ["Медленно", "Вручную"]},
+                "right": {"header": "Стало", "points": ["Быстро", "Автоматически"]}}
+    if kind == "metrics":
+        return {"items": [{"value": "300", "unit": "км/с", "label": "скорость", "status": "estimate",
+                           "source_ref": None} for _ in range(3)], "body": None}
+    if kind in ("chart_series", "chart_share"):
+        return {"insight": "Ряд растёт каждый месяц.", "value_axis_title": None, "category_labels": None}
     raise ValueError(schema_name)
 
 

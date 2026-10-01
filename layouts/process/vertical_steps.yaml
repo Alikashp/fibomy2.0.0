@@ -1,0 +1,32 @@
+# Шаги сверху вниз: номер, название, пояснение (05_LAYOUTS.md, 3.5): 3–6 шагов, запасной вариант kind.
+id: process.vertical_steps
+kind: process
+family: list
+version: 1
+fallback: true
+applies_when: {image: forbidden, items: {min: 3, max: 6}}
+elements:
+  - {name: title, type: text, box: [80, 80, 1760, 176], style: h1, min_style: h2, max_lines: 2,
+     color: text, bind: title, anchor: middle}
+  - {name: footnote, type: text, box: [80, 944, 1760, 40], style: small, min_style: min, max_lines: 1,
+     color: text_muted, bind: footnote, optional: true}
+items:
+  bind: content.steps
+  arrangements:
+    3:
+      grid: {area: [80, 280, 1760, 640], cols: 1, rows: 3, gap: 16}
+      elements: &step3
+        - {name: badge, type: badge, box: [0, 0, 64, 64], style: h3, fill: primary, color: on_primary, bind: $index}
+        - {name: label, type: text, box: [96, 6, w-96, 48], style: h3, min_style: body, max_lines: 1,
+           color: text, bind: label}
+        - {name: text, type: text, box: [96, 56, w-96, h-56], style: body, min_style: small, max_lines: 3,
+           color: text_muted, bind: text}
+    4:
+      grid: {area: [80, 280, 1760, 640], cols: 1, rows: 4, gap: 16}
+      elements: *step3
+    5:
+      grid: {area: [80, 280, 1760, 640], cols: 1, rows: 5, gap: 12}
+      elements: *step3
+    6:
+      grid: {area: [80, 280, 1760, 640], cols: 1, rows: 6, gap: 8}
+      elements: *step3

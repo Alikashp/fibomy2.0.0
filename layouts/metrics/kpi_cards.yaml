@@ -1,0 +1,35 @@
+# 2–4 карточки: значение, единица, подпись (05_LAYOUTS.md, 3.6)
+id: metrics.kpi_cards
+kind: metrics
+family: cards
+version: 1
+fallback: true
+applies_when: {image: forbidden, items: {min: 2, max: 4}}
+elements:
+  - {name: title, type: text, box: [80, 80, 1760, 176], style: h1, min_style: h2, max_lines: 2,
+     color: text, bind: title, anchor: middle}
+  - {name: body, type: text, box: [80, 780, 1760, 130], style: body, min_style: small, max_lines: 2,
+     color: text_muted, bind: content.body, optional: true}
+  - {name: footnote, type: text, box: [80, 944, 1760, 40], style: small, min_style: min, max_lines: 1,
+     color: text_muted, bind: footnote, optional: true}
+items:
+  bind: content.items
+  arrangements:
+    2:
+      grid: {area: [80, 320, 1760, 420], cols: 2, rows: 1, gap: 40}
+      elements: &kpi
+        - {name: card, type: rect, box: [0, 0, w, h], fill: surface, radius: true}
+        - {name: tag, type: text, box: [32, 24, w-64, 34], style: small, min_style: min, max_lines: 1,
+           color: accent, bind: tag, optional: true}
+        - {name: value, type: text, box: [32, 60, w-64, 144], style: display, min_style: h1, max_lines: 1,
+           color: primary, bind: value, never_truncate: true}
+        - {name: unit, type: text, box: [32, 204, w-64, 48], style: h3, min_style: body, max_lines: 1,
+           color: text, bind: unit, optional: true}
+        - {name: label, type: text, box: [32, 256, w-64, 148], style: body, min_style: small, max_lines: 3,
+           color: text_muted, bind: label}
+    3:
+      grid: {area: [80, 320, 1760, 420], cols: 3, rows: 1, gap: 40}
+      elements: *kpi
+    4:
+      grid: {area: [80, 320, 1760, 420], cols: 4, rows: 1, gap: 40}
+      elements: *kpi

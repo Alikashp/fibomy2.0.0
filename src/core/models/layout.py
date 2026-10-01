@@ -12,7 +12,9 @@
         <n>: {grid: {area, cols, rows, gap, center_last_row}, elements: [...]}
 
 Внутри arrangements координаты элемента — относительно ячейки; в выражениях
-доступны w и h ячейки («w-64»). Типы элементов: text, rect, line, icon, badge.
+доступны w и h ячейки («w-64»). Типы элементов: text, rect, line, icon, badge (кружок с номером), chart
+(нативная диаграмма: chart = column | line | donut, данные — Slide.data).
+fill: $chart — цвет серии chart_N по номеру элемента.
 У text: style, min_style, max_lines, color, bind, align (left|center|right),
 anchor (top|middle|bottom), optional, never_truncate.
 
@@ -80,6 +82,7 @@ class Element:
     never_truncate: bool = False
     fmt: str | None = None
     radius: bool = False
+    chart: str | None = None
 
     @property
     def is_text(self) -> bool:
@@ -94,7 +97,7 @@ def _element(raw: dict, w: float = 0, h: float = 0, dx: float = 0, dy: float = 0
         max_lines=int(raw.get("max_lines", 1)), color=raw.get("color", "text"), fill=raw.get("fill"),
         bind=raw.get("bind"), align=raw.get("align", "left"), anchor=raw.get("anchor", "top"),
         optional=bool(raw.get("optional", False)), never_truncate=bool(raw.get("never_truncate", False)),
-        fmt=raw.get("format"), radius=bool(raw.get("radius", False)),
+        fmt=raw.get("format"), radius=bool(raw.get("radius", False)), chart=raw.get("chart"),
     )
 
 

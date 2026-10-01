@@ -15,7 +15,7 @@ from core.models.digest import Genre, ThesisStatus
 # решает код (режим, реализованные варианты) — схема получает только их.
 CONTENT_KINDS = ("statement", "bullets", "comparison", "process", "metrics",
                  "chart_series", "chart_share", "conclusion")
-ROLES = ("context", "problem", "goal", "results", "details", "requirements", "constraints",
+ROLES = ("definition", "context", "problem", "goal", "results", "details", "requirements", "constraints",
          "criteria", "plan", "risks", "ask", "conclusion", "team", "other")
 GENRES = ("topic", "report", "requirements", "plan", "article", "other")
 STATUSES = ("fact", "plan", "requirement", "constraint", "opinion")

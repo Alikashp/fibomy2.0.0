@@ -1,0 +1,12 @@
+genre: report
+title: "report — отчёт: что сделано и что получилось"
+blocks:
+  - {id: goal,       role: goal,       priority: 1, hint: "цель работы, проблема или период, о котором отчёт"}
+  - {id: done,       role: results,    priority: 2, hint: "что сделано; этапы — process"}
+  - {id: numbers,    role: results,    priority: 1, hint: "результаты с числами: ряды — chart_series / chart_share, отдельные числа — metrics"}
+  - {id: negative,   role: problem,    priority: 2, hint: "что хуже плана или в минус — обязательно, если есть"}
+  - {id: compare,    role: details,    priority: 2, hint: "сравнение с альтернативами или прошлым периодом — comparison, если в источнике две стороны"}
+  - {id: plans,      role: plan,       priority: 2, hint: "планы и следующие шаги — ровно те, что названы в источнике, с их датами; шаги — process"}
+  - {id: team,       role: team,       priority: 3, hint: "команда, ресурсы, отзывы — в последнюю очередь"}
+  - {id: conclusion, role: conclusion, priority: 2, hint: "выводы"}
+  - {id: ask,        role: ask,        priority: 0, position: last, hint: "запрос или решение к аудитории — последний слайд плана"}

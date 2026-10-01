@@ -24,6 +24,7 @@ from core.models import bind as B
 from core.models.deck import DeckSpec, Slide
 from core.models.layout import Element, LayoutSpec, load_layouts
 from core.models.theme import BOLD_STYLES, Theme, load_theme
+from core.render.pptx.charts import add_chart
 from core.render.pptx.icons import icon_png
 
 EMU_PER_UNIT = 6350
@@ -83,13 +84,18 @@ def _text(slide_obj, ctx: _Ctx, element: Element, text: str, style: str, color: 
         run._r.get_or_add_rPr().set("lang", ctx.lang)
 
 
-def _rect(slide_obj, ctx: _Ctx, element: Element) -> None:
+def _fill_token(element: Element, index: int | None) -> str:
+    token = element.fill or "surface"
+    return f"chart_{(index or 0) + 1}" if token == "$chart" else token
+
+
+def _rect(slide_obj, ctx: _Ctx, element: Element, index: int | None = None) -> None:
     box = element.box
     kind = MSO_SHAPE.ROUNDED_RECTANGLE if element.radius else MSO_SHAPE.RECTANGLE
     shape = slide_obj.shapes.add_shape(kind, u(box.x), u(box.y), u(box.w), u(box.h))
     shape.name = element.name
     shape.fill.solid()
-    shape.fill.fore_color.rgb = _rgb(ctx.theme.color(element.fill or "surface"))
+    shape.fill.fore_color.rgb = _rgb(ctx.theme.color(_fill_token(element, index)))
     shape.line.fill.background()
     if element.radius:
         radius = float(ctx.theme.style.get("radius", 8))
@@ -104,12 +110,46 @@ def _icon(slide_obj, ctx: _Ctx, element: Element, name: str | None) -> None:
     pic.name = f"{element.name}:{name}"
 
 
+def _badge(slide_obj, ctx: _Ctx, element: Element, text: str) -> None:
+    """Кружок цвета fill с номером цветом color по центру."""
+    box = element.box
+    shape = slide_obj.shapes.add_shape(MSO_SHAPE.OVAL, u(box.x), u(box.y), u(box.w), u(box.h))
+    shape.name = element.name
+    shape.fill.solid()
+    shape.fill.fore_color.rgb = _rgb(ctx.theme.color(element.fill or "primary"))
+    shape.line.fill.background()
+    _no_style(shape)
+    tf = shape.text_frame
+    tf.auto_size = MSO_AUTO_SIZE.NONE
+    tf.word_wrap = False
+    tf.margin_left = tf.margin_right = tf.margin_top = tf.margin_bottom = 0
+    tf.vertical_anchor = MSO_ANCHOR.MIDDLE
+    p = tf.paragraphs[0]
+    p.alignment = PP_ALIGN.CENTER
+    run = p.add_run()
+    run.text = text
+    style = element.style or "h3"
+    run.font.name = ctx.theme.fonts["heading"]
+    run.font.size = Pt(ctx.theme.pt(style))
+    run.font.bold = True
+    run.font.color.rgb = _rgb(ctx.theme.color(element.color or "on_primary"))
+    run._r.get_or_add_rPr().set("lang", ctx.lang)
+
+
 def _draw(slide_obj, ctx: _Ctx, slide: Slide, element: Element, key: str,
           item: dict | None = None, index: int | None = None) -> None:
     if element.type in ("rect", "line"):
-        _rect(slide_obj, ctx, element)
+        _rect(slide_obj, ctx, element, index)
         return
     value = B.read(element, slide, ctx.spec, item=item, index=index)
+    if element.type == "chart":
+        if value:
+            add_chart(slide_obj, value, element.chart or value.get("chart", "column"), element.box, ctx.theme, u,
+                      ctx.lang)
+        return
+    if element.type == "badge":
+        _badge(slide_obj, ctx, element, str(value if value is not None else ""))
+        return
     if element.type == "icon":
         _icon(slide_obj, ctx, element, value)
         return

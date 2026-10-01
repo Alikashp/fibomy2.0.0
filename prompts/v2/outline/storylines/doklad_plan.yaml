@@ -1,0 +1,10 @@
+genre: plan
+title: "plan — план: что собираются сделать"
+blocks:
+  - {id: goal,       role: goal,       priority: 1, hint: "цель и зачем"}
+  - {id: situation,  role: context,    priority: 2, hint: "исходная ситуация с числами из источника"}
+  - {id: steps,      role: plan,       priority: 1, hint: "шаги и этапы — process, даты только из источника"}
+  - {id: resources,  role: details,    priority: 2, hint: "ресурсы, бюджет, команда"}
+  - {id: risks,      role: risks,      priority: 2, hint: "риски и ограничения"}
+  - {id: conclusion, role: conclusion, priority: 3, hint: "ожидаемый результат — как цель, а не факт"}
+  - {id: ask,        role: ask,        priority: 0, position: last, hint: "запрос или решение к аудитории"}

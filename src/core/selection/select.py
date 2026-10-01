@@ -22,6 +22,8 @@ ROLE_BONUS = {
     "criteria": {"bullets.numbered_columns", "process.vertical_steps"},
     "requirements": {"bullets.numbered_columns", "process.vertical_steps"},
 }
+# Ряд по времени из 4+ точек — линия (05_LAYOUTS.md, 3.7)
+SHAPE_BONUS = {"chart_series.line_chart": 1.0}
 FALLBACK_KIND = "bullets"
 
 
@@ -34,6 +36,11 @@ class SlideNeed:
     items: int | None = None
     title: str = ""
     has_image: bool = False
+    # Диаграммы: число категорий, серий, ось, сумма долей (из Slide.data)
+    points: int | None = None
+    series: int | None = None
+    axis: str | None = None
+    share_sum: float | None = None
 
 
 @dataclass
@@ -57,6 +64,17 @@ def applicable(spec: LayoutSpec, need: SlideNeed) -> bool:
     items = rule.get("items")
     if items and need.items is not None and not (items["min"] <= need.items <= items["max"]):
         return False
+    points = rule.get("points")
+    if points and need.points is not None and not (points.get("min", 0) <= need.points <= points.get("max", 10 ** 6)):
+        return False
+    series = rule.get("series")
+    if series and need.series is not None and need.series > series.get("max", 10 ** 6):
+        return False
+    if rule.get("axis") and need.axis != rule["axis"]:
+        return False
+    share = rule.get("share_sum")
+    if share and (need.share_sum is None or not share["min"] <= need.share_sum <= share["max"]):
+        return False
     limit = rule.get("title_max_chars")
     if limit and need.title:
         slot = next((e for e in spec.elements() if e.bind == "title"), None)
@@ -68,6 +86,13 @@ def applicable(spec: LayoutSpec, need: SlideNeed) -> bool:
 
 def choose(need: SlideNeed, seed: int, used: dict[str, int], prev_family: str | None) -> Choice:
     candidates = [s for s in variants_of(need.kind) if applicable(s, need)]
+    if not candidates and need.kind == "chart_share" and need.points:
+        # Доли не сходятся в 95–105% или долей больше 6 → столбцы по тем же данным (05_LAYOUTS.md, 5)
+        alt = SlideNeed(need.slide_id, "chart_series", need.role, None, need.title, need.has_image,
+                        need.points, need.series, need.axis, None)
+        chosen = choose(alt, seed, used, prev_family)
+        chosen.reason = chosen.reason or "kind_fallback:chart_share->chart_series"
+        return chosen
     if not candidates:
         # Запасной вариант kind тоже не применим (он самый вместительный) → bullets
         fallback = next((s for s in variants_of(FALLBACK_KIND) if s.fallback), None)
@@ -83,6 +108,7 @@ def choose(need: SlideNeed, seed: int, used: dict[str, int], prev_family: str | 
             score -= 2.0
         if spec.id in ROLE_BONUS.get(need.role, ()):
             score += 2.0
+        score += SHAPE_BONUS.get(spec.id, 0.0)
         score += rng.uniform(0, 0.5)
         if best_score is None or score > best_score:
             best, best_score = spec, score

@@ -103,8 +103,11 @@ class LLMClient:
         attempts: int = 2,
         usage: DeckUsage | None = None,
         validate: Callable[[M], list[str]] | None = None,
+        soft: Callable[[M], list[str]] | None = None,
         log_fields: dict | None = None,
     ) -> M:
+        """validate — ошибки, без исправления которых ответ не принимается; soft — замечания,
+        ради которых делается повтор, но на последней попытке ответ принимается с ними."""
         model, effort = stage_model(stage)
         messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
         last_error = "no attempts"
@@ -153,7 +156,13 @@ class LLMClient:
 
             errors = self._check(content, model_cls, validate, choice.finish_reason)
             if isinstance(errors, BaseModel):
-                return errors
+                remarks = soft(errors) if soft else []
+                if not remarks or attempt >= attempts:
+                    if remarks:
+                        logger.warning("LLM answer accepted with remarks", extra={
+                            "stage": stage, "remarks": "; ".join(remarks)[:500], **(log_fields or {})})
+                    return errors
+                errors = remarks
             last_error = "; ".join(errors)[:1000]
             logger.warning("LLM answer rejected", extra={"stage": stage, "attempt": attempt, "errors": last_error,
                                                          **(log_fields or {})})

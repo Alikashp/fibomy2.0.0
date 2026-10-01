@@ -92,11 +92,14 @@ class Schemas(unittest.TestCase):
 
 class Layouts(unittest.TestCase):
 
-    def test_session_1_catalog(self):
+    def test_catalog_session_2(self):
         ids = set(load_layouts())
         self.assertEqual(ids, {"title.cover_center", "statement.big_quote", "bullets.cards_grid",
-                               "conclusion.numbered_takeaways", "closing.thanks_center"})
-        for kind in ("title", "statement", "bullets", "conclusion", "closing"):
+                               "conclusion.numbered_takeaways", "closing.thanks_center", "metrics.kpi_cards",
+                               "chart_series.column_chart", "chart_series.line_chart", "chart_share.donut",
+                               "comparison.two_columns", "process.vertical_steps"})
+        for kind in ("title", "statement", "bullets", "conclusion", "closing", "metrics", "chart_series",
+                     "chart_share", "comparison", "process"):
             self.assertTrue(any(v.fallback for v in variants_of(kind)), kind)
 
     def test_capacity_matches_design_tables(self):

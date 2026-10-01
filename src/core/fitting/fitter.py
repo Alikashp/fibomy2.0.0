@@ -32,7 +32,15 @@ class TextFit:
     fits: bool
 
 
+def _display(element: Element, text: str) -> str:
+    """Текст так, как его нарисует рендерер (format элемента: «•  {}»)."""
+    if element.fmt and element.bind and not element.bind.startswith(("$", "const:")):
+        return element.fmt.format(text)
+    return text
+
+
 def measure(element: Element, text: str, style: str, theme: Theme) -> TextFit:
+    text = _display(element, text)
     pt = theme.pt(style)
     lines = wrap(text, element.box.w, pt, style in BOLD_STYLES)
     return TextFit(style, lines, len(lines) <= max_lines_at(element, style, theme.typescale))
@@ -86,7 +94,7 @@ def fit_slide(slide: Slide, spec: DeckSpec, layout: LayoutSpec, theme: Theme) ->
             if element.is_text:
                 slide.fit.styles[element.name] = element.style
             continue
-        text = B.read(element, slide, spec)
+        text = B.text_of(element, slide, spec)
         if not text:
             continue
         style = _fit_group([(element, text)], theme)
@@ -103,7 +111,10 @@ def fit_slide(slide: Slide, spec: DeckSpec, layout: LayoutSpec, theme: Theme) ->
         group = []
         for i, item in enumerate(items):
             element = per_item[i][pos]
-            text = B.read(element, slide, spec, item=item, index=i)
+            if (element.bind or "").startswith("$"):
+                text = B.read(element, slide, spec, item=item, index=i)
+            else:
+                text = B.text_of(element, slide, spec, item=item, index=i)
             if text:
                 group.append((element, str(text), item))
         if not group:

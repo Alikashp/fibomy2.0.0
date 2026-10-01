@@ -1,0 +1,7 @@
+genre: article
+title: "article — статья, объяснение темы"
+blocks:
+  - {id: definition, role: definition, priority: 1, hint: "о чём текст: определение предмета"}
+  - {id: parts,      role: details,    priority: 1, hint: "главные мысли автора по порядку; механизм — process, противопоставление — comparison"}
+  - {id: numbers,    role: results,    priority: 2, hint: "числа и примеры из текста"}
+  - {id: conclusion, role: conclusion, priority: 1, hint: "выводы автора"}

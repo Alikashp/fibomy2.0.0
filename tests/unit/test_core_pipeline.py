@@ -140,12 +140,6 @@ class Pipeline(unittest.TestCase):
         self.assertNotIn("Fibonacci.", texts(res.pptx))
         self.assertIn("Fibonacci.", texts(seen[0]))
 
-    def test_material_not_supported_yet(self):
-        req = DeckRequest(input={"topic": "Тема", "material": {"kind": "text", "ref": "redis:x"}})
-        with self.assertRaises(pipeline.DeckError) as ctx:
-            run(FakeOpenAI(), req)
-        self.assertEqual(ctx.exception.code, "BAD_REQUEST")
-
     def test_progress_stages(self):
         stages = []
 
