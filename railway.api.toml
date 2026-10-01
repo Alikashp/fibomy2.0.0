@@ -1,0 +1,19 @@
+# Конфиг сервиса api в Railway (REST API для второго бота, docs/API.md).
+#
+# Тот же образ, что у бота и воркера, другая команда запуска. Чтобы Railway взял
+# команду отсюда: сервис api → Settings → Config-as-code → путь к файлу:
+# /railway.api.toml. Публичный домен: Settings → Networking → Generate Domain.
+#
+# --proxy-headers: Railway завершает TLS на своём прокси — адреса в ответах API
+# (ссылки на файлы) получаются https://, а не http://.
+
+[build]
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "sh -c \"cd src && uvicorn api.app:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips '*'\""
+healthcheckPath = "/v1/health"
+healthcheckTimeout = 60
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3

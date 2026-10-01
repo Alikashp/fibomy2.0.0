@@ -1,6 +1,6 @@
 # 04. Контракты данных
 
-**Статус:** утверждено 01.10.2026 · **Дата:** 30.09.2026, правка 01.10.2026 (тема до 200 знаков, четыре темы, поля бота в `client`, формат LayoutSpec) · **Опирается на:** `01_SCOPE.md`, `02_CJM.md`, `03_ARCHITECTURE.md`, ТЗ 3.10, 4.3, 4.8
+**Статус:** утверждено 01.10.2026 · **Дата:** 30.09.2026, правка 01.10.2026 (тема до 200 знаков, четыре темы, поля бота в `client`, формат LayoutSpec; раздел 7 и 8.3 — API реализован в сессии 3, D-055…D-059) · **Опирается на:** `01_SCOPE.md`, `02_CJM.md`, `03_ARCHITECTURE.md`, ТЗ 3.10, 4.3, 4.8
 
 Все контракты в коде — модели pydantic в `core/models/`. JSON Schema ниже — их описание: из моделей она генерируется автоматически (для structured outputs и тестов), здесь приведена для утверждения. Схемы — draft 2020-12, сокращены до значимых полей.
 
@@ -339,7 +339,7 @@ name: {ru: "Графит светлая", en: "Graphite light"}
 mode: light
 tags: [business, academic]
 free: true                  # фаза 1: все темы всем (вопрос 12)
-enabled: true               # доступна в боте; остальные три — с сессии 3
+enabled: true               # доступна в боте и API (с сессии 2 — все четыре)
 fonts: {heading: Arial, body: Arial}
 colors:
   bg: "#FFFFFF"
@@ -379,21 +379,45 @@ contrast_pairs:             # пары, которые реально встре
 
 ---
 
-## 7. Контракт API фазы 3 (только описание)
+## 7. Контракт API v1
 
-Цель раздела — чтобы модели фазы 1 уже совпадали с API. Реализация — фаза 3.
+Реализован в сессии 3 (перенесён из фазы 3, D-054): `src/api/`, отдельный сервис Railway «api». Руководство разработчика клиента — `docs/API.md`; машинная схема — `/v1/openapi.json`, её снимок — `tests/unit/api_contract_v1.json` (тест не пропускает несовместимые изменения, D-059). Ниже — контракт и что изменено относительно первоначального описания (7.5).
 
 ### 7.1 Эндпоинты
 
 | Метод | Путь | Тело / параметры | Ответ |
 |---|---|---|---|
-| `POST` | `/v1/decks` | JSON `DeckCreate` или `multipart/form-data` (поле `file` + поле `params` с JSON). Заголовки `Authorization: Bearer <key>`, `Idempotency-Key` | `202 {"id", "status": "queued", "created_at"}`; повтор с тем же ключом — `200` с той же колодой |
-| `GET` | `/v1/decks/{id}` | — | `DeckStatus` (7.2) |
-| `GET` | `/v1/decks/{id}/files/{pptx\|pdf}` | — | `302` на подписанную ссылку S3 (24 ч) |
-| `GET` | `/v1/themes` | — | `[{"id", "name", "mode", "tags"}]` |
-| `GET` | `/v1/health` | — | `{"status": "ok", "version"}` |
+| `POST` | `/v1/decks` | JSON `DeckCreate` или `multipart/form-data` (поле `params` с JSON `DeckCreate` + поле `file`). Заголовки `Authorization: Bearer <key>`, `Idempotency-Key` (необязательно) | `202` + `DeckStatus` (`status = queued`), `Location`, `X-Daily-Remaining`; повтор с тем же ключом — `200` + `DeckStatus` той же колоды |
+| `GET` | `/v1/decks/{id}` | — | `DeckStatus` (7.2); чужая колода — `404` |
+| `GET` | `/v1/decks/{id}/files/{pptx\|pdf}` | — | `200` — байты файла (скачивание через API с ключом) |
+| `GET` | `/v1/themes` | — | `{"themes": [{"id", "name", "mode", "tags"}]}` |
+| `GET` | `/v1/usage` | — | лимиты ключа и израсходовано за сутки |
+| `GET` | `/v1/health` | без ключа | `{"status": "ok" \| "degraded", "version", "engine", "db", "redis"}`; `503` при `degraded` |
 
-`DeckCreate` — это `DeckRequest` (раздел 2) без `client` (его подставляет сервер по ключу) и с `input.text` вместо ссылки на материал (сервер сам кладёт текст в `uploads/`). `source_mode` по умолчанию `strict`, профиль не читается.
+`DeckCreate` — `DeckRequest` (раздел 2) без полей, которые задаёт сервер:
+
+```json
+{
+  "$id": "DeckCreate", "type": "object", "additionalProperties": false,
+  "required": ["input"],
+  "properties": {
+    "presentation_type": {"type": "string", "default": "doklad", "description": "pitch_deck и прочие — 400 UNSUPPORTED_TYPE (до сессии 5)"},
+    "input": {"type": "object", "additionalProperties": false, "required": ["topic"], "properties": {
+      "topic": {"type": "string", "minLength": 3, "maxLength": 200},
+      "text": {"type": ["string", "null"], "maxLength": 200000, "description": "текст-материал; сервер кладёт его в uploads/, в decks — ссылка"}}},
+    "source_mode": {"enum": ["strict", "extend", null], "description": "только с материалом; по умолчанию strict"},
+    "language": {"enum": ["ru", "en", "uz", "kk"], "default": "ru"},
+    "audience": {"enum": ["general", "students", "colleagues", "management", "clients", "investors"], "default": "general"},
+    "slides_count": {"type": ["integer", "null"], "minimum": 4, "maximum": 20},
+    "theme_id": {"enum": ["graphite_light", "graphite_dark", "azure_coral", "fresh_green"], "default": "graphite_light"},
+    "author": {"type": ["object", "null"], "properties": {"name": {"type": ["string", "null"]}, "group": {"type": ["string", "null"]}}},
+    "webhook_url": {"type": ["string", "null"], "maxLength": 2000},
+    "seed": {"type": ["integer", "null"]}
+  }
+}
+```
+
+Сервер подставляет в `DeckRequest`: `client = {"kind": "api", "api_client_id", "plan"}`, `watermark` — из настройки ключа, `image_mode = "none"` (картинки — сессия 4), материал — ссылкой `uploads/` (файл — по расширению имени: pdf, docx, pptx, txt, до 20 МБ). Профиля у клиента API нет: значения по умолчанию не запоминаются.
 
 ### 7.2 DeckStatus
 
@@ -401,30 +425,66 @@ contrast_pairs:             # пары, которые реально встре
 {
   "id": "dk_01J…",
   "status": "queued | processing | done | done_pdf_pending | failed",
-  "stage": "ingest | outline | select | content | images | fit | render | convert | deliver | null",
+  "stage": "ingest | outline | content | render | convert | null",
   "progress": {"slides_done": 4, "slides_total": 9},
-  "created_at": "…", "finished_at": "…",
-  "files": {"pptx": "https://…", "pdf": "https://…", "expires_at": "…"},
-  "warnings": ["material_short: 7 of 9", "truncated: 40000 of 62000"],
+  "title": "тема дословно", "slides": 9,
+  "created_at": "…", "started_at": "…", "finished_at": "…",
+  "files": {"pptx": "https://<api>/v1/decks/dk_…/files/pptx", "pdf": "… | null", "expires_at": "…"},
+  "warnings": [{"code": "SLIDES_SHORT", "message": "В материале хватило на 7 слайдов из 9. …"}],
   "error": {"code": "SCAN_WITHOUT_TEXT", "message": "…"}
 }
 ```
 
+- `stage` — только при `processing`; `progress` — только на этапе `content` (Redis, не `decks`: правится на каждом слайде).
+- `warnings` — из `decks.warnings` (`slides_short:7/9`, `truncated:40000/62000`, `pdf_failed` → `SLIDES_SHORT`, `MATERIAL_TRUNCATED`, `PDF_FAILED`).
+- Колода `queued` / `processing` дольше 15 минут отдаётся как `failed` / `DEADLINE_EXCEEDED` (воркер её потерял); строку правит сторож зависших колод (сессия 5).
+- Файлы колод API: S3 (`decks/ГГГГ/ММ/ДД/<id>.<ext>`, 24 ч), без S3 — Redis на 1 ч (D-058); `decks.files = {"pptx": ref, "pdf": ref | null, "expires_at", "backend"}`.
+
 ### 7.3 Коды ошибок (общие для бота и API)
+
+Формат ответа — `{"error": {"code", "message"}}`, `message` — по-русски для разработчика и пользователя. Коды — часть контракта: добавлять можно, переименовывать и удалять — нет.
 
 | Код | HTTP (API) | Когда |
 |---|---|---|
-| `BAD_REQUEST` | 400 | неверные параметры |
-| `UNAUTHORIZED` | 401 | нет или неверный ключ |
-| `RATE_LIMITED` | 429 | превышен лимит ключа (по умолчанию 10 колод в минуту) |
-| `FILE_UNSUPPORTED`, `FILE_TOO_LARGE` | 400 / 413 | формат или размер |
-| `SCAN_WITHOUT_TEXT`, `BAD_FILE`, `PARSE_TIMEOUT` | — (в статусе) | INGEST |
+| `BAD_REQUEST` | 400 | неверные параметры, неизвестное поле, не JSON (ошибки валидации — 400, а не 422 FastAPI) |
+| `UNSUPPORTED_TYPE` | 400 | `presentation_type` не `doklad` |
+| `FILE_UNSUPPORTED`, `FILE_TOO_LARGE` | 400 / 413 | расширение файла; файл > 20 МБ или JSON > 1 МБ |
+| `UNAUTHORIZED` | 401 | нет, неверный или отозванный ключ |
+| `NOT_FOUND`, `METHOD_NOT_ALLOWED` | 404 / 405 | нет колоды (или чужая), неверный адрес |
+| `DECK_NOT_READY`, `DECK_FAILED` | 409 | файлы запрошены до `done` или у упавшей колоды |
+| `FILE_NOT_AVAILABLE` | 404 | PDF не получился |
+| `FILE_EXPIRED` | 410 | срок хранения файлов истёк |
+| `RATE_LIMITED` | 429 | превышены запросы или новые колоды в минуту на ключ |
+| `DAILY_LIMIT_EXCEEDED` | 429 | исчерпан суточный лимит колод ключа |
+| `SERVICE_UNAVAILABLE` | 503 | недоступны БД, очередь или хранилище |
+| `SCAN_WITHOUT_TEXT`, `BAD_FILE`, `PARSE_TIMEOUT`, `UPLOAD_EXPIRED` | — (в статусе) | INGEST |
 | `OUTLINE_FAILED` | — | OUTLINE |
 | `RENDER_FAILED` | — | RENDER |
-| `DEADLINE_EXCEEDED` | — | колода не собралась даже с деградацией |
-| `INTERNAL` | 500 | прочее |
+| `STORAGE_FAILED` | — | файлы колоды API не сохранились |
+| `DEADLINE_EXCEEDED` | — | колода не собралась даже с деградацией или потеряна воркером |
+| `INTERNAL` | 500 / в статусе | прочее |
 
-Webhook: `POST webhook_url`, тело — `DeckStatus`, заголовок `X-Fibonacci-Signature: sha256=<HMAC тела ключом клиента>`, 3 повтора с растущей паузой.
+### 7.4 Лимиты и webhook
+
+- Лимиты — на ключ, в `api_clients` (D-057): `daily_limit` колод за календарные сутки UTC (упавшие не считаются; проверка и вставка — под блокировкой строки клиента), `rate_limit_per_min` любых запросов и `decks_per_min` новых колод — окно календарной минуты в Redis. Ответы с ключом несут `X-RateLimit-Limit / Remaining / Reset`, `429` — `Retry-After`.
+- Webhook: `POST webhook_url`, тело — `DeckStatus`, заголовок `X-Fibonacci-Signature: sha256=<HMAC-SHA256 тела секретом webhook клиента>`, `X-Fibonacci-Deck-Id`, `X-Fibonacci-Attempt`; при `done` и `failed`; ответ не `2xx` — 3 повтора через 10 с, 1 мин, 5 мин (задачи ARQ `deliver_webhook_job`), без редиректов.
+
+### 7.5 Что изменено относительно первоначального описания (сессия 3) и почему
+
+| Было в контракте | Стало | Почему |
+|---|---|---|
+| `GET …/files/{fmt}` → `302` на подписанную ссылку S3 (24 ч) | `200` и байты файла через API с ключом; хранение S3 (24 ч) или Redis (1 ч) | S3 на проде ещё нет (сессия 5); ссылка через API работает с любым хранилищем и не раздаёт файл без ключа; клиенту всё равно — он скачивает URL из `files` (D-058) |
+| `POST` → `202 {"id", "status", "created_at"}` | `202` + полный `DeckStatus` | один парсер ответа у клиента для `POST`, повтора по `Idempotency-Key` и `GET`; поля — надмножество прежних |
+| `GET /v1/themes` → массив | `{"themes": [...]}` | в объект можно добавлять поля (например, тема по умолчанию) без нарушения совместимости — с сессии 3 у API живые клиенты |
+| `presentation_type` — перечисление | строка; не `doklad` — `400 UNSUPPORTED_TYPE` с понятным текстом | питч-дек пока не на новом движке; ошибка валидации перечисления не объясняет, что тип появится позже |
+| `DeckCreate` = `DeckRequest` без `client` | ещё без `watermark`, `image_mode`, `parent_deck_id`, `schema_version` | водяной знак — свойство ключа, а не запроса; картинок ещё нет (поле добавится необязательным); «Повторить» — только в боте |
+| `warnings` — строки `"material_short: 7 of 9"` | объекты `{"code", "message"}` | код — для логики клиента, текст — показать пользователю второго бота |
+| `DeckStatus` | + `title`, `slides`, `started_at`; `progress` только на этапе `content` | клиенту нужна подпись к файлу и число слайдов без разбора PPTX |
+| `RATE_LIMITED` — «10 колод в минуту» | три лимита ключа: колоды в сутки (`DAILY_LIMIT_EXCEEDED`), колоды в минуту, запросы в минуту | требование владельца: лимит генераций в сутки на ключ и частота запросов |
+| — | `GET /v1/usage` | второй бот может показать остаток лимита и не упираться в `429` |
+| Ошибок «нет колоды», «не готова», «истёк срок» нет | `NOT_FOUND`, `DECK_NOT_READY`, `DECK_FAILED`, `FILE_NOT_AVAILABLE`, `FILE_EXPIRED`, `SERVICE_UNAVAILABLE`, `UPLOAD_EXPIRED`, `STORAGE_FAILED` | понадобились при реализации скачивания и хранения |
+| Подпись webhook — «ключом клиента» | отдельным секретом `whsec_…` (показывается вместе с ключом) | ключ хранится только хэшем — подписать им тело нельзя; отдельный секрет можно сменить, не меняя ключ |
+| `api_clients.webhook_secret_hash`, `rate_limit_per_min` | `webhook_secret` (как есть), `key_prefix`, `daily_limit`, `rate_limit_per_min`, `decks_per_min`, `watermark`, `revoked_at` (8.3) | хэш секрета не годится для HMAC; лимиты и водяной знак — по требованию владельца |
 
 ---
 
@@ -438,7 +498,7 @@ Webhook: `POST webhook_url`, тело — `DeckStatus`, заголовок `X-Fi
 |---|---|---|
 | `id` | `varchar(32)` PK | `dk_<ULID>` |
 | `user_id` | `bigint` FK `users.user_id`, NULL | NULL у колод API |
-| `api_client_id` | `varchar(32)`, NULL | фаза 3 (FK появится с таблицей `api_clients`) |
+| `api_client_id` | `varchar(32)`, NULL | колоды API; FK на `api_clients` — миграция `0006` (сессия 3) |
 | `idempotency_key` | `varchar(128)`, NULL | уникален в паре с `api_client_id` |
 | `parent_deck_id` | `varchar(32)`, NULL | «Повторить с другими параметрами» |
 | `status` | `varchar(24)` | `queued`, `processing`, `done`, `done_pdf_pending`, `failed` |
@@ -461,8 +521,28 @@ Webhook: `POST webhook_url`, тело — `DeckStatus`, заголовок `X-Fi
 **Таблица `deck_revisions`** (создаётся сразу, пишется в фазе 4): `id` serial PK, `deck_id` FK, `revision`, `action` (`theme`, `variant`, `regen_slide`, `shorten`, `image`), `slide_id` NULL, `spec` JSONB, `cost_rub`, `created_at`. Хранятся последние 10 на колоду.
 
 ### 8.2 Что происходит со старыми таблицами
-- `presentations` — перестаёт пополняться с сессии 1. Счётчик `users.presentations_count` остаётся источником лимита. Таблица удаляется миграцией в фазе 2, когда `decks` проработает неделю (`08_MIGRATION.md`).
+- `presentations` — перестаёт пополняться с сессии 1. Счётчик `users.presentations_count` остаётся источником лимита. Таблица удаляется миграцией в фазе 2, когда `decks` проработает неделю (`08_MIGRATION.md`) — это исключение из правила «миграции только добавляющие» (`CLAUDE.md`, с сессии 3), только отдельным решением владельца.
 - `users` — без изменений (колонки `last_*` из `0004` используются сводкой). `last_color_scheme` хранит `theme_id`: старые значения (`light`, `dark`, `forest`, `ember`) читаются через таблицу соответствия (`light` → `graphite_light`, `dark` → `graphite_dark`, прочие → тема по умолчанию).
 
-### 8.3 Фаза 3 (только описание)
-`api_clients`: `id`, `name`, `key_hash` (SHA-256), `rate_limit_per_min`, `webhook_secret_hash`, `plan`, `active`, `created_at`. FK `decks.api_client_id → api_clients.id` добавляется той же миграцией.
+### 8.3 Миграция `0006_api_clients` (сессия 3)
+
+**Таблица `api_clients`:**
+
+| Колонка | Тип | Примечание |
+|---|---|---|
+| `id` | `varchar(32)` PK | `ac_<ULID>` |
+| `name` | `varchar(128)` | «Второй бот» |
+| `key_hash` | `varchar(64)`, уникальный | SHA-256 ключа `fib_…`; сам ключ не хранится (D-056) |
+| `key_prefix` | `varchar(16)` | начало ключа — узнать его в списке клиентов |
+| `webhook_secret` | `varchar(64)` | `whsec_…`, как есть: им подписывается webhook (HMAC) |
+| `daily_limit` | `int` default 100 | колод за сутки UTC |
+| `rate_limit_per_min` | `int` default 120 | любых запросов в минуту |
+| `decks_per_min` | `int` default 10 | новых колод в минуту |
+| `watermark` | `boolean` default true | водяной знак в PDF колод клиента |
+| `plan` | `varchar(16)` default `free` | `free` при водяном знаке, иначе `pro`; тарифы — фаза 3 |
+| `active` | `boolean` default true | `false` — ключ отозван (`401`) |
+| `created_at`, `revoked_at` | `timestamptz` | |
+
+**`decks`:** + `warnings` JSONB (предупреждения колоды для статуса API); индекс `(api_client_id, created_at)` для суточного лимита; FK `decks.api_client_id → api_clients.id` (на Postgres — `NOT VALID`: проверяются новые строки, накат после отката не падает).
+
+Миграция только добавляющая: откат кода без отката БД безопасен.

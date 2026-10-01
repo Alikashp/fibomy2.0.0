@@ -51,7 +51,7 @@ DEFAULT_THEME = "graphite_light"
 # Цветовые схемы старого движка (до 01.10.2026) → темы (04_CONTRACTS.md, 8.2)
 THEME_BY_LEGACY_SCHEME = {"light": "graphite_light", "dark": "graphite_dark", "forest": "fresh_green",
                           "ember": "azure_coral"}
-# Питч-дек до сессии 3 рисует старый движок: тема → его цветовая схема
+# Питч-дек до сессии 5 (D-054) рисует старый движок: тема → его цветовая схема
 LEGACY_SCHEME_BY_THEME = {"graphite_light": "light", "graphite_dark": "dark", "azure_coral": "light",
                           "fresh_green": "forest"}
 
@@ -78,7 +78,7 @@ def has_material(data: dict) -> bool:
 
 # ── Движок (D-038) ───────────────────────────────────────────────────────────
 # Доклад — по теме и по материалу — новый движок (PPTX + PDF). Питч-дек — старый
-# движок до сессии 3, где появляется его сюжет (docs/design/08_MIGRATION.md, 2.1).
+# движок до сессии 5, где появляется его сюжет (docs/design/08_MIGRATION.md, 2.1; D-054).
 
 def engine_for(data: dict) -> str:
     """«new» — колода нового движка (PPTX + PDF), «old» — старый HTML → PDF."""

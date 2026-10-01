@@ -21,3 +21,6 @@ trafilatura==1.12.2
 arq==0.26.1
 boto3==1.34.144
 alembic==1.13.2
+fastapi==0.115.0
+uvicorn==0.30.6
+python-multipart==0.0.12

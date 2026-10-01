@@ -1,0 +1,4 @@
+# Только тесты (CI «tests»): SQLite для БД API и подменный Redis.
+# pip install -r requirements.txt -r requirements-dev.txt
+aiosqlite==0.20.0
+fakeredis==2.24.1

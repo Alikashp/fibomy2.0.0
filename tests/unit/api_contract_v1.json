@@ -1,0 +1,954 @@
+{
+ "paths": {
+  "/v1/decks": {
+   "post": {
+    "operationId": "create_deck_v1_decks_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/DeckCreate"
+       }
+      },
+      "multipart/form-data": {
+       "schema": {
+        "properties": {
+         "file": {
+          "description": ".pdf, .docx, .pptx или .txt до 20 МБ",
+          "format": "binary",
+          "type": "string"
+         },
+         "params": {
+          "description": "DeckCreate в JSON",
+          "type": "string"
+         }
+        },
+        "required": [
+         "params"
+        ],
+        "type": "object"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/DeckStatus"
+        }
+       }
+      },
+      "description": "Повтор с тем же Idempotency-Key"
+     },
+     "202": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/DeckStatus"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "400": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Bad Request"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "413": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Request Entity Too Large"
+     },
+     "429": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Too Many Requests"
+     },
+     "503": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Service Unavailable"
+     }
+    },
+    "summary": "Create Deck",
+    "tags": [
+     "decks"
+    ]
+   }
+  },
+  "/v1/decks/{deck_id}": {
+   "get": {
+    "operationId": "get_deck_v1_decks__deck_id__get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "deck_id",
+      "required": true,
+      "schema": {
+       "title": "Deck Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/DeckStatus"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "429": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Too Many Requests"
+     }
+    },
+    "summary": "Get Deck",
+    "tags": [
+     "decks"
+    ]
+   }
+  },
+  "/v1/decks/{deck_id}/files/{fmt}": {
+   "get": {
+    "operationId": "get_file_v1_decks__deck_id__files__fmt__get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "deck_id",
+      "required": true,
+      "schema": {
+       "title": "Deck Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "fmt",
+      "required": true,
+      "schema": {
+       "title": "Fmt",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       },
+       "application/pdf": {
+        "schema": {
+         "format": "binary",
+         "type": "string"
+        }
+       },
+       "application/vnd.openxmlformats-officedocument.presentationml.presentation": {
+        "schema": {
+         "format": "binary",
+         "type": "string"
+        }
+       }
+      },
+      "description": "Файл колоды"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Not Found"
+     },
+     "409": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Conflict"
+     },
+     "410": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Gone"
+     },
+     "429": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Too Many Requests"
+     }
+    },
+    "summary": "Get File",
+    "tags": [
+     "decks"
+    ]
+   }
+  },
+  "/v1/health": {
+   "get": {
+    "operationId": "health_v1_health_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Health"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "503": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Health"
+        }
+       }
+      },
+      "description": "Service Unavailable"
+     }
+    },
+    "summary": "Health",
+    "tags": [
+     "service"
+    ]
+   }
+  },
+  "/v1/themes": {
+   "get": {
+    "operationId": "themes_v1_themes_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Themes"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "429": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Too Many Requests"
+     }
+    },
+    "summary": "Themes",
+    "tags": [
+     "decks"
+    ]
+   }
+  },
+  "/v1/usage": {
+   "get": {
+    "operationId": "usage_v1_usage_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Usage"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "401": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Unauthorized"
+     },
+     "429": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Too Many Requests"
+     }
+    },
+    "summary": "Usage",
+    "tags": [
+     "service"
+    ]
+   }
+  }
+ },
+ "schemas": {
+  "Author": {
+   "additionalProperties": false,
+   "properties": {
+    "group": {
+     "anyOf": [
+      {
+       "maxLength": 150,
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "Группа или организация",
+     "title": "Group"
+    },
+    "name": {
+     "anyOf": [
+      {
+       "maxLength": 150,
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "ФИО докладчика — на титуле и финале",
+     "title": "Name"
+    }
+   },
+   "title": "Author",
+   "type": "object"
+  },
+  "DeckCreate": {
+   "additionalProperties": false,
+   "description": "Параметры колоды: JSON-тело или поле params в multipart/form-data (с полем file).",
+   "properties": {
+    "audience": {
+     "default": "general",
+     "enum": [
+      "general",
+      "students",
+      "colleagues",
+      "management",
+      "clients",
+      "investors"
+     ],
+     "title": "Audience",
+     "type": "string"
+    },
+    "author": {
+     "anyOf": [
+      {
+       "$ref": "#/components/schemas/Author"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null
+    },
+    "input": {
+     "$ref": "#/components/schemas/DeckInput"
+    },
+    "language": {
+     "default": "ru",
+     "enum": [
+      "ru",
+      "en",
+      "uz",
+      "kk"
+     ],
+     "title": "Language",
+     "type": "string"
+    },
+    "presentation_type": {
+     "default": "doklad",
+     "description": "doklad — доклад. pitch_deck пока не поддерживается (UNSUPPORTED_TYPE)",
+     "title": "Presentation Type",
+     "type": "string"
+    },
+    "seed": {
+     "anyOf": [
+      {
+       "maximum": 2147483647,
+       "minimum": 0,
+       "type": "integer"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "Повторяемый выбор вариантов слайдов; обычно не нужен",
+     "title": "Seed"
+    },
+    "slides_count": {
+     "anyOf": [
+      {
+       "maximum": 20,
+       "minimum": 4,
+       "type": "integer"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "Всего слайдов вместе с титулом и финалом; по умолчанию 9",
+     "title": "Slides Count"
+    },
+    "source_mode": {
+     "anyOf": [
+      {
+       "enum": [
+        "strict",
+        "extend"
+       ],
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "Только с материалом: strict — только материал (по умолчанию), extend — дополнить общими знаниями до slides_count",
+     "title": "Source Mode"
+    },
+    "theme_id": {
+     "default": "graphite_light",
+     "description": "id из GET /v1/themes",
+     "enum": [
+      "graphite_light",
+      "graphite_dark",
+      "azure_coral",
+      "fresh_green"
+     ],
+     "title": "Theme Id",
+     "type": "string"
+    },
+    "webhook_url": {
+     "anyOf": [
+      {
+       "maxLength": 2000,
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "https://… — POST со статусом колоды по готовности",
+     "title": "Webhook Url"
+    }
+   },
+   "required": [
+    "input"
+   ],
+   "title": "DeckCreate",
+   "type": "object"
+  },
+  "DeckInput": {
+   "additionalProperties": false,
+   "properties": {
+    "text": {
+     "anyOf": [
+      {
+       "maxLength": 200000,
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "Текст-материал. Не вместе с файлом",
+     "title": "Text"
+    },
+    "topic": {
+     "description": "Тема — заголовок титульного слайда дословно, до 200 знаков",
+     "maxLength": 200,
+     "minLength": 3,
+     "title": "Topic",
+     "type": "string"
+    }
+   },
+   "required": [
+    "topic"
+   ],
+   "title": "DeckInput",
+   "type": "object"
+  },
+  "DeckStatus": {
+   "properties": {
+    "created_at": {
+     "format": "date-time",
+     "title": "Created At",
+     "type": "string"
+    },
+    "error": {
+     "anyOf": [
+      {
+       "$ref": "#/components/schemas/Notice"
+      },
+      {
+       "type": "null"
+      }
+     ]
+    },
+    "files": {
+     "anyOf": [
+      {
+       "$ref": "#/components/schemas/Files"
+      },
+      {
+       "type": "null"
+      }
+     ]
+    },
+    "finished_at": {
+     "anyOf": [
+      {
+       "format": "date-time",
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "title": "Finished At"
+    },
+    "id": {
+     "title": "Id",
+     "type": "string"
+    },
+    "progress": {
+     "anyOf": [
+      {
+       "$ref": "#/components/schemas/Progress"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "description": "Слайдов готово из N — на этапе content"
+    },
+    "slides": {
+     "anyOf": [
+      {
+       "type": "integer"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "description": "Слайдов в готовой колоде",
+     "title": "Slides"
+    },
+    "stage": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "description": "Этап: ingest, outline, content, render, convert; null — в очереди или завершена",
+     "title": "Stage"
+    },
+    "started_at": {
+     "anyOf": [
+      {
+       "format": "date-time",
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "title": "Started At"
+    },
+    "status": {
+     "enum": [
+      "queued",
+      "processing",
+      "done",
+      "done_pdf_pending",
+      "failed"
+     ],
+     "title": "Status",
+     "type": "string"
+    },
+    "title": {
+     "title": "Title",
+     "type": "string"
+    },
+    "warnings": {
+     "items": {
+      "$ref": "#/components/schemas/Notice"
+     },
+     "title": "Warnings",
+     "type": "array"
+    }
+   },
+   "required": [
+    "id",
+    "status",
+    "stage",
+    "progress",
+    "title",
+    "slides",
+    "created_at",
+    "started_at",
+    "finished_at",
+    "files",
+    "warnings",
+    "error"
+   ],
+   "title": "DeckStatus",
+   "type": "object"
+  },
+  "ErrorResponse": {
+   "properties": {
+    "error": {
+     "$ref": "#/components/schemas/Notice"
+    }
+   },
+   "required": [
+    "error"
+   ],
+   "title": "ErrorResponse",
+   "type": "object"
+  },
+  "Files": {
+   "properties": {
+    "expires_at": {
+     "description": "После этого момента файлы недоступны (410 FILE_EXPIRED)",
+     "format": "date-time",
+     "title": "Expires At",
+     "type": "string"
+    },
+    "pdf": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "description": "null — PDF не получился (предупреждение PDF_FAILED)",
+     "title": "Pdf"
+    },
+    "pptx": {
+     "description": "Ссылка на скачивание через API (с тем же ключом)",
+     "title": "Pptx",
+     "type": "string"
+    }
+   },
+   "required": [
+    "pptx",
+    "pdf",
+    "expires_at"
+   ],
+   "title": "Files",
+   "type": "object"
+  },
+  "Health": {
+   "properties": {
+    "db": {
+     "enum": [
+      "ok",
+      "error",
+      "disabled"
+     ],
+     "title": "Db",
+     "type": "string"
+    },
+    "engine": {
+     "title": "Engine",
+     "type": "string"
+    },
+    "redis": {
+     "enum": [
+      "ok",
+      "error"
+     ],
+     "title": "Redis",
+     "type": "string"
+    },
+    "status": {
+     "enum": [
+      "ok",
+      "degraded"
+     ],
+     "title": "Status",
+     "type": "string"
+    },
+    "version": {
+     "title": "Version",
+     "type": "string"
+    }
+   },
+   "required": [
+    "status",
+    "version",
+    "engine",
+    "db",
+    "redis"
+   ],
+   "title": "Health",
+   "type": "object"
+  },
+  "Notice": {
+   "properties": {
+    "code": {
+     "title": "Code",
+     "type": "string"
+    },
+    "message": {
+     "title": "Message",
+     "type": "string"
+    }
+   },
+   "required": [
+    "code",
+    "message"
+   ],
+   "title": "Notice",
+   "type": "object"
+  },
+  "Progress": {
+   "properties": {
+    "slides_done": {
+     "title": "Slides Done",
+     "type": "integer"
+    },
+    "slides_total": {
+     "title": "Slides Total",
+     "type": "integer"
+    }
+   },
+   "required": [
+    "slides_done",
+    "slides_total"
+   ],
+   "title": "Progress",
+   "type": "object"
+  },
+  "Theme": {
+   "properties": {
+    "id": {
+     "title": "Id",
+     "type": "string"
+    },
+    "mode": {
+     "enum": [
+      "light",
+      "dark"
+     ],
+     "title": "Mode",
+     "type": "string"
+    },
+    "name": {
+     "additionalProperties": {
+      "type": "string"
+     },
+     "description": "Название по языкам: {\"ru\": …, \"en\": …}",
+     "title": "Name",
+     "type": "object"
+    },
+    "tags": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Tags",
+     "type": "array"
+    }
+   },
+   "required": [
+    "id",
+    "name",
+    "mode",
+    "tags"
+   ],
+   "title": "Theme",
+   "type": "object"
+  },
+  "Themes": {
+   "properties": {
+    "themes": {
+     "items": {
+      "$ref": "#/components/schemas/Theme"
+     },
+     "title": "Themes",
+     "type": "array"
+    }
+   },
+   "required": [
+    "themes"
+   ],
+   "title": "Themes",
+   "type": "object"
+  },
+  "Usage": {
+   "properties": {
+    "client_id": {
+     "title": "Client Id",
+     "type": "string"
+    },
+    "daily_limit": {
+     "title": "Daily Limit",
+     "type": "integer"
+    },
+    "decks_per_min": {
+     "title": "Decks Per Min",
+     "type": "integer"
+    },
+    "name": {
+     "title": "Name",
+     "type": "string"
+    },
+    "rate_limit_per_min": {
+     "title": "Rate Limit Per Min",
+     "type": "integer"
+    },
+    "remaining_today": {
+     "title": "Remaining Today",
+     "type": "integer"
+    },
+    "resets_at": {
+     "description": "Начало следующих суток UTC — счётчик обнуляется",
+     "format": "date-time",
+     "title": "Resets At",
+     "type": "string"
+    },
+    "used_today": {
+     "title": "Used Today",
+     "type": "integer"
+    },
+    "watermark": {
+     "title": "Watermark",
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "client_id",
+    "name",
+    "watermark",
+    "daily_limit",
+    "used_today",
+    "remaining_today",
+    "resets_at",
+    "rate_limit_per_min",
+    "decks_per_min"
+   ],
+   "title": "Usage",
+   "type": "object"
+  }
+ }
+}
