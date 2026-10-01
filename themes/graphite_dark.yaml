@@ -1,0 +1,44 @@
+# Тема оформления (docs/design/05_LAYOUTS.md, 6; контракт — 04_CONTRACTS.md, 6.2).
+# Токены утверждены; выбор в сводке бота — сессия 3 (docs/design/09_PLAN.md).
+id: graphite_dark
+name: {ru: "Графит тёмная", en: "Graphite dark"}
+mode: dark
+tags: [business, tech]
+free: true                  # фаза 1: все темы всем (вопрос 12)
+enabled: false               # доступна в боте
+fonts: {heading: Arial, body: Arial}
+colors:
+  bg: "#121821"
+  surface: "#1C2430"
+  surface_alt: "#273242"
+  primary: "#6CB2F0"
+  accent: "#F2B45A"
+  text: "#F3F5F8"
+  text_muted: "#B7C0CC"
+  on_primary: "#0E1520"
+  border: "#3A4657"
+  positive: "#6FCF97"
+  negative: "#F08A80"
+# Серии и сектора диаграмм по порядку: графика ≥ 3:1 к bg и surface, первые пять
+# попарно различимы (CIEDE2000 ≥ 20), шестой — нейтральный для «прочее».
+chart: ["#5AA9F0", "#F5A34B", "#3FD0B0", "#B08CF5", "#F27389", "#C9D1DC"]
+typescale: {hero: 96, display: 60, h1: 36, h2: 26, h3: 20, body: 18, small: 14, min: 12}
+style:
+  radius: 8                 # 0 / 8 / 16
+  card: fill                # fill / outline
+  image: plain              # plain / rounded
+  decor: line               # none / line
+# Пары «текст / фон», которые реально встречаются в макетах; тест — не ниже 4.5:1
+contrast_pairs:
+  - [text, bg]
+  - [text, surface]
+  - [text, surface_alt]
+  - [text_muted, bg]
+  - [text_muted, surface]
+  - [primary, bg]
+  - [primary, surface]
+  - [accent, bg]
+  - [accent, surface]
+  - [positive, surface]
+  - [negative, surface]
+  - [on_primary, primary]

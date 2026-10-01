@@ -1,6 +1,6 @@
 # 04. Контракты данных
 
-**Статус:** проект на утверждение · **Дата:** 30.09.2026 · **Опирается на:** `01_SCOPE.md`, `02_CJM.md`, `03_ARCHITECTURE.md`, ТЗ 3.10, 4.3, 4.8
+**Статус:** утверждено 01.10.2026 · **Дата:** 30.09.2026, правка 01.10.2026 (тема до 200 знаков, четыре темы, поля бота в `client`, формат LayoutSpec) · **Опирается на:** `01_SCOPE.md`, `02_CJM.md`, `03_ARCHITECTURE.md`, ТЗ 3.10, 4.3, 4.8
 
 Все контракты в коде — модели pydantic в `core/models/`. JSON Schema ниже — их описание: из моделей она генерируется автоматически (для structured outputs и тестов), здесь приведена для утверждения. Схемы — draft 2020-12, сокращены до значимых полей.
 
@@ -30,10 +30,12 @@
       "kind": {"enum": ["bot", "api"]},
       "user_id": {"type": ["integer", "null"]},
       "api_client_id": {"type": ["string", "null"]},
-      "plan": {"enum": ["free", "starter", "pro", "team"]}}},
+      "plan": {"enum": ["free", "starter", "pro", "team"]},
+      "chat_id": {"type": ["integer", "null"], "description": "только бот: куда воркер отправляет файлы"},
+      "status_message_id": {"type": ["integer", "null"], "description": "только бот: статусное сообщение, которое правит прогресс"}}},
     "presentation_type": {"enum": ["doklad", "pitch_deck"], "description": "фаза 2+: report, lecture, defense, general (ТЗ 3.2)"},
     "input": {"type": "object", "properties": {
-      "topic": {"type": "string", "minLength": 3, "maxLength": 300},
+      "topic": {"type": "string", "minLength": 3, "maxLength": 200, "description": "длиннее — текст-материал (D-039)"},
       "material": {"type": ["object", "null"], "properties": {
         "kind": {"enum": ["text", "document", "digest"]},
         "ref": {"type": "string", "description": "uploads/…, redis:… (D-008) или digests/{deck_id} при «Повторить»"},
@@ -44,7 +46,7 @@
     "language": {"enum": ["ru", "en", "uz", "kk"], "description": "фаза 2: 15 языков"},
     "audience": {"enum": ["general", "students", "colleagues", "management", "clients", "investors"]},
     "slides_count": {"type": ["integer", "null"], "minimum": 4, "maximum": 20, "description": "null — число задаёт сюжет (питч-дек, 11)"},
-    "theme_id": {"enum": ["graphite_light", "graphite_dark"]},
+    "theme_id": {"enum": ["graphite_light", "graphite_dark", "azure_coral", "fresh_green"]},
     "image_mode": {"enum": ["none", "web", "ai"], "default": "web"},
     "author": {"type": ["object", "null"], "properties": {"name": {"type": ["string", "null"]}, "group": {"type": ["string", "null"]}}},
     "watermark": {"type": "boolean"},
@@ -294,67 +296,64 @@ r3: Предзаказ | 4,7 | 10 | новый канал
 
 ### 6.1 LayoutSpec — пример `layouts/bullets/cards_grid.yaml`
 
+Формат уточнён при реализации в сессии 1 (D-044): элементы слайда — один упорядоченный список `elements` (порядок = z-порядок), повторяющиеся элементы — `items.arrangements` по числу элементов, вместимость в YAML не хранится — её считает код. Полное описание формата — docstring `src/core/models/layout.py`.
+
 ```yaml
 id: bullets.cards_grid
 kind: bullets
 family: cards                 # штраф соседства одинаковых семей (ТЗ 3.4.3)
 version: 1
 fallback: true                # самый вместительный вариант kind
-applies_when:
-  items: {min: 3, max: 6}
-  image: forbidden
-  text_max_chars:             # предел длины для применимости: по числу элементов
-    3: 180
-    4: 126
-    5: 65
-    6: 65
-slots:
-  title: {type: text, box: [80, 80, 1760, 176], style: h1, min_style: h2, max_lines: 2, color: text, bind: title}
-  items:
-    type: repeat
-    bind: content.items
-    arrangements:              # раскладка на каждое число элементов
-      3:
-        cells: grid(area=[80, 280, 1760, 640], cols=3, rows=1, gap=40)
-        item:
-          card:    {type: shape, box: [0, 0, w, h], fill: surface, radius: theme}
-          icon:    {type: icon, box: [32, 32, 64, 64], color: primary, bind: icon}
-          heading: {type: text, box: [32, 120, w-64, 96], style: h3, min_style: body, max_lines: 2, max_chars: 37, color: text, bind: heading}
-          text:    {type: text, box: [32, 232, w-64, h-264], style: body, min_style: small, max_lines: 8, max_chars: 180, color: text_muted, bind: text}
-      4:
-        cells: grid(area=[80, 280, 1760, 640], cols=2, rows=2, gap=40)
-        item: { … }            # см. 05_LAYOUTS.md
-  footnote: {type: text, box: [80, 944, 1760, 40], style: small, max_lines: 1, color: text_muted, bind: footnote, optional: true}
+applies_when: {image: forbidden, items: {min: 3, max: 6}}
+elements:
+  - {name: title, type: text, box: [80, 80, 1760, 176], style: h1, min_style: h2, max_lines: 2,
+     color: text, bind: title, anchor: middle}
+  - {name: footnote, type: text, box: [80, 944, 1760, 40], style: small, min_style: min, max_lines: 1,
+     color: text_muted, bind: footnote, optional: true}
+items:
+  bind: content.items
+  arrangements:               # раскладка на каждое число элементов
+    3:
+      grid: {area: [80, 280, 1760, 640], cols: 3, rows: 1, gap: 40}
+      elements:
+        - {name: card, type: rect, box: [0, 0, w, h], fill: surface, radius: true}
+        - {name: icon, type: icon, box: [32, 32, 64, 64], color: primary, bind: icon}
+        - {name: heading, type: text, box: [32, 120, w-64, 96], style: h3, min_style: body, max_lines: 2,
+           color: text, bind: heading}
+        - {name: text, type: text, box: [32, 232, w-64, h-264], style: body, min_style: small, max_lines: 8,
+           color: text_muted, bind: text}
+    4: { … }                  # см. layouts/bullets/cards_grid.yaml
 ```
 
 Правила формата:
-- координаты — на сетке 1920×1080; внутри `item` — относительно ячейки (`w`, `h` — размер ячейки);
+- координаты — на сетке 1920×1080; внутри `arrangements` — относительно ячейки (`w`, `h` — размер ячейки), `center_last_row` центрирует неполный последний ряд;
 - цвет — только токен темы (ТЗ 3.4.2);
-- `max_chars` — вместимость для промпта, посчитанная по формуле `05_LAYOUTS.md`, 2; `min_style` — нижний шаг fitter'а;
-- `bind` — путь в `Slide` (связь слота с содержанием kind).
+- вместимость для промпта и схемы — `capacity()` по формуле `05_LAYOUTS.md`, 2; `min_style` — нижний шаг fitter'а; `never_truncate` — текст не обрезается (тема на титуле);
+- `bind` — путь в `Slide` / `DeckSpec` (`title`, `meta.title`, `footnote`, `content.<поле>`, поле пункта, `$index`, `const:<текст>`).
 
 ### 6.2 Theme — пример `themes/graphite_light.yaml`
 
 ```yaml
 id: graphite_light
-name: {ru: "Светлая", en: "Light"}
+name: {ru: "Графит светлая", en: "Graphite light"}
 mode: light
 tags: [business, academic]
-free: true
+free: true                  # фаза 1: все темы всем (вопрос 12)
+enabled: true               # доступна в боте; остальные три — с сессии 3
 fonts: {heading: Arial, body: Arial}
 colors:
   bg: "#FFFFFF"
   surface: "#F2F4F7"
   surface_alt: "#E4E8EE"
   primary: "#1F4E79"
-  accent: "#9A4A10"
+  accent: "#B4530F"
   text: "#1A1F29"
   text_muted: "#4A5565"
   on_primary: "#FFFFFF"
   border: "#CBD2DC"
   positive: "#1E6B3A"
   negative: "#A8261F"
-chart: ["#1F4E79", "#9A4A10", "#2E7D6B", "#6B4C9A", "#8A6D1F", "#5A6B7F"]
+chart: ["#1F5FAD", "#D2620A", "#0F8A73", "#9B3FB8", "#C8364A", "#6B7280"]
 typescale: {hero: 96, display: 60, h1: 36, h2: 26, h3: 20, body: 18, small: 14, min: 12}
 style:
   radius: 8                 # 0 / 8 / 16
@@ -364,12 +363,19 @@ style:
 contrast_pairs:             # пары, которые реально встречаются в макетах; тест ≥ 4.5:1
   - [text, bg]
   - [text, surface]
+  - [text, surface_alt]
   - [text_muted, bg]
   - [text_muted, surface]
   - [primary, bg]
+  - [primary, surface]
   - [accent, bg]
+  - [accent, surface]
+  - [positive, surface]
+  - [negative, surface]
   - [on_primary, primary]
 ```
+
+Остальные три темы — `themes/graphite_dark.yaml`, `azure_coral.yaml`, `fresh_green.yaml`; токены и контраст — `05_LAYOUTS.md`, 6.
 
 ---
 
