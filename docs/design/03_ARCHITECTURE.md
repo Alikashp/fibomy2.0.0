@@ -1,6 +1,6 @@
 # 03. Архитектура нового движка
 
-**Статус:** проект на утверждение · **Дата:** 30.09.2026 · **Опирается на:** `01_SCOPE.md`, `02_CJM.md`, ТЗ 4.1–4.7, 5, D-001…D-030
+**Статус:** утверждено 01.10.2026 · **Дата:** 30.09.2026, правка 01.10.2026 (четыре темы, S3 любого провайдера, временная маршрутизация) · **Опирается на:** `01_SCOPE.md`, `02_CJM.md`, ТЗ 4.1–4.7, 5, D-001…D-030
 
 ---
 
@@ -42,7 +42,7 @@ src/
   db/                  модели, Alembic
   config.py            все настройки
 layouts/<kind>/<variant>.yaml      22 файла фазы 1
-themes/<id>.yaml                   2 файла фазы 1
+themes/<id>.yaml                   4 файла фазы 1 (D-037)
 fonts/                             LiberationSans-{Regular,Bold}.ttf (метрики fitter)
 assets/icons/                      PNG Tabler Icons (MIT) — набор фазы 1
 prompts/v2/                        промпты нового движка (06_PROMPTS.md)
@@ -58,7 +58,7 @@ prompts/v2/                        промпты нового движка (06_
 | `src/generation/content_extractor.py` | **переписываем на основе** | `core/ingest/`. Логику pdfplumber (`find_tables`, текст без символов таблиц) и чтение таблиц docx сохраняем; выход — `SourceDigest` с `datasets` и адресами ячеек, а не плоский текст. Добавляем таблицы и данные диаграмм pptx, лимиты и zip-проверку |
 | `src/generation/uploads.py` | **переиспользуем** | `core/storage/uploads.py` без изменений (D-008) |
 | `src/generation/storage.py` | **переписываем** | `core/storage/files.py`: PPTX + PDF + `SourceDigest`, префиксы и TTL — раздел 7 |
-| `src/generation/llm_models.py`, `prompts/models.yaml` | **переиспользуем** | `core/llm/models.py`: параметры запроса по модели, учёт токенов и стоимости (D-020, D-021) |
+| `src/generation/llm_models.py`, `prompts/models.yaml` | **переиспользуем** | `core/llm/models.py`: параметры запроса по модели, учёт токенов и стоимости (D-020, D-021). Перенесено в сессии 1; `generation/llm_models.py` — реэкспорт для старого движка до сессии 5 |
 | `src/generation/prompts.py` (загрузчик) | **переиспользуем** | `core/llm/prompts.py`, промпты — `prompts/v2/` |
 | `src/logging_setup.py` | **переиспользуем** | + обязательные поля `deck_id`, `stage` |
 | `src/db/` (session, миграции 0001–0004) | **переиспользуем** | + миграция `0005_decks` (`04_CONTRACTS.md`, 8) |
@@ -121,7 +121,7 @@ sequenceDiagram
     participant L as LLM (gpt-6-luna)
     participant P as Pexels
     participant LO as LibreOffice
-    participant S3 as S3 (R2)
+    participant S3 as S3 (R2 / Yandex / Selectel)
 
     U->>B: «✅ Сгенерировать»
     B->>PG: users.last_* ; INSERT decks (queued, request)
@@ -233,7 +233,7 @@ sequenceDiagram
 | Кэш картинок (поиск и файл) | Redis `img:{hash}` (метаданные) + S3 `images/{hash}.jpg` | 7 дней | воркер |
 | Иконки, макеты, темы, шрифты | репозиторий, в образе | с версией кода | рендерер |
 
-Без S3 (сейчас на проде): файлы отправляются из памяти, `SourceDigest` и кэш картинок — в Redis с TTL 24 ч. «Повторить» и повторная отправка работают сутки. Настройка R2 — вопрос 5.
+Без S3 (сейчас на проде): файлы отправляются из памяти, `SourceDigest` и кэш картинок — в Redis с TTL 24 ч. «Повторить» и повторная отправка работают сутки. Хранилище заводится до сессии 4 (вопрос 5): R2 или любое S3-совместимое — код работает через boto3 с `S3_ENDPOINT_URL`, без привязки к провайдеру (D-042).
 
 ---
 
@@ -250,8 +250,8 @@ sequenceDiagram
 ## 9. Инфраструктура
 
 - **Образ:** один Docker-образ для бота и воркера (D-010 остаётся). После удаления старого движка базовый образ — `python:3.10-slim-bookworm` + `libreoffice-impress`, `fonts-liberation`, `fonts-dejavu-core`, `fonts-noto-core` (спайк 3.2). Playwright и Chromium уходят. До удаления старого кода в образе есть и Playwright, и LibreOffice (сессии 1–4, рост образа терпим).
-- **Сервисы Railway** в фазе 1: `bot`, `worker`, PostgreSQL, Redis. `api` — фаза 3. S3 — внешний R2.
-- **Переменные:** новые — `PEXELS_API_KEY` (есть), `S3_*` (есть в `Settings`), `LLM_MAX_CONCURRENCY`, `CONTENT_CONCURRENCY`, `LIBREOFFICE_MAX_PARALLEL`, `DECK_DEADLINE_SECONDS`. Все через `Settings`, в `.env.example`.
+- **Сервисы Railway** в фазе 1: `bot`, `worker`, PostgreSQL, Redis. `api` — фаза 3. S3 — внешнее S3-совместимое хранилище (R2, Yandex Object Storage или Selectel).
+- **Переменные:** новые — `PEXELS_API_KEY` (есть), `S3_*` (есть в `Settings`), `LLM_MAX_CONCURRENCY`, `CONTENT_CONCURRENCY`, `LIBREOFFICE_MAX_PARALLEL`, `DECK_DEADLINE_SECONDS`, `LLM_STRUCTURED_OUTPUTS`, `LLM_MODEL_OUTLINE` / `LLM_MODEL_CONTENT`, `LLM_EFFORT_OUTLINE` / `LLM_EFFORT_CONTENT` (добавлены в сессии 1). Все через `Settings`, в `.env.example`.
 
 ## 10. Безопасность
 - Материал пользователя идёт в промпт только внутри разметки данных (`<source>…</source>`) с инструкцией не выполнять команды из него (ТЗ 6.5).

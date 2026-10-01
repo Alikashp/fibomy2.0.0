@@ -1,0 +1,16 @@
+# Крупная кавычка, утверждение, пояснение (05_LAYOUTS.md, 3.2)
+id: statement.big_quote
+kind: statement
+family: quote
+version: 1
+fallback: true
+applies_when: {image: forbidden, title_max_chars: 150}
+elements:
+  - {name: quote_mark, type: text, box: [80, 200, 180, 240], style: hero, color: accent, bind: "const:«"}
+  # Утверждение — это заголовок слайда (title), набранный крупнее
+  - {name: statement, type: text, box: [260, 250, 1440, 400], style: h1, min_style: h2, max_lines: 4,
+     color: text, bind: title, anchor: bottom}
+  - {name: body, type: text, box: [260, 690, 1440, 170], style: body, min_style: small, max_lines: 3,
+     color: text_muted, bind: content.body, optional: true}
+  - {name: footnote, type: text, box: [80, 944, 1760, 40], style: small, min_style: min, max_lines: 1,
+     color: text_muted, bind: footnote, optional: true}

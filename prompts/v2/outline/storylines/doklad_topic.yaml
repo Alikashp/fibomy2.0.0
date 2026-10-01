@@ -1,0 +1,14 @@
+# Сюжет доклада по теме (перенос prompts/doklad/narrative_topic.txt). Код собирает
+# из блоков текст $storyline. priority: 1 — сжимается последним.
+genre: topic
+intro: |-
+  Блоки идут в этом порядке. Слайдов больше, чем блоков, — раскрой части темы подробнее, по два слайда на часть.
+  Меньше — объедини соседние блоки. Заголовок формулируй по содержанию, а не по роли блока.
+blocks:
+  - {id: where,         role: context,    priority: 2, hint: "где тема встречается в жизни или практике аудитории"}
+  - {id: part1,         role: details,    priority: 1, hint: "первая смысловая часть темы — через логику и бытовую аналогию"}
+  - {id: example1,      role: details,    priority: 2, hint: "наглядный пример или механизм к первой части"}
+  - {id: part2,         role: details,    priority: 1, hint: "вторая смысловая часть темы"}
+  - {id: example2,      role: details,    priority: 2, hint: "пример, сопоставление или сильная формулировка ко второй части"}
+  - {id: misconceptions, role: other,     priority: 2, hint: "что обычно понимают неверно — частые заблуждения"}
+  - {id: conclusion,    role: conclusion, priority: 1, kind: conclusion, hint: "выводы: что следует из разобранного, последний слайд плана"}

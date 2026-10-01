@@ -1,6 +1,9 @@
 # Реальные генерации golden-корпуса (ТЗ 4.8.7, 7.4): G-01 docx strict ×2,
 # G-02 pdf strict ×2, G-03 по теме ×1, питч-дек по теме ×1. Каждая колода
 # проверяется check_case.py; итог — комментарий в PR, JSON и PDF — артефакт.
+# Новый движок (src/core, сессия 1): пробный вызов structured outputs и колоды
+# по теме G-05 и «Как работает фотосинтез» — tests/golden/run_new_engine.py.
+# С сессии 2 golden целиком переходит на новый движок (docs/design/07_TESTING.md, 3).
 #
 # Запуск: автоматически на PR, меняющие промпты или код генерации, и вручную
 # (Actions → golden → Run workflow). Нужен секрет OPENAI_API_KEY; без него
@@ -12,6 +15,9 @@ on:
     paths:
       - "prompts/**"
       - "src/generation/**"
+      - "src/core/**"
+      - "layouts/**"
+      - "themes/**"
       - "tests/golden/**"
   workflow_dispatch:
 
@@ -75,6 +81,12 @@ jobs:
       - name: Chromium для PDF
         run: python -m playwright install --with-deps chromium
 
+      - name: LibreOffice и шрифты для нового движка
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends libreoffice-impress \
+            fonts-liberation fonts-crosextra-carlito fonts-dejavu-core fonts-noto-core
+
       - name: Генерации и check_case
         run: |
           set +e
@@ -90,6 +102,19 @@ jobs:
           2. Self-hosted runner в РФ (любой VPS): `runs-on: self-hosted` в `.github/workflows/golden.yml`.
           3. Запускать `tests/golden/run_golden.py` вручную на машине, откуда API доступен, и прикладывать `summary.md` к PR.
           EOF
+          fi
+          exit "$code"
+
+      - name: Новый движок — structured outputs и колоды по теме
+        if: always() && hashFiles('golden_out/summary.md') != ''
+        run: |
+          set +e
+          python tests/golden/run_new_engine.py --out golden_out/new_engine
+          code=$?
+          set -e
+          if [ -f golden_out/new_engine/new_engine.md ]; then
+            printf '\n' >> golden_out/summary.md
+            cat golden_out/new_engine/new_engine.md >> golden_out/summary.md
           fi
           exit "$code"
 

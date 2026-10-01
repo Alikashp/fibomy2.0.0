@@ -10,7 +10,12 @@ aiogram-хендлера в main.py и блокировала бота на 60-9
 
 Запуск: arq worker.WorkerSettings
 
-Пайплайн одной задачи:
+Две задачи (docs/design/08_MIGRATION.md, 2):
+- generate_deck_job(deck_id) — новый движок (src/core): PPTX + PDF. Сейчас —
+  доклад по теме; материал и питч-дек идут в старый движок до сессий 2 и 3 (D-038);
+- generate_presentation_job — старый движок (HTML → PDF), удаляется в сессии 5.
+
+Пайплайн старой задачи:
   extract_content (если source_type != TOPIC)
     → generate_presentation_structure
     → fetch_images_for_slides
@@ -24,6 +29,7 @@ aiogram-хендлера в main.py и блокировала бота на 60-9
 и это ровно та работа, которую мы не хотим держать в бот-процессе.
 """
 
+import asyncio
 import logging
 import time
 
@@ -41,13 +47,20 @@ from generation.template_engine import render_presentation
 from generation.pdf_renderer import html_to_pdf, get_renderer, shutdown_renderer
 from generation.storage import upload_pdf
 from generation.uploads import UploadNotFound, close_uploads, delete_upload, get_upload
-from db.session import init_db, close_db, get_session, get_or_create_user, record_presentation
+from db.session import init_db, close_db, get_session, get_or_create_user, record_presentation, count_generation
 from logging_setup import deck_id_var, setup_logging, stage
+from bot import delivery
+from core.models.request import DeckRequest
+from core.models.theme import load_theme
+from core.pipeline import DeckError, generate_deck
+from core.storage import decks as deck_store
 
 setup_logging()
 logger = logging.getLogger(__name__)
 
 JOB_TIMEOUT_SECONDS = 180  # LLM + картинки + PDF с запасом; см. WorkerSettings.job_timeout
+# Новый движок: дедлайн колоды 110 с (DECK_DEADLINE_SECONDS), job_timeout — страховка
+# от зависания кода (03_ARCHITECTURE.md, 4.2); ARQ берёт общий job_timeout воркера.
 MAX_CONCURRENT_JOBS = 5    # нагрузочный критерий Sprint 1: 5 параллельных не блокируют бота
 
 # Layout'ы, которые реально умеет рисовать templates/doklad/template.html
@@ -310,6 +323,72 @@ async def generate_presentation_job(
             await delete_upload(document_ref)
 
 
+async def generate_deck_job(ctx: dict, deck_id: str, request: dict | None = None) -> dict:
+    """Новый движок: колода по deck_id (D-034). request передаётся, только если у бота
+    не было БД и строку decks создать не удалось."""
+    bot: Bot = ctx["bot"]
+    deck_id_var.set(deck_id)
+    raw = request or await deck_store.load_request(deck_id)
+    if raw is None:
+        logger.error("Deck request not found", extra={"deck_id": deck_id})
+        return {"status": "failed", "deck_id": deck_id, "reason": "not_found"}
+    req = DeckRequest.model_validate(raw)
+    chat_id, user_id = req.client.chat_id, req.client.user_id
+    status = delivery.StatusMessage(bot, chat_id, req.client.status_message_id, deck_id)
+    stage_seen: set[str] = set()
+
+    async def progress(stage_name: str, done: int | None = None, total: int | None = None) -> None:
+        if stage_name not in stage_seen:
+            stage_seen.add(stage_name)
+            await deck_store.set_stage(deck_id, stage_name)
+        await status(stage_name, done, total)
+
+    await deck_store.mark_processing(deck_id)
+    started = time.perf_counter()
+    try:
+        result = await generate_deck(deck_id, req, progress)
+    except DeckError as e:
+        logger.error("Deck failed", extra={"error_code": e.code, "error": str(e)})
+        await deck_store.fail(deck_id, e.code)
+        await status.show(delivery.ERROR_TEXT.get(e.code, delivery.DEFAULT_ERROR).format(deck_id=deck_id))
+        return {"status": "failed", "deck_id": deck_id, "error_code": e.code}
+    except Exception as e:
+        logger.exception("Deck crashed", extra={"error": str(e)})
+        await deck_store.fail(deck_id, "INTERNAL")
+        await status.show(delivery.DEFAULT_ERROR.format(deck_id=deck_id))
+        raise
+
+    spec = result.spec
+    await deck_store.finish(
+        deck_id, status="done", spec=spec.model_dump(mode="json"), durations_ms=result.durations_ms,
+        usage=result.usage.as_dict(), cost_rub=result.usage.cost_rub,
+        degradations=[d.model_dump() for d in spec.degradations],
+    )
+
+    notes = []
+    for w in result.warnings:
+        if w.startswith("slides_short:"):
+            got, wanted = w.split(":", 1)[1].split("/")
+            notes.append(f"Получилось {got} слайдов из {wanted}.")
+    text = delivery.caption(spec.meta.title, len(spec.slides), load_theme(spec.meta.theme_id).name.get("ru", ""),
+                            req.watermark, result.pdf is None, notes)
+    if chat_id is not None:
+        with stage("deliver", result.durations_ms):
+            await delivery.send_files(bot, chat_id, spec.meta.title, result.pptx, result.pdf, text)
+        await status.delete()
+        # Лимит списывается только после успешной отправки (02_CJM.md, 1.2, шаг 8)
+        async with get_session() as session:
+            if session and user_id is not None:
+                await count_generation(session, user_id)
+        await deck_store.mark_counted(deck_id)
+
+    logger.info("Deck delivered", extra={
+        "slides": len(spec.slides), "cost_rub": result.usage.cost_rub,
+        "total_ms": int((time.perf_counter() - started) * 1000), "durations_ms": result.durations_ms,
+    })
+    return {"status": "ok", "deck_id": deck_id, "slides": len(spec.slides), "cost_rub": result.usage.cost_rub}
+
+
 def _material_shortage_note(request: UserRequest, slide_count: int) -> str | None:
     """«Только мой материал»: слайдов не больше выбранного, и если модель
     сделала меньше — говорим пользователю, что материала хватило на X (ТЗ 3.3.3)."""
@@ -350,7 +429,27 @@ async def startup(ctx: dict) -> None:
     ctx["bot"] = Bot(token=settings.telegram_bot_token)
     await init_db()
     await get_renderer()
+    # Первый запуск LibreOffice в контейнере медленный (холодный диск) — прогреваем
+    # в фоне, чтобы первая колода не потратила на это бюджет CONVERT
+    ctx["lo_warmup"] = asyncio.create_task(_warmup_libreoffice())
     logger.info("ARQ worker started", extra={"max_jobs": MAX_CONCURRENT_JOBS})
+
+
+async def _warmup_libreoffice() -> None:
+    import io
+    from pptx import Presentation
+    from core.render.pdf.convert import pptx_to_pdf
+
+    buf = io.BytesIO()
+    prs = Presentation()
+    prs.slides.add_slide(prs.slide_layouts[6])
+    prs.save(buf)
+    started = time.perf_counter()
+    try:
+        await pptx_to_pdf(buf.getvalue(), timeout=120)
+        logger.info("LibreOffice warmed up", extra={"duration_ms": int((time.perf_counter() - started) * 1000)})
+    except Exception as e:
+        logger.error("LibreOffice warmup failed — PDF of the new engine will not work", extra={"error": str(e)})
 
 
 async def shutdown(ctx: dict) -> None:
@@ -364,7 +463,9 @@ async def shutdown(ctx: dict) -> None:
 
 
 class WorkerSettings:
-    functions = [generate_presentation_job]
+    # generate_presentation_job (старый движок) — для материала и питч-дека до сессий 2–3
+    # и для задач, поставленных до деплоя (08_MIGRATION.md, 2)
+    functions = [generate_deck_job, generate_presentation_job]
     on_startup = startup
     on_shutdown = shutdown
     redis_settings = RedisSettings.from_dsn(settings.redis_url)

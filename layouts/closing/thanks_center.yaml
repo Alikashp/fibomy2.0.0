@@ -1,0 +1,15 @@
+# Благодарность по центру, контакты/вопросы, автор (05_LAYOUTS.md, 3.10). Собирает код (D-033).
+id: closing.thanks_center
+kind: closing
+family: closing
+version: 1
+fallback: true
+applies_when: {image: forbidden}
+elements:
+  - {name: accent_line, type: rect, box: [880, 330, 160, 8], fill: primary}
+  - {name: title, type: text, box: [160, 360, 1600, 170], style: display, min_style: h1, max_lines: 1,
+     color: text, bind: content.title, align: center, anchor: middle}
+  - {name: body, type: text, box: [160, 560, 1600, 120], style: h3, min_style: body, max_lines: 2,
+     color: text_muted, bind: content.body, align: center, optional: true}
+  - {name: author, type: text, box: [160, 760, 1600, 90], style: body, min_style: small, max_lines: 2,
+     color: text_muted, bind: content.author, align: center, optional: true}

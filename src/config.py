@@ -19,6 +19,25 @@ class Settings(BaseSettings):
     openai_timeout_seconds: float = 45.0
     watermark_free_tier: bool = True
 
+    # ── Новый движок (src/core, docs/design/03_ARCHITECTURE.md, 9) ─────────
+    # Модель и уровень рассуждений по этапам; пусто — OPENAI_MODEL и
+    # OPENAI_REASONING_EFFORT (06_PROMPTS.md, 1).
+    llm_model_outline: str = ""
+    llm_model_content: str = ""
+    llm_effort_outline: str = ""
+    llm_effort_content: str = ""
+    # structured outputs: auto — json_schema strict, при отказе провайдера
+    # json_object + проверка pydantic; json_schema / json_object — принудительно.
+    llm_structured_outputs: str = "auto"
+    # Одновременных запросов к LLM на процесс воркера (429 у провайдера — уменьшить)
+    llm_max_concurrency: int = 16
+    # Одновременных вызовов CONTENT на колоду
+    content_concurrency: int = 8
+    # Одновременных конвертаций LibreOffice на процесс
+    libreoffice_max_parallel: int = 2
+    # Дедлайн колоды от старта задачи, с (03_ARCHITECTURE.md, 4.2)
+    deck_deadline_seconds: int = 110
+
     # ── БД ───────────────────────────────────────────────────────────────────
     database_url: str = ""          # пусто = бот и воркер работают без БД
 
