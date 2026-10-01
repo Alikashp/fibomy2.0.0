@@ -1,0 +1,29 @@
+# Иконки фазы 1 — единый список для схемы ответа CONTENT (enum поля icon) и
+# рендера (assets/icons/<имя>.png). PNG собирает scripts/build_icons.py из шрифта
+# Tabler Icons (MIT). Добавили имя сюда — пересоберите PNG.
+icons:
+  - file-text
+  - list
+  - check
+  - alert-triangle
+  - clock
+  - calendar
+  - users
+  - user
+  - coin
+  - chart-bar
+  - target
+  - bulb
+  - search
+  - settings
+  - lock
+  - message-circle
+  - folder
+  - arrow-up
+  - arrow-right
+  - help-circle
+  - star
+  - bolt
+  - shield
+  - refresh
+  - link

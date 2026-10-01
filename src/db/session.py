@@ -228,3 +228,11 @@ async def upgrade_user_plan(
     session.add(payment)
     await session.flush()
     logger.info(f"User {user.user_id} upgraded to {plan}, {stars_amount} stars")
+
+
+async def count_generation(session: AsyncSession, user_id: int) -> None:
+    """Списывает генерацию нового движка с лимита (users.presentations_count — источник
+    лимита, 04_CONTRACTS.md, 8.2). Строку presentations новый движок не пишет."""
+    user = await get_or_create_user(session, user_id)
+    user.presentations_count += 1
+    await session.flush()

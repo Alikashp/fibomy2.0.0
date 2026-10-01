@@ -30,6 +30,10 @@ from db.session import (
 from db.models import PlanType
 from generation.uploads import close_uploads, put_upload
 from logging_setup import setup_logging
+from core.models.ids import new_deck_id
+from core.models.request import DeckRequest
+from core.models.theme import enabled_theme_ids
+from core.storage import decks as deck_store
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -134,9 +138,11 @@ MENU_TEXT = "📋 <b>Меню</b>\n\nВыберите действие:"
 
 HELP_TEXT = (
     "❓ <b>Что умеет Fibonacci AI</b>\n\n"
-    "Собираю презентацию в PDF за 60–90 секунд: питч-дек для инвесторов или доклад "
+    "Собираю презентацию за 60–90 секунд: питч-дек для инвесторов или доклад "
     "на любую тему — с нуля по названию темы или по вашему готовому тексту/документу "
     "(только по нему или с дополнением общими знаниями — на ваш выбор).\n\n"
+    "Доклад по теме приходит двумя файлами: PPTX — его можно редактировать в PowerPoint, "
+    "Keynote или Google Slides — и PDF для показа.\n\n"
     "Команды:\n"
     "/new — начать новую презентацию\n"
     "/plan — тарифы и лимит бесплатных презентаций\n"
@@ -875,12 +881,14 @@ async def _confirm_and_generate(message: Message, data: dict, state: FSMContext)
                 )
                 return
             watermark = user.plan == "free"
+            plan = str(user.plan)
         else:
             watermark = True
+            plan = "free"
 
     # Параметры пользователь только что видел в сводке — не повторяем их.
     await state.clear()
-    await generate_and_send(message, data, watermark=watermark)
+    await generate_and_send(message, data, watermark=watermark, plan=plan)
 
 
 # ── Генерация ─────────────────────────────────────────────────────────────────
@@ -893,7 +901,10 @@ async def _confirm_and_generate(message: Message, data: dict, state: FSMContext)
 BRIEF_TEMPLATE = load_template("brief.txt")
 
 
-async def generate_and_send(message: Message, data: dict, watermark: bool = True):
+async def generate_and_send(message: Message, data: dict, watermark: bool = True, plan: str = "free"):
+    if dialog.engine_for(data) == "new":
+        await generate_deck(message, data, watermark=watermark, plan=plan)
+        return
     ptype = data["presentation_type"]
     # Бриф — только питч-деку (после «Сменить тип» в данных мог остаться)
     brief = data.get("brief") if ptype == "pitch_deck" else None
@@ -954,6 +965,60 @@ async def generate_and_send(message: Message, data: dict, watermark: bool = True
         color_scheme=data.get("color_scheme", "light"),
         _job_id=job_id,
     )
+
+
+def deck_request(data: dict, *, user_id: int, chat_id: int, status_message_id: int | None,
+                 watermark: bool, plan: str, author: dict | None) -> DeckRequest:
+    """Параметры сводки → DeckRequest нового движка (04_CONTRACTS.md, 2)."""
+    return DeckRequest(
+        client={"kind": "bot", "user_id": user_id, "plan": plan if plan in ("free", "starter", "pro", "team") else "free",
+                "chat_id": chat_id, "status_message_id": status_message_id},
+        presentation_type=data["presentation_type"],
+        input={"topic": data["topic"][:dialog.TOPIC_MAX_CHARS]},
+        language=data["language"],
+        audience=data["audience"],
+        slides_count=int(data["slide_count"]) if data.get("slide_count") else None,
+        theme_id=dialog.theme_for(data.get("color_scheme"), enabled_theme_ids()),
+        image_mode="none",   # картинки — сессия 4
+        author=author,
+        watermark=watermark,
+    )
+
+
+async def _author(user_id: int) -> dict | None:
+    async with get_session() as session:
+        if session:
+            user = await get_or_create_user(session, user_id)
+            if user.author_name or user.author_group:
+                return {"name": user.author_name, "group": user.author_group}
+    return None
+
+
+async def generate_deck(message: Message, data: dict, watermark: bool, plan: str = "free") -> None:
+    """Новый движок: строка decks + задача generate_deck_job(deck_id) (D-034)."""
+    deck_id = new_deck_id()
+    status_msg = await message.answer(
+        f"⏳ <b>В очереди.</b> Обычно занимает около минуты — пришлю PPTX и PDF сюда же.\n\n"
+        f"<code>{deck_id}</code>",
+        parse_mode="HTML",
+    )
+    if arq_pool is None:
+        logger.error("ARQ pool is not initialized — cannot enqueue deck")
+        await status_msg.edit_text("❌ Очередь генерации сейчас недоступна. Попробуйте через минуту.")
+        return
+    try:
+        request = deck_request(data, user_id=message.chat.id, chat_id=message.chat.id,
+                               status_message_id=status_msg.message_id, watermark=watermark, plan=plan,
+                               author=await _author(message.chat.id))
+    except Exception:
+        logger.exception("Bad deck request", extra={"deck_id": deck_id})
+        await status_msg.edit_text("❌ Не получилось разобрать параметры. Начните заново: /new")
+        return
+    payload = request.model_dump(mode="json")
+    stored = await deck_store.create_deck(deck_id, payload, user_id=message.chat.id)
+    # Без БД строки нет — параметры идут в задачу (только для локального запуска)
+    await arq_pool.enqueue_job("generate_deck_job", deck_id, request=None if stored else payload, _job_id=deck_id)
+    logger.info("Deck enqueued", extra={"deck_id": deck_id, "stored": stored})
 
 
 # ── Запуск ────────────────────────────────────────────────────────────────────

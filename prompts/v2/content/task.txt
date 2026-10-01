@@ -1,0 +1,8 @@
+СЛАЙД $index из $total: kind=$kind, роль=$role
+Заголовок: $title
+Главная мысль: $key_message
+Опирается на: $refs
+
+$kind_rules
+
+$capacity

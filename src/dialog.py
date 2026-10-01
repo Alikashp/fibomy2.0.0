@@ -59,13 +59,37 @@ SOURCE_MODES = {
 }
 DEFAULT_SOURCE_MODE = "strict"
 
-# Сообщение длиннее — это не тема, а текст для презентации (UserRequest.topic ≤ 300)
-TOPIC_MAX_CHARS = 300
+# Сообщение длиннее — это не тема, а текст для презентации (вопрос 8, D-039;
+# DeckRequest.input.topic ≤ 200)
+TOPIC_MAX_CHARS = 200
 MATERIAL_MAX_CHARS = 15000
 
 
 def has_material(data: dict) -> bool:
     return data.get("source_type") in ("text", "document")
+
+
+# ── Маршрутизация между движками (временная, D-038) ──────────────────────────
+# Новый движок (src/core) пока умеет только доклад по теме: материал — сессия 2,
+# питч-дек — сессия 3 (docs/design/09_PLAN.md). Остальное — в старый движок.
+
+NEW_ENGINE_THEME = "graphite_light"
+NEW_ENGINE_THEME_LABEL = "☀️ Графит светлая"
+# Старые схемы → темы нового движка (04_CONTRACTS.md, 8.2). Тема, которая ещё не
+# включена в боте (enabled: false), заменяется темой по умолчанию.
+THEME_BY_SCHEME = {"light": "graphite_light", "dark": "graphite_dark"}
+
+
+def engine_for(data: dict) -> str:
+    """«new» — колода нового движка (PPTX + PDF), «old» — старый HTML → PDF."""
+    if data.get("presentation_type", "doklad") == "doklad" and not has_material(data):
+        return "new"
+    return "old"
+
+
+def theme_for(scheme: str | None, enabled: list[str] | tuple[str, ...] = (NEW_ENGINE_THEME,)) -> str:
+    theme = THEME_BY_SCHEME.get(scheme or "", NEW_ENGINE_THEME)
+    return theme if theme in enabled else NEW_ENGINE_THEME
 
 
 def scheme_allowed(scheme: str, plan: str) -> bool:
@@ -162,8 +186,13 @@ def summary_text(data: dict, plan: str) -> str:
     else:
         lines.append(f"🔢 Слайдов: <b>{PITCH_SLIDE_COUNT}</b> (структура питч-дека)")
     lines.append(f"👥 Аудитория: <b>{AUDIENCES.get(data.get('audience'), data.get('audience'))}</b>")
-    scheme = data.get("color_scheme", DEFAULT_SCHEME)
-    lines.append(f"🎨 Дизайн: <b>{SCHEMES.get(scheme, (scheme,))[0]}</b>")
+    if engine_for(data) == "new":
+        lines.append(f"🎨 Дизайн: <b>{NEW_ENGINE_THEME_LABEL}</b>")
+        lines.append("📦 Файлы: <b>PPTX + PDF</b>")
+    else:
+        scheme = data.get("color_scheme", DEFAULT_SCHEME)
+        lines.append(f"🎨 Дизайн: <b>{SCHEMES.get(scheme, (scheme,))[0]}</b>")
+        lines.append("📦 Файлы: <b>PDF</b>")
     if has_material(data) and ptype == "doklad" and data.get("source_mode") == "strict":
         lines += ["", "<i>Если материала мало, слайдов будет меньше выбранного — бот скажет, сколько вышло.</i>"]
     return "\n".join(lines)
@@ -193,7 +222,11 @@ def summary_keyboard(data: dict) -> InlineKeyboardMarkup:
     if ptype == "doklad":
         lang_row.append(_btn("🔢 Сменить число слайдов", "sum:slides"))
     rows.append(lang_row)
-    rows.append([_btn("👥 Сменить аудиторию", "sum:aud"), _btn("🎨 Сменить дизайн", "sum:design")])
+    aud_row = [_btn("👥 Сменить аудиторию", "sum:aud")]
+    if engine_for(data) == "old":
+        # У нового движка пока одна тема; выбор тем — сессия 3
+        aud_row.append(_btn("🎨 Сменить дизайн", "sum:design"))
+    rows.append(aud_row)
     rows.append([_btn("✅ Сгенерировать презентацию", "sum:go")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 

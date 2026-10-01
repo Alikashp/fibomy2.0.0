@@ -1,0 +1,6 @@
+ЗАПРОС
+- Тип презентации: $presentation_type
+- Тема: <topic>$topic</topic>
+- Содержательных слайдов: $n
+
+$source

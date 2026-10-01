@@ -5,6 +5,8 @@
 - users       — все кто писал боту
 - presentations — каждая сгенерированная презентация
 - payments    — платежи через Telegram Stars
+- decks, deck_revisions — колоды нового движка (docs/design/04_CONTRACTS.md, 8);
+  presentations перестаёт пополняться с переходом бота на новый движок
 
 Решения:
 - Схема меняется только миграциями Alembic (src/db/migrations). После правки
@@ -16,7 +18,7 @@
 
 from datetime import datetime
 from sqlalchemy import (
-    JSON, BigInteger, Boolean, DateTime, Integer,
+    JSON, BigInteger, Boolean, DateTime, Integer, Numeric,
     String, Text, ForeignKey, func,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -130,3 +132,45 @@ class Payment(Base):
     )
 
     user: Mapped["User"] = relationship(back_populates="payments")
+
+
+class Deck(Base):
+    """Колода нового движка (D-034). id — dk_<ULID>; в очередь уходит только он."""
+    __tablename__ = "decks"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.user_id"))
+    api_client_id: Mapped[str | None] = mapped_column(String(32))
+    idempotency_key: Mapped[str | None] = mapped_column(String(128))
+    parent_deck_id: Mapped[str | None] = mapped_column(String(32))
+    # queued | processing | done | done_pdf_pending | failed
+    status: Mapped[str] = mapped_column(String(24), default="queued", server_default="queued")
+    stage: Mapped[str | None] = mapped_column(String(16))
+    request: Mapped[dict] = mapped_column(JsonColumn)           # DeckRequest
+    spec: Mapped[dict | None] = mapped_column(JsonColumn)       # DeckSpec последней ревизии
+    revision: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    files: Mapped[dict | None] = mapped_column(JsonColumn)      # {"pptx": key, "pdf": key}
+    digest_key: Mapped[str | None] = mapped_column(String(256))
+    durations_ms: Mapped[dict | None] = mapped_column(JsonColumn)
+    usage: Mapped[dict | None] = mapped_column(JsonColumn)
+    cost_rub: Mapped[float | None] = mapped_column(Numeric(10, 4))
+    degradations: Mapped[list | None] = mapped_column(JsonColumn)
+    error_code: Mapped[str | None] = mapped_column(String(32))
+    counted: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class DeckRevision(Base):
+    """Ревизии колоды — правки фазы 4; последние 10 на колоду."""
+    __tablename__ = "deck_revisions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    deck_id: Mapped[str] = mapped_column(String(32), ForeignKey("decks.id", ondelete="CASCADE"))
+    revision: Mapped[int] = mapped_column(Integer)
+    action: Mapped[str] = mapped_column(String(16))   # theme | variant | regen_slide | shorten | image
+    slide_id: Mapped[str | None] = mapped_column(String(8))
+    spec: Mapped[dict] = mapped_column(JsonColumn)
+    cost_rub: Mapped[float | None] = mapped_column(Numeric(10, 4))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
