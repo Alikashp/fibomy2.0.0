@@ -23,7 +23,7 @@ from core.paths import PROMPTS_DIR
 
 logger = logging.getLogger(__name__)
 
-# Файл остаётся в prompts/ до удаления старого движка (сессия 5: → prompts/v2/)
+# Файл остаётся в prompts/ до удаления старого движка (сессия 6: → prompts/v2/)
 with (PROMPTS_DIR / "models.yaml").open(encoding="utf-8") as _f:
     _CONFIG = yaml.safe_load(_f)
 _RESERVE = _CONFIG["reasoning_reserve_tokens"]
