@@ -130,7 +130,9 @@ jobs:
           exit "$code"
 
       - name: API end-to-end (POST → опрос статуса → скачивание, webhook)
-        if: always()
+        # не always(): у отменённого запуска пропущены шаги установки (LibreOffice) —
+        # e2e дал бы ложный «PDF 404» отдельным комментарием
+        if: ${{ !cancelled() }}
         env:
           DATABASE_URL: postgresql://postgres:golden@127.0.0.1:5432/fibonacci
           REDIS_URL: redis://127.0.0.1:6379/0
