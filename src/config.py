@@ -59,6 +59,11 @@ class Settings(BaseSettings):
     s3_bucket: str = "fibonacci-presentations"
     s3_region: str = "us-east-1"
 
+    # ── Админ-команды бота (/apikey, bot/admin.py) ─────────────────────────
+    # Telegram ID владельцев через запятую: «123456789,987654321». Пусто — админ-команд
+    # нет ни у кого; остальным пользователям бот отвечает как на неизвестную команду.
+    admin_telegram_ids: str = ""
+
     # ── REST API (src/api, отдельный сервис Railway «api», docs/API.md) ───────
     # Публичный адрес API (https://api-….up.railway.app) — для ссылок на файлы в
     # webhook. Пусто — в ответах API адрес из запроса, в webhook — относительные пути.

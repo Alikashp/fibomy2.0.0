@@ -5,12 +5,14 @@
 
     python -m api.keys create --name "Второй бот" --daily-limit 200 [--no-watermark]
     python -m api.keys list
-    python -m api.keys set ac_… --daily-limit 500 --rate-limit 240 --decks-per-min 20 --watermark/--no-watermark
+    python -m api.keys set "Второй бот" --daily-limit 500 --rate-limit 240 --decks-per-min 20 --watermark/--no-watermark
     python -m api.keys rotate ac_…        # новый ключ, старый перестаёт работать сразу
     python -m api.keys revoke ac_…        # отключить клиента
     python -m api.keys usage [--days 30]  # колоды и себестоимость по клиентам
 
-Ключ и секрет webhook печатаются один раз: в БД хранится только хэш ключа.
+Клиента можно указать по id (ac_…) или по имени. Ключ и секрет webhook печатаются
+один раз: в БД хранится только хэш ключа. Логика — api.admin, общая с командой бота
+/apikey (bot/admin.py): владельцу без доступа к Railway удобнее бот.
 """
 
 import argparse
@@ -18,7 +20,7 @@ import asyncio
 import sys
 from datetime import datetime, timedelta, timezone
 
-from api import store
+from api import admin, store
 from db.session import close_db, init_db
 
 
@@ -37,9 +39,9 @@ async def _run(args) -> int:
     await init_db()
     try:
         if args.command == "create":
-            client, key = await store.create_client(
-                args.name, daily_limit=args.daily_limit, rate_limit_per_min=args.rate_limit,
-                decks_per_min=args.decks_per_min, watermark=args.watermark)
+            client, key = await admin.create(args.name, daily_limit=args.daily_limit,
+                                             rate_limit_per_min=args.rate_limit, decks_per_min=args.decks_per_min,
+                                             watermark=args.watermark)
             print("Клиент создан:")
             _print_client(client)
             print()
@@ -48,51 +50,45 @@ async def _run(args) -> int:
             print(f"  секрет webhook:  {client.webhook_secret}")
             return 0
         if args.command == "list":
-            clients = await store.list_clients()
-            if not clients:
+            rows = await admin.overview()
+            if not rows:
                 print("Клиентов нет. Создать: python -m api.keys create --name \"…\"")
-            for client in clients:
-                _print_client(client)
+            for row in rows:
+                _print_client(row.client)
+                print(f"  сегодня:          {row.used_today} колод, {row.cost_today:.2f} ₽")
+                print(f"  за 30 дней:       {row.decks_30d} колод (ошибок {row.failed_30d}), {row.cost_30d:.2f} ₽")
                 print()
             return 0
         if args.command == "set":
-            client = await store.update_client(args.client_id, daily_limit=args.daily_limit,
-                                               rate_limit_per_min=args.rate_limit, decks_per_min=args.decks_per_min,
-                                               watermark=args.watermark, name=args.name)
-            if client is None:
-                print(f"Клиент {args.client_id} не найден", file=sys.stderr)
-                return 1
+            client = await admin.update(args.client_id, daily_limit=args.daily_limit,
+                                        rate_limit_per_min=args.rate_limit, decks_per_min=args.decks_per_min,
+                                        watermark=args.watermark, name=args.name)
             print("Клиент обновлён:")
             _print_client(client)
             return 0
         if args.command == "rotate":
-            key = await store.rotate_key(args.client_id)
-            if key is None:
-                print(f"Клиент {args.client_id} не найден", file=sys.stderr)
-                return 1
-            print(f"Новый API-ключ (старый уже не работает): {key}")
+            client, key = await admin.rotate(args.client_id)
+            print(f"Новый API-ключ клиента «{client.name}» (старый уже не работает): {key}")
             return 0
         if args.command == "revoke":
-            client = await store.update_client(args.client_id, active=False)
-            if client is None:
-                print(f"Клиент {args.client_id} не найден", file=sys.stderr)
-                return 1
-            print(f"Клиент {client.id} отключён: запросы с его ключом получают 401.")
+            client = await admin.revoke(args.client_id)
+            print(f"Клиент «{client.name}» ({client.id}) отключён: запросы с его ключом получают 401.")
             return 0
         if args.command == "usage":
             since = datetime.now(timezone.utc) - timedelta(days=args.days)
-            names = {c.id: c.name for c in await store.list_clients()}
-            rows = await store.usage_report(since)
+            rows = [r for r in await admin.overview(days=args.days) if r.decks_30d]
             print(f"За {args.days} дн. (с {since:%Y-%m-%d %H:%M} UTC):")
             if not rows:
                 print("  колод нет")
             for row in rows:
-                ok = row["decks"] - row["failed"]
-                avg = row["cost_rub"] / row["decks"] if row["decks"] else 0
-                print(f"  {names.get(row['client_id'], row['client_id'])}: колод {row['decks']} "
-                      f"(готово {ok}, ошибок {row['failed']}), себестоимость {row['cost_rub']:.2f} ₽, "
-                      f"в среднем {avg:.2f} ₽")
+                ok = row.decks_30d - row.failed_30d
+                avg = row.cost_30d / row.decks_30d
+                print(f"  {row.client.name}: колод {row.decks_30d} (готово {ok}, ошибок {row.failed_30d}), "
+                      f"себестоимость {row.cost_30d:.2f} ₽, в среднем {avg:.2f} ₽")
             return 0
+    except admin.AdminError as e:
+        print(str(e), file=sys.stderr)
+        return 1
     except store.StoreUnavailable:
         print("DATABASE_URL не задан", file=sys.stderr)
         return 2
@@ -116,7 +112,7 @@ def parse_args(argv: list[str] | None = None):
     sub.add_parser("list", help="все клиенты")
 
     upd = sub.add_parser("set", help="изменить лимиты клиента")
-    upd.add_argument("client_id")
+    upd.add_argument("client_id", metavar="client", help="id (ac_…) или имя")
     upd.add_argument("--name")
     upd.add_argument("--daily-limit", type=int)
     upd.add_argument("--rate-limit", type=int)
@@ -124,9 +120,9 @@ def parse_args(argv: list[str] | None = None):
     upd.add_argument("--watermark", action=argparse.BooleanOptionalAction, default=None)
 
     rotate = sub.add_parser("rotate", help="выпустить новый ключ")
-    rotate.add_argument("client_id")
+    rotate.add_argument("client_id", metavar="client", help="id (ac_…) или имя")
     revoke = sub.add_parser("revoke", help="отключить клиента")
-    revoke.add_argument("client_id")
+    revoke.add_argument("client_id", metavar="client", help="id (ac_…) или имя")
 
     usage = sub.add_parser("usage", help="колоды и себестоимость по клиентам")
     usage.add_argument("--days", type=int, default=30)

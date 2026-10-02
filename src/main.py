@@ -34,6 +34,7 @@ from core.models.ids import new_deck_id
 from core.models.request import DeckRequest
 from core.models.theme import enabled_theme_ids
 from core.storage import decks as deck_store
+from bot import admin as bot_admin
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -53,6 +54,11 @@ FSM_TTL_SECONDS = 7 * 24 * 60 * 60
 dp = Dispatcher(storage=RedisStorage.from_url(
     settings.redis_url, state_ttl=FSM_TTL_SECONDS, data_ttl=FSM_TTL_SECONDS,
 ))
+
+# Админ-команды (/apikey) — первыми: не-админу фильтр не срабатывает, и сообщение идёт
+# дальше, как незнакомая команда; админу «/apikey» не перехватит обработчик состояния
+# диалога (bot/admin.py, D-061).
+bot_admin.register(dp, get_pool=lambda: arq_pool)
 
 # ── Цены в Telegram Stars ─────────────────────────────────────────────────────
 PLANS = {
