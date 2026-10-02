@@ -26,5 +26,6 @@ COPY themes/ ./themes/
 COPY fonts/ ./fonts/
 COPY assets/ ./assets/
 
-# Запуск
-CMD ["python", "src/main.py"]
+# Запуск: процесс выбирает переменная SERVICE_ROLE (bot — по умолчанию, worker, api) —
+# src/start.py, D-062. Config as Code (railway*.toml) Railway отключает.
+CMD ["python", "src/start.py"]

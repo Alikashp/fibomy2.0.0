@@ -4,6 +4,26 @@
 
 ---
 
+## 2026-10-02 — Сервис api крашился: роль сервиса — переменной SERVICE_ROLE
+
+Ветка `claude/sprint-1-schema-zones-c2hxbc` пересоздана от свежего `main`: PR #81 смёржен. PR — #82.
+
+**Что случилось:** сервис api в Railway падал по кругу с `TokenValidationError` в `src/main.py` — в нём запускался **бот**, а не API. Railway отключает Config as Code: сервисы, созданные после 28.08.2026, не могут его включить, поэтому «Railway Config File = /railway.api.toml» игнорировался и стартовал CMD образа (`python src/main.py`) без `TELEGRAM_BOT_TOKEN`. Файлы конфигурации старых сервисов (`railway.worker.toml`) работают до 01.12.2026 — дальше так же сломался бы воркер.
+
+**Сделано** (D-062)
+- `src/start.py` — CMD образа: процесс выбирает переменная `SERVICE_ROLE` — `bot` (по умолчанию), `worker`, `api` (`uvicorn` на `$PORT`, `--proxy-headers`); неизвестная роль — выход с ошибкой, а не запуск бота. `Settings.service_role`, `.env.example`.
+- `railway.api.toml` помечен устаревшим, `railway.worker.toml` — предупреждение о 01.12.2026; `CLAUDE.md`, `08_MIGRATION.md` §8 — роль через переменную.
+- `tests/unit/test_start.py` — команды ролей, порт Railway, неизвестная роль, CMD Dockerfile. Проверено локально: `SERVICE_ROLE=api python src/start.py` поднимает uvicorn, `/v1/health` отвечает. D-061 — «действует».
+
+**Не доделано**
+- Переменные в Railway задаёт владелец (шаги — в PR).
+
+**Следующие шаги**
+1. Владелец: `SERVICE_ROLE=api` у сервиса api, `SERVICE_ROLE=worker` у воркера; затем шаги PR #81 (`ADMIN_TELEGRAM_IDS`, `/apikey create`).
+2. Сессия 4 по `09_PLAN.md`.
+
+---
+
 ## 2026-10-02 — Админ-команды ключей API в Telegram-боте
 
 Ветка `claude/sprint-1-schema-zones-c2hxbc` пересоздана от свежего `main`: PR #80 смёржен. PR — #81.
