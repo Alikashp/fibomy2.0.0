@@ -1,3 +1,5 @@
+# Общий конфиг сборки. Команда запуска — CMD Dockerfile (src/start.py): процесс выбирает
+# переменная SERVICE_ROLE сервиса — bot (по умолчанию), worker, api (D-062).
 [build]
 builder = "dockerfile"
 dockerfilePath = "Dockerfile"
