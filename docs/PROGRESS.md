@@ -6,7 +6,7 @@
 
 ## 2026-10-02 — Сервис api крашился: роль сервиса — переменной SERVICE_ROLE
 
-Ветка `claude/sprint-1-schema-zones-c2hxbc` пересоздана от свежего `main`: PR #81 смёржен.
+Ветка `claude/sprint-1-schema-zones-c2hxbc` пересоздана от свежего `main`: PR #81 смёржен. PR — #82.
 
 **Что случилось:** сервис api в Railway падал по кругу с `TokenValidationError` в `src/main.py` — в нём запускался **бот**, а не API. Railway отключает Config as Code: сервисы, созданные после 28.08.2026, не могут его включить, поэтому «Railway Config File = /railway.api.toml» игнорировался и стартовал CMD образа (`python src/main.py`) без `TELEGRAM_BOT_TOKEN`. Файлы конфигурации старых сервисов (`railway.worker.toml`) работают до 01.12.2026 — дальше так же сломался бы воркер.
 
