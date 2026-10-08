@@ -61,7 +61,9 @@ def _text(slide_obj, ctx: _Ctx, element: Element, text: str, style: str, color: 
     shape = slide_obj.shapes.add_textbox(u(box.x), u(box.y), u(box.w), u(box.h))
     shape.name = element.name
     tf = shape.text_frame
-    tf.word_wrap = True
+    # Однострочное число, которое нельзя резать (never_truncate): без переноса — разница метрик
+    # LibreOffice и PowerPoint не уносит последнюю цифру на невидимую вторую строку
+    tf.word_wrap = not (element.never_truncate and element.max_lines == 1)
     tf.auto_size = MSO_AUTO_SIZE.NONE
     tf.margin_left = tf.margin_right = tf.margin_top = tf.margin_bottom = 0
     tf.vertical_anchor = _ANCHOR.get(element.anchor, MSO_ANCHOR.TOP)

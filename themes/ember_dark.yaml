@@ -56,10 +56,10 @@ decor:
     - {shape: arc, center: [w-160, h], radius: 170, thickness: 28, start: 180, end: 300, fill: primary}
   header: []
   content:
-    - {shape: arc, center: [w, 0], radius: 230, thickness: 26, start: 90, end: 180,
+    - {shape: arc, center: [w, 0], radius: 160, thickness: 22, start: 90, end: 180,
        fill: {gradient: [brand_2, primary]}}
-    - {shape: arc, center: [w, 0], radius: 180, thickness: 3, start: 90, end: 180, fill: primary, alpha: 0.6}
-    - {shape: circle, center: [w-40, 270], radius: 10, fill: primary}
+    - {shape: arc, center: [w, 0], radius: 124, thickness: 3, start: 90, end: 180, fill: primary, alpha: 0.6}
+    - {shape: circle, center: [w-40, 200], radius: 10, fill: primary}
     - {shape: polygon, points: [[0, h-10], [w, h-10], [w, h], [0, h]], fill: {gradient: [brand, primary], angle: 0}}
 contrast_pairs:
   - [text, bg]

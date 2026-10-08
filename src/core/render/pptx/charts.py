@@ -14,6 +14,7 @@ from pptx.util import Emu, Pt
 
 from core.models.theme import Theme
 
+LABELS_MAX = 24
 _TYPES = {"column": XL_CHART_TYPE.COLUMN_CLUSTERED, "line": XL_CHART_TYPE.LINE_MARKERS,
           "donut": XL_CHART_TYPE.DOUGHNUT}
 
@@ -69,13 +70,24 @@ def add_chart(slide_obj, data: dict, kind: str, box, theme: Theme, u, lang: str)
         chart.legend.position = XL_LEGEND_POSITION.BOTTOM
         chart.legend.include_in_layout = False
         chart.legend.font.size = Pt(theme.pt("small"))
-    plot.has_data_labels = True
+    # Подписи значений — если их не больше 24 (12 точек × 2 серии): иначе слипаются, значения — по оси
+    plot.has_data_labels = len(categories) * len(series) <= LABELS_MAX
+    if not plot.has_data_labels:
+        _axes(chart, data, theme, lang)
+        return
     labels = plot.data_labels
     labels.number_format = number_format(data, lang.split('-')[0])
     labels.number_format_is_linked = False
     labels.font.size = Pt(theme.pt("small"))
     labels.font.color.rgb = _rgb(theme.color("text"))
     labels.position = XL_LABEL_POSITION.OUTSIDE_END if kind == "column" else XL_LABEL_POSITION.ABOVE
+    _axes(chart, data, theme, lang)
+
+
+def _axes(chart, data: dict, theme: Theme, lang: str) -> None:
+    kind = "column" if chart.chart_type == XL_CHART_TYPE.COLUMN_CLUSTERED else "line"
+    plot = chart.plots[0]
+    series = data["series"]
     if kind == "column":
         plot.gap_width = 60
         plot.overlap = -10

@@ -79,7 +79,8 @@ def chart_errors(slide_obj) -> list[str]:
         if getattr(shape, "has_chart", False) and shape.has_chart:
             chart = shape.chart
             kind = shape.name.split(":")[-1]
-            if kind in ("column", "line") and not chart.plots[0].has_data_labels:
+            points = len(chart.plots[0].categories) * len(chart.plots[0].series)
+            if kind in ("column", "line") and points <= 24 and not chart.plots[0].has_data_labels:
                 errors.append(f"{shape.name}: нет подписей значений")
     return errors
 
