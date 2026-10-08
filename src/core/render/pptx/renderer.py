@@ -194,7 +194,19 @@ def _image(slide_obj, ctx: _Ctx, element: Element, asset_id: str | None, box: Bo
 
 
 STYLE_DEFAULTS = {"pause_text": "on_brand", "quote_plate": "surface_alt", "quote_text": "primary",
-                  "accent_fill": "$brand"}
+                  "accent_fill": "$brand", "heading_color": "primary"}
+DEFAULT_PANEL = Box(64, 56, 1792, 940)
+
+
+def panel_mode(ctx: "_Ctx", layout: LayoutSpec) -> bool:
+    """Тема разрешает целиком цветными только титул и финал (style.full_color: cover): у остальных
+    «цветных» слайдов (пауза, утверждение с картинкой) — обычный фон и цветная панель (D-070)."""
+    return (layout.background in ("brand", "pause") and layout.kind not in ("title", "closing")
+            and ctx.theme.style.get("full_color") == "cover")
+
+
+def _panel_fill(ctx: "_Ctx", layout: LayoutSpec) -> str:
+    return "accent" if layout.background == "pause" and ctx.theme.style.get("pause") == "accent" else "$brand"
 
 
 def _style_ref(ctx: _Ctx, element: Element) -> Element:
@@ -272,7 +284,13 @@ def _header(slide_obj, ctx: _Ctx, layout: LayoutSpec) -> str | None:
 
 def _decor(slide_obj, ctx: _Ctx, layout: LayoutSpec) -> None:
     sets = layout.decor
-    if sets is None:
+    panel = panel_mode(ctx, layout)
+    if panel:
+        box = Box(*layout.panel) if layout.panel else DEFAULT_PANEL
+        S.rect(slide_obj, ctx.theme, box, _panel_fill(ctx, layout), radius=float(ctx.theme.style.get("radius", 8)),
+               name="panel:color")
+        sets = [{"set": "pause", "region": [box.x, box.y, box.w, box.h]}]
+    elif sets is None:
         sets = [{"set": {"brand": "cover", "pause": "pause"}.get(layout.background, "content")}]
     for d in sets:
         region = Box(*d["region"]) if d.get("region") else SLIDE_BOX
@@ -285,6 +303,8 @@ def _decor(slide_obj, ctx: _Ctx, layout: LayoutSpec) -> None:
 def _footer(slide_obj, ctx: _Ctx, slide: Slide, total: int, watermark: bool, layout: LayoutSpec) -> None:
     color = {"brand": "on_brand", "pause": ctx.theme.style.get("pause_text", "on_brand")}.get(layout.background,
                                                                                          "text_muted")
+    if panel_mode(ctx, layout):
+        color = "text_muted"                        # колонтитул — под панелью, на фоне слайда
     small = Element(name="footer", type="text", box=Box(80, 1012, 600, 40), style="small", color=color)
     if watermark:
         _text(slide_obj, ctx, small, WATERMARK, "small")
@@ -296,13 +316,16 @@ def _footer(slide_obj, ctx: _Ctx, slide: Slide, total: int, watermark: bool, lay
 
 def _background(slide_obj, ctx: _Ctx, layout: LayoutSpec) -> None:
     fill = slide_obj.background.fill
-    background = layout.background
+    background = "bg" if panel_mode(ctx, layout) else layout.background
     if background == "pause":
         # Слайд-пауза: в цвете brand или (тема так решила) сплошным accent
         background = "accent" if ctx.theme.style.get("pause") == "accent" else "brand"
     if background == "accent":
         fill.solid()
         fill.fore_color.rgb = S.rgb(ctx.theme.color("accent"))
+    elif background == "brand" and ctx.theme.colors["brand"].upper() == ctx.theme.colors["brand_2"].upper():
+        fill.solid()                                # плоская тема — сплошная заливка
+        fill.fore_color.rgb = S.rgb(ctx.theme.color("brand"))
     elif background == "brand":
         fill.gradient()
         fill.gradient_angle = float(ctx.theme.style.get("gradient_angle", 0))

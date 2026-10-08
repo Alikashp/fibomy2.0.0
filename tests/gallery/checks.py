@@ -220,9 +220,16 @@ def color_share(png, theme_id: str, exclude=()) -> float:
     return 100.0 * colored / max(1, total)
 
 
-def color_threshold(kind: str, variant: str) -> float:
+def color_threshold(kind: str, variant: str, theme: Theme | None = None) -> float:
+    """Порог доли цвета слайда. Тема может задать свои (gallery: в YAML) — спокойные темы с одним
+    акцентом и «воздухом» по решению владельца (D-070)."""
+    own = (theme.gallery if theme is not None else {}) or {}
     if kind in ("title", "closing"):
-        return COLOR_THRESHOLDS["cover"]
+        return float(own.get("cover_min", COLOR_THRESHOLDS["cover"]))
     if kind in ("chart_series", "chart_share"):
-        return COLOR_THRESHOLDS["chart"]
-    return COLOR_THRESHOLDS["content"]
+        return float(own.get("chart_min", COLOR_THRESHOLDS["chart"]))
+    return float(own.get("content_min", COLOR_THRESHOLDS["content"]))
+
+
+def deck_median(theme: Theme) -> float:
+    return float((theme.gallery or {}).get("median_min", DECK_MEDIAN))

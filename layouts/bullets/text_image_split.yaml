@@ -20,7 +20,7 @@ items:
       elements: &point
         - {name: icon, type: icon, box: [0, 0, 64, 64], color: primary, bind: icon, plate: true}
         - {name: heading, type: text, box: [88, 0, w-88, 48], style: h3, min_style: body, max_lines: 1,
-           color: primary, bind: heading}
+           color: "@heading_color", bind: heading}
         - {name: text, type: text, box: [88, 50, w-88, h-50], style: body, min_style: small, max_lines: 3,
            color: text_muted, bind: text}
     4:
@@ -28,6 +28,6 @@ items:
       elements:
         - {name: icon, type: icon, box: [0, 0, 64, 64], color: primary, bind: icon, plate: true}
         - {name: heading, type: text, box: [88, 0, w-88, 48], style: h3, min_style: body, max_lines: 1,
-           color: primary, bind: heading}
+           color: "@heading_color", bind: heading}
         - {name: text, type: text, box: [88, 50, w-88, h-50], style: body, min_style: small, max_lines: 2,
            color: text_muted, bind: text}

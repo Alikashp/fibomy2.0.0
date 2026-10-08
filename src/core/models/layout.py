@@ -9,6 +9,8 @@
     color_heavy: true         # «цветной» слайд: не чаще одного на 3 слайда (selection)
     decor: [{set: cover|band|content|header, region: [x, y, w, h]}]   # по умолчанию — по background
     compact: {area: [x, y, w, h], align: center|top}   # высота панелей по содержимому (fitter)
+    panel: [x, y, w, h]       # цветная панель вместо цветного фона, если тема красит целиком только титул
+                              # и финал (style.full_color: cover)
     elements:            # элементы слайда в порядке отрисовки (z-порядок)
       - {name, type, box: [x, y, w, h], ...}
     items:               # повторяющиеся элементы (пункты, выводы), если есть
@@ -133,6 +135,7 @@ class LayoutSpec:
     color_heavy: bool = False
     decor: list[dict] | None = None
     compact: dict | None = None
+    panel: list[float] | None = None
 
     @property
     def variant(self) -> str:
@@ -217,6 +220,7 @@ def _load(path) -> LayoutSpec:
         arrangements={int(k): v for k, v in (items.get("arrangements") or {}).items()},
         background=raw.get("background", "bg"), header=bool(raw.get("header", False)),
         color_heavy=bool(raw.get("color_heavy", False)), decor=raw.get("decor"), compact=raw.get("compact"),
+        panel=raw.get("panel"),
     )
 
 

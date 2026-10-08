@@ -6,6 +6,7 @@ family: image_split
 version: 1
 fallback: false
 background: brand
+panel: [896, 64, 960, 936]   # тема без цветных фонов (full_color: cover) — панель справа
 color_heavy: true
 applies_when: {image: required, title_max_chars: 110}
 elements:

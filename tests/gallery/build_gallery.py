@@ -134,7 +134,7 @@ async def run(out: Path, themes: list[str], fixtures: list[str], variants: list[
                     elif any(r.startswith("overflow") for r in fit_errors_by_variant.get(slide.variant, [])):
                         errors += [f"fit: {r}" for r in fit_errors_by_variant[slide.variant] if r.startswith("overflow")]
                     share = C.color_share(png, theme_id, pictures)
-                    threshold = C.color_threshold(slide.kind, slide.variant)
+                    threshold = C.color_threshold(slide.kind, slide.variant, theme)
                     if share < threshold and fixture != "min":   # min — короткие тексты: только в отчёте
                         errors.append(f"доля цвета {share:.1f}% < {threshold:.0f}%")
                     fill = C.fill_share(slide_obj) if slide.kind in C.FILL_KINDS and slide.variant not in C.FILL_EXEMPT else None
@@ -150,10 +150,11 @@ async def run(out: Path, themes: list[str], fixtures: list[str], variants: list[
     # Медиана доли цвета по «колоде» темы (заполнение typical) — ≥ 8%
     for theme_id in themes:
         shares = [r["color_share"] for r in results if r["theme"] == theme_id and r["fixture"] == "typical"]
-        if shares and statistics.median(shares) < C.DECK_MEDIAN:
+        median_min = C.deck_median(load_theme(theme_id))
+        if shares and statistics.median(shares) < median_min:
             results.append({"theme": theme_id, "fixture": "typical", "variant": "(медиана колоды)",
                             "color_share": statistics.median(shares), "fill": None,
-                            "errors": [f"медиана доли цвета {statistics.median(shares):.1f}% < {C.DECK_MEDIAN:.0f}%"]})
+                            "errors": [f"медиана доли цвета {statistics.median(shares):.1f}% < {median_min:.0f}%"]})
             failures += 1
     book.save(str(out / "gallery.pdf"))
     for theme_id, pngs in sheets.items():

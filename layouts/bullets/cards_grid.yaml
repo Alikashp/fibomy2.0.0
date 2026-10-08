@@ -22,7 +22,7 @@ items:
         - {name: card, type: card, box: [0, 0, w, h]}
         - {name: icon, type: icon, box: [40, 40, 80, 80], color: primary, bind: icon, plate: true}
         - {name: heading, type: text, box: [40, 144, w-80, 96], style: h3, min_style: body, max_lines: 2,
-           color: primary, bind: heading}
+           color: "@heading_color", bind: heading}
         - {name: text, type: text, box: [40, 248, w-80, h-288], style: body, min_style: small, max_lines: 8,
            color: text_muted, bind: text}
     4:
@@ -31,7 +31,7 @@ items:
         - {name: card, type: card, box: [0, 0, w, h]}
         - {name: icon, type: icon, box: [40, 32, 72, 72], color: primary, bind: icon, plate: true}
         - {name: heading, type: text, box: [136, 32, w-176, 48], style: h3, min_style: body, max_lines: 1,
-           color: primary, bind: heading}
+           color: "@heading_color", bind: heading}
         - {name: text, type: text, box: [136, 88, w-176, 180], style: body, min_style: small, max_lines: 4,
            color: text_muted, bind: text}
     5:
@@ -40,7 +40,7 @@ items:
         - {name: card, type: card, box: [0, 0, w, h]}
         - {name: icon, type: icon, box: [w-88, 32, 56, 56], color: primary, bind: icon, plate: true}
         - {name: heading, type: text, box: [36, 32, w-136, 96], style: h3, min_style: body, max_lines: 2,
-           color: primary, bind: heading}
+           color: "@heading_color", bind: heading}
         - {name: text, type: text, box: [36, 136, w-72, 140], style: body, min_style: small, max_lines: 3,
            color: text_muted, bind: text}
     6:

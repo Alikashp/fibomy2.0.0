@@ -32,6 +32,7 @@ class Theme(BaseModel):
     typescale: dict[str, int]
     style: dict
     decor: dict[str, list[dict]] = {}
+    gallery: dict = {}          # свои пороги доли цвета в стресс-галерее (tests/gallery, D-070)
     contrast_pairs: list[tuple[str, str]]
 
     def color(self, token: str) -> str:

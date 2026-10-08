@@ -64,6 +64,8 @@ def apply_fill(shape, theme: Theme, fill, alpha: float | None = None, angle: flo
         shape.fill.background()
         return
     grad = gradient_tokens(fill)
+    if grad and theme.color(grad[0]).upper() == theme.color(grad[1]).upper():
+        fill, grad = grad[0], None                 # плоская тема (brand = brand_2) — сплошная заливка
     if grad:
         shape.fill.gradient()
         shape.fill.gradient_angle = float(angle if angle is not None else

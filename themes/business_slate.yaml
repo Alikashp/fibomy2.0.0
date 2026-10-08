@@ -1,7 +1,9 @@
 # Тема оформления (docs/design/05_LAYOUTS.md, 6; контракт — 04_CONTRACTS.md, 6.2).
-# Светлая деловая, серо-синяя (в духе шаблона Focus, docs/design/references/): светло-серый фон,
-# белые карточки, тёмно-синий градиент на титуле и в плашке заголовка, номера во флажках,
-# янтарный акцент, геометрия — диагональные полосы. Тема по умолчанию (сессия 4, D-063).
+# Светлая деловая (ориентир — шаблон Focus, docs/design/references/): плоский современный стиль —
+# белый фон, светлые карточки без градиентов, тёмно-синий текст и один яркий акцент — насыщенный
+# синий; заголовок — тёмный текст с тонкой акцентной линией; титул и финал — плоская синяя заливка
+# с крупными плоскими кругами. Спокойная тема для корпоративного сегмента. По умолчанию.
+# (Сессия 4, D-063; переделка по замечанию владельца «как PowerPoint 2010» — D-070.)
 id: business_slate
 name: {ru: "Деловая серо-синяя", en: "Business slate"}
 mode: light
@@ -11,59 +13,60 @@ enabled: true
 replaces: [graphite_light]  # старые id, которые переводятся на эту тему (бот, API, DeckSpec)
 fonts: {heading: Arial, body: Arial}
 colors:
-  bg: "#F1F3F6"
-  surface: "#FFFFFF"
-  surface_alt: "#E3E8EF"
-  primary: "#205279"         # числа, номера, полосы карточек, заголовки пунктов
+  bg: "#FFFFFF"
+  surface: "#F3F5F8"
+  surface_alt: "#E8ECF2"
+  primary: "#2563EB"         # единственный яркий акцент: номера, числа, заголовки пунктов, линии
   on_primary: "#FFFFFF"
-  brand: "#0F2440"           # большие цветные площади: градиент brand → brand_2
-  brand_2: "#2D6CA8"
+  brand: "#1D4ED8"           # плоская заливка титула, финала, панелей (brand_2 = brand — без градиента)
+  brand_2: "#1D4ED8"
   on_brand: "#FFFFFF"
-  accent: "#F2A33A"          # декор и плашки (не цвет мелкого текста)
-  on_accent: "#1F2A40"
-  paper: "#FFFFFF"           # карточки на цветном фоне (слайд-пауза)
-  on_paper: "#1F2A40"
-  text: "#1F2A40"
-  text_muted: "#545F7D"
-  border: "#CDD5E1"
-  on_status: "#FFFFFF"         # текст и иконки на шапках positive / negative
-  positive: "#1E7A46"
-  negative: "#B3261E"
+  accent: "#38BDF8"          # небесный — только декор на титуле
+  on_accent: "#0B1B33"
+  paper: "#FFFFFF"           # карточки на цветной панели
+  on_paper: "#14213D"
+  text: "#14213D"
+  text_muted: "#556074"
+  border: "#D7DDE6"
+  on_status: "#FFFFFF"       # текст и иконки на шапках positive / negative
+  positive: "#15803D"
+  negative: "#B91C1C"
 # Серии и сектора диаграмм по порядку: графика ≥ 3:1 к bg и surface, первые пять
 # попарно различимы (CIEDE2000 ≥ 20), шестой — нейтральный для «прочее».
-chart: ["#2B63B5", "#D2620A", "#11917F", "#8E44AD", "#C7385A", "#6B7480"]
+chart: ["#2563EB", "#C2410C", "#0F8A7E", "#A21CAF", "#B7791F", "#64748B"]
 typescale: {hero: 96, display: 60, h1: 36, h2: 26, h3: 20, body: 18, small: 14, min: 12}
 style:
-  radius: 12                # скругление карточек, единиц сетки
+  radius: 16                # скругление карточек, единиц сетки
   image_radius: 20          # скругление картинок
-  gradient_angle: 30        # угол градиента brand → brand_2, градусы
-  card: fill                # fill — заливка surface; outline — обводка
-  card_stripe: left         # цветная полоса карточки: left / top / none
-  stripe_fill: primary      # цвет полосы: токен или $brand (градиент)
-  header: plate             # оформление заголовка: plate / underline / marker / bar
-  badge: pennant            # фигура номера: circle / square / flag / pennant / chevron
-  quote_plate: paper       # плашка цитаты statement.big_quote
-  quote_text: brand_2
-  icon_plate: gradient      # иконка в градиентной фигуре
+  gradient_angle: 0
+  card: fill                # плоская светлая карточка без полосы
+  card_stripe: none
+  header: underline         # тёмный заголовок и тонкая акцентная линия под ним
+  heading_color: primary
+  badge: square             # номер — в скруглённом квадрате
+  quote_plate: surface      # плашка цитаты statement.big_quote
+  quote_text: text
+  icon_plate: gradient      # brand = brand_2 → плоская синяя подложка
+  accent_fill: primary
+  full_color: cover         # целиком цветные — только титул и финал; пауза — синяя панель
 # Декоративные фигуры темы: нативные фигуры PPTX (custGeom), цвет — токены темы.
-# Наборы: cover — цветной фон (титул, финал, пауза), band — цветная полоса,
-# content — содержательные слайды, header — поверх плашки заголовка.
-# box — в координатах области (w, h — её размер); всё, что вышло за область, обрезается.
+# Только крупные плоские круги на цветных слайдах; на содержательных декора нет — больше воздуха.
 decor:
   cover:
-    - {shape: polygon, points: [[w-760, 0], [w, 0], [w, 760]], fill: on_brand, alpha: 0.06}
-    - {shape: polygon, points: [[w-430, 0], [w-330, 0], [w, 330], [w, 430]], fill: on_brand, alpha: 0.10}
-    - {shape: polygon, points: [[w-230, 0], [w-140, 0], [w, 140], [w, 230]], fill: accent}
-    - {shape: polygon, points: [[0, h-300], [300, h], [0, h]], fill: on_brand, alpha: 0.07}
-    - {shape: polygon, points: [[0, h-170], [170, h], [100, h], [0, h-100]], fill: accent}
+    - {shape: circle, center: [w-220, h/2+40], radius: 460, fill: on_brand, alpha: 0.07}
+    - {shape: circle, center: [w-110, 150], radius: 110, fill: accent}
+    - {shape: circle, center: [130, h-120], radius: 44, fill: on_brand, alpha: 0.18}
   band:
-    - {shape: polygon, points: [[w-420, 0], [w-280, 0], [w-420, h], [w-560, h]], fill: on_brand, alpha: 0.10}
-    - {shape: polygon, points: [[w-200, 0], [w-120, 0], [w-260, h], [w-340, h]], fill: accent}
-  header:
-    - {shape: polygon, points: [[w-120, 0], [w-70, 0], [w-10, h], [w-60, h]], fill: on_brand, alpha: 0.14}
-    - {shape: polygon, points: [[w-40, 0], [w, 0], [w, h], [w+20, h]], fill: accent}
+    - {shape: circle, center: [w-200, h/2+60], radius: 300, fill: on_brand, alpha: 0.08}
+    - {shape: circle, center: [w-120, h/2-40], radius: 70, fill: accent}
+  pause:
+    - {shape: circle, center: [w-60, -20], radius: 260, fill: on_brand, alpha: 0.08}
+  header: []
   content: []
-# Пары «текст / фон», которые реально встречаются в макетах; тест — не ниже 4.5:1
+# Пороги доли цвета в стресс-галерее (tests/gallery): плоская спокойная тема с одним акцентом
+# и «воздухом» по решению владельца (D-070) — на содержательных слайдах цвет только в номерах,
+# иконках и линиях; у линейной диаграммы — тонкие линии и плоская полоса вывода (≥ 8%).
+gallery: {content_min: 0.5, chart_min: 8, median_min: 5}
 contrast_pairs:
   - [text, bg]
   - [text, surface]

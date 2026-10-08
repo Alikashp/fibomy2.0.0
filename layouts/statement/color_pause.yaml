@@ -6,6 +6,7 @@ family: pause
 version: 1
 fallback: false
 background: pause
+panel: [64, 56, 1792, 944]    # тема без цветных фонов (full_color: cover) — цветная панель на фоне слайда
 color_heavy: true
 applies_when: {image: forbidden, title_max_chars: 140}
 elements:

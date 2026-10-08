@@ -196,6 +196,24 @@ class Themes(unittest.TestCase):
             self.assertIn(st["badge"], ("circle", "square", "flag", "pennant", "chevron"), tid)
             self.assertTrue({"cover", "content"} <= set(t.decor), tid)
 
+    def test_owner_review_d070(self):
+        """Тёмная: светлые заголовки, акцент тёплый (оранжевый — янтарный, без малинового), целиком
+        цветные только титул и финал. Деловая: плоская (brand = brand_2), без декора на слайдах, без плашки."""
+        import colorsys
+        ember = load_theme("ember_dark")
+        self.assertNotIn("title_color", ember.style)
+        self.assertEqual((ember.style["heading_color"], ember.style["quote_text"]), ("text", "text"))
+        self.assertEqual(ember.style["full_color"], "cover")
+        for token in ("primary", "brand", "brand_2", "accent"):
+            r, g, b = (int(ember.colors[token][i:i + 2], 16) / 255 for i in (1, 3, 5))
+            hue = colorsys.rgb_to_hsv(r, g, b)[0] * 360
+            self.assertTrue(18 <= hue <= 50, (token, hue))          # оранжевый — янтарный
+        slate = load_theme("business_slate")
+        self.assertEqual(slate.colors["brand"], slate.colors["brand_2"])
+        self.assertEqual(slate.style["header"], "underline")
+        self.assertEqual((slate.decor.get("content"), slate.decor.get("header")), ([], []))
+        self.assertEqual(slate.style["card_stripe"], "none")
+
     def test_old_theme_ids_map_to_new(self):
         from core.models.theme import legacy_theme_ids, resolve_theme_id
         self.assertEqual(legacy_theme_ids(), {"graphite_light": "business_slate", "graphite_dark": "ember_dark",

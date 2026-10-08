@@ -89,6 +89,42 @@ class Fitting(unittest.TestCase):
         self.assertTrue(any(d.reason.startswith("truncated:") for d in spec.degradations))
 
 
+class ThemeLook(unittest.TestCase):
+    """Правки владельца по галерее (D-070): тёмная — без заливки слайда целиком, кроме титула и финала;
+    деловая — плоская, без градиентов и декора на содержательных слайдах."""
+
+    @staticmethod
+    def deck(theme_id: str) -> Presentation:
+        spec = make_spec()
+        spec.meta.theme_id = theme_id
+        spec.slides.insert(4, Slide(id="s05", index=5, kind="statement", variant="statement.color_pause",
+                                    title="Короткое утверждение-пауза", content={"body": "Пояснение в карточке."}))
+        for i, sl in enumerate(spec.slides, start=1):
+            sl.index, sl.id = i, f"s{i:02d}"
+        fit_deck(spec, load_theme(theme_id))
+        return Presentation(io.BytesIO(render_pptx(spec)))
+
+    @staticmethod
+    def bg_fill(slide) -> str:
+        bg = slide._element.find(qn("p:cSld")).find(qn("p:bg"))
+        return "grad" if bg is not None and bg.find(".//" + qn("a:gradFill")) is not None else "solid"
+
+    def test_ember_pause_is_a_panel_on_dark_slide(self):
+        prs = self.deck("ember_dark")
+        pause = prs.slides[4]
+        self.assertEqual(self.bg_fill(pause), "solid")
+        self.assertTrue(any(sh.name == "panel:color" for sh in pause.shapes))
+        self.assertEqual(self.bg_fill(prs.slides[0]), "grad")          # титул — цветной целиком
+
+    def test_slate_is_flat(self):
+        prs = self.deck("business_slate")
+        xml = "".join(s._element.xml for s in prs.slides)
+        self.assertNotIn("<a:gradFill", xml)                           # ни одного градиента
+        content = prs.slides[2]
+        self.assertFalse([sh.name for sh in content.shapes if sh.name.startswith(("decor", "header:plate"))])
+        self.assertTrue(any(sh.name == "header:underline" for sh in content.shapes))
+
+
 class Render(unittest.TestCase):
 
     @classmethod
