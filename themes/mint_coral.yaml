@@ -1,0 +1,77 @@
+# Тема оформления (docs/design/05_LAYOUTS.md, 6; контракт — 04_CONTRACTS.md, 6.2).
+# Свежая зелёная с коралловым: градиент изумруд → морская волна, коралловый акцент,
+# карточки с зелёной обводкой, декор — волны (сессия 4, D-063).
+id: mint_coral
+name: {ru: "Мята и коралл", en: "Mint coral"}
+mode: light
+tags: [bright, education, business]
+free: true
+enabled: true
+replaces: [fresh_green, azure_coral]
+fonts: {heading: Arial, body: Arial}
+colors:
+  bg: "#FFFFFF"
+  surface: "#EAF6F1"
+  surface_alt: "#D3EDE3"
+  primary: "#0B7A5F"
+  on_primary: "#FFFFFF"
+  brand: "#0B7A5F"
+  brand_2: "#0E6378"
+  on_brand: "#FFFFFF"
+  accent: "#FF6B57"
+  on_accent: "#1F1210"
+  paper: "#FFFFFF"
+  on_paper: "#13241E"
+  text: "#13241E"
+  text_muted: "#48594F"
+  border: "#BFDCCF"
+  on_status: "#FFFFFF"         # текст и иконки на шапках positive / negative
+  positive: "#18794E"
+  negative: "#B42318"
+chart: ["#0E8A68", "#E5533A", "#2A6BD1", "#9446C8", "#C7366F", "#66706B"]
+typescale: {hero: 96, display: 60, h1: 36, h2: 26, h3: 20, body: 18, small: 14, min: 12}
+style:
+  radius: 24
+  image_radius: 36
+  gradient_angle: 60
+  card: outline
+  card_line: primary
+  card_stripe: top
+  stripe_fill: $brand
+  title_color: primary
+  header: bar
+  badge: chevron
+  quote_plate: surface       # плашка цитаты statement.big_quote
+  quote_text: primary
+  icon_plate: gradient
+decor:
+  cover:
+    - {shape: wave, box: [0, h-170, w, 170], amplitude: 26, period: 960, phase: 0, fill: on_brand, alpha: 0.12}
+    - {shape: wave, box: [0, h-110, w, 110], amplitude: 22, period: 760, phase: 1.6, fill: accent}
+    - {shape: arc, center: [w-200, 170], radius: 110, thickness: 3, start: 0, end: 360, fill: on_brand, alpha: 0.5}
+    - {shape: circle, center: [w-200, 170], radius: 54, fill: accent}
+  band:
+    - {shape: wave, box: [0, h-80, w, 80], amplitude: 18, period: 760, phase: 1.6, fill: accent}
+  header: []
+  content:
+    - {shape: circle, center: [w-60, 60], radius: 26, fill: accent}
+    - {shape: arc, center: [w-60, 60], radius: 46, thickness: 3, start: 0, end: 360, fill: primary, alpha: 0.6}
+    - {shape: wave, box: [0, h-44, w, 44], amplitude: 8, period: 640, phase: 0.8, fill: $brand}
+    - {shape: wave, box: [0, h-22, w, 22], amplitude: 6, period: 520, phase: 2.2, fill: accent}
+contrast_pairs:
+  - [text, bg]
+  - [text, surface]
+  - [text, surface_alt]
+  - [text_muted, bg]
+  - [text_muted, surface]
+  - [primary, bg]
+  - [primary, surface]
+  - [on_primary, primary]
+  - [on_brand, brand]
+  - [on_brand, brand_2]
+  - [on_accent, accent]
+  - [on_paper, paper]
+  - [positive, surface]
+  - [negative, surface]
+  - [on_status, positive]
+  - [on_status, negative]

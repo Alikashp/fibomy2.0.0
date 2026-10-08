@@ -139,7 +139,7 @@ async def _run_new(case: Case, n: int, out: Path) -> dict:
                   usage_by_stage=res.usage.as_dict(), stages=res.durations_ms, slides=len(spec["slides"]),
                   source_genre=spec["meta"].get("genre"), degradations=spec["degradations"],
                   kinds=[s["kind"] for s in spec["slides"]], variants=[s["variant"] for s in spec["slides"]],
-                  warnings_deck=res.warnings)
+                  warnings_deck=res.warnings, images=image_stats(spec, res.usage.as_dict(), res.durations_ms))
     (out / f"{run_name}.deckspec.json").write_text(json.dumps(spec, ensure_ascii=False, indent=2), encoding="utf-8")
     (out / f"{run_name}.pptx").write_bytes(res.pptx)
     if res.pdf:
@@ -153,6 +153,34 @@ async def _run_new(case: Case, n: int, out: Path) -> dict:
     else:
         result.update(violations=file_problems, warnings=[], passed=0)
     return result
+
+
+def image_stats(spec: dict, usage: dict, stages: dict) -> dict:
+    """ИИ-картинки колоды: заказано, встало, не успело или ошибка, время ожидания и стоимость."""
+    images = usage.get("images") or {}
+    missed = [d for d in spec.get("degradations", []) if d["stage"] == "images"]
+    return {"requested": images.get("calls", 0), "placed": len(spec.get("assets") or {}),
+            "missed": len(missed), "timeouts": sum("timeout" in d["reason"] for d in missed),
+            "ms": stages.get("images"), "cost_rub": images.get("cost_rub") or 0.0,
+            "max_ms": max((a.get("ms", 0) for a in (spec.get("assets") or {}).values()), default=None)}
+
+
+def images_md(results: list[dict]) -> list[str]:
+    """Строка отчёта о картинках по всем колодам нового движка."""
+    stats = [r["images"] for r in results if r.get("status") == "ok" and r.get("images")]
+    requested = sum(s["requested"] for s in stats)
+    if not requested:
+        return ["Картинки: не заказывались (нет SILICONFLOW_API_KEY в секретах или image_mode = none).", ""]
+    placed = sum(s["placed"] for s in stats)
+    missed = sum(s["missed"] for s in stats)
+    timeouts = sum(s["timeouts"] for s in stats)
+    cost = sum(s["cost_rub"] for s in stats)
+    waits = sorted(s["max_ms"] for s in stats if s.get("max_ms"))
+    wait = f", самая долгая картинка — p50 {waits[len(waits) // 2] / 1000:.1f} с, макс {waits[-1] / 1000:.1f} с" \
+        if waits else ""
+    return [f"Картинки: заказано {requested}, встало {placed}, не успели или ошибка — {missed} "
+            f"(**{100 * missed / requested:.0f}%**, из них таймаут {timeouts}){wait}; стоимость картинок "
+            f"{cost:.2f} ₽, в среднем {cost / len(stats):.2f} ₽ на колоду.", ""]
 
 
 def _total_usage(deck_usage) -> dict:
@@ -323,8 +351,9 @@ def summary_md(results: list[dict], meta: dict, preflight_error: str | None = No
         total += f", средняя стоимость **{avg:.2f} ₽**".replace(".", ",")
     if times:
         p95 = times[min(len(times) - 1, int(round(0.95 * (len(times) - 1))))]
-        total += f", время p50 {times[len(times) // 2]} с, p95 {p95} с (без картинок)"
+        total += f", время p50 {times[len(times) // 2]} с, p95 {p95} с (с картинками, если заказаны)"
     lines += ["", total + ".", ""]
+    lines += images_md(results)
     if avg is not None and avg > 4:
         lines += ["**Средняя стоимость выше 4 ₽ — порог сигнала владельцу (D-041).**", ""]
     lines += [f"«До» — колоды старого движка (`{json.loads((ROOT / 'tests/golden/baseline.json').read_text())['report']}`); "

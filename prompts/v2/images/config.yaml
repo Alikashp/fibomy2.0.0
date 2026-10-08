@@ -1,0 +1,10 @@
+# ИИ-картинки колоды (сессия 4, ТЗ 3.6, D-067): SiliconFlow, модель Z-Image-Turbo.
+# Ключ — переменная SILICONFLOW_API_KEY (Railway: воркер). Без ключа колоды собираются без картинок.
+model: Tongyi-MAI/Z-Image-Turbo     # id модели SiliconFlow (переопределяет SILICONFLOW_MODEL)
+image_size: 1024x1024               # квадрат: под слот половины слайда кадрируется cover-crop
+per_deck: 3                         # не больше картинок на колоду: титул + 2 слайда
+timeout_seconds: 20                 # на одну картинку (запрос + скачивание); не успела — слайд без картинки
+concurrency: 4                      # одновременных запросов на колоду
+price_rub: 0.5                      # ≈ $0.005 за картинку по прайсу SiliconFlow; пишется в decks.cost_rub
+max_side: 1600                      # длинная сторона файла в PPTX, px
+jpeg_quality: 82

@@ -1,0 +1,31 @@
+# Одно крупное число на градиентной панели темы, подпись, пояснение в карточке (05_LAYOUTS.md, 3.6)
+id: metrics.big_number
+kind: metrics
+family: hero
+version: 1
+fallback: false
+header: true
+applies_when: {image: forbidden, items: {min: 1, max: 1}, value_max_chars: 13}
+elements:
+  - {name: title, type: text, box: [80, 80, 1760, 176], style: h1, min_style: h2, max_lines: 2,
+     color: text, bind: title, anchor: middle}
+  - {name: panel, type: rect, box: [80, 280, 980, 640], fill: $brand, radius: true}
+  - {name: body_card, type: card, box: [1100, 280, 740, 640], when: content.body}
+  - {name: body, type: text, box: [1148, 328, 644, 544], style: body, min_style: small, max_lines: 10,
+     color: text, bind: content.body, anchor: middle, optional: true}
+  - {name: footnote, type: text, box: [80, 944, 1760, 40], style: small, min_style: min, max_lines: 1,
+     color: text_muted, bind: footnote, optional: true}
+items:
+  bind: content.items
+  arrangements:
+    1:
+      grid: {area: [80, 280, 980, 640], cols: 1, rows: 1, gap: 0}
+      elements:
+        - {name: tag, type: text, box: [56, 56, w-112, 40], style: body, min_style: small, max_lines: 1,
+           color: on_brand, bind: tag, optional: true}
+        - {name: value, type: text, box: [56, 150, w-112, 250], style: hero, min_style: display, max_lines: 1,
+           color: on_brand, bind: value, anchor: bottom, never_truncate: true}
+        - {name: unit, type: text, box: [56, 408, w-112, 56], style: h2, min_style: h3, max_lines: 1,
+           color: on_brand, bind: unit, optional: true}
+        - {name: label, type: text, box: [56, 472, w-112, 130], style: h3, min_style: body, max_lines: 2,
+           color: on_brand, bind: label}

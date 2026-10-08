@@ -6,6 +6,7 @@
     title                 заголовок слайда (у statement — само утверждение)
     footnote              сноска, которую ставит код
     data                  снимок данных диаграммы (Slide.data)
+    image                 id картинки слайда из DeckSpec.assets (Slide.image)
     content.<путь>        поле содержания по схеме kind; путь через точку,
                           индексы списков — числами: content.left.points.0
     const:<текст>         постоянный текст макета (кавычка)
@@ -51,6 +52,8 @@ def _raw(element: Element, slide: Slide, spec: DeckSpec, item: dict | None, inde
         return slide.footnote
     if bind == "data":
         return slide.data
+    if bind == "image":
+        return slide.image
     if bind.startswith("content."):
         return _get(slide.content, bind.split(".")[1:])
     raise ValueError(f"unknown bind {bind!r} in {slide.variant}")

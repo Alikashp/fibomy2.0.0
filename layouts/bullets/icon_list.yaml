@@ -1,0 +1,32 @@
+# Список: иконка в градиентной подложке, заголовок пункта цветом темы, текст (05_LAYOUTS.md, 3.3)
+id: bullets.icon_list
+kind: bullets
+family: list
+version: 1
+fallback: false
+header: true
+applies_when: {image: forbidden, items: {min: 3, max: 4}}
+elements:
+  - {name: title, type: text, box: [80, 80, 1760, 176], style: h1, min_style: h2, max_lines: 2,
+     color: text, bind: title, anchor: middle}
+  - {name: footnote, type: text, box: [80, 944, 1760, 40], style: small, min_style: min, max_lines: 1,
+     color: text_muted, bind: footnote, optional: true}
+items:
+  bind: content.items
+  arrangements:
+    3:
+      grid: {area: [80, 280, 1760, 640], cols: 1, rows: 3, gap: 24, compact: center, pad: 8}
+      elements:
+        - {name: icon, type: icon, box: [0, 0, 80, 80], color: primary, bind: icon, plate: true}
+        - {name: heading, type: text, box: [112, 0, w-112, 48], style: h3, min_style: body, max_lines: 1,
+           color: "@heading_color", bind: heading}
+        - {name: text, type: text, box: [112, 52, w-112, h-52], style: body, min_style: small, max_lines: 3,
+           color: text_muted, bind: text}
+    4:
+      grid: {area: [80, 280, 1760, 640], cols: 1, rows: 4, gap: 20, compact: center, pad: 8}
+      elements:
+        - {name: icon, type: icon, box: [0, 0, 80, 80], color: primary, bind: icon, plate: true}
+        - {name: heading, type: text, box: [112, 0, w-112, 48], style: h3, min_style: body, max_lines: 1,
+           color: "@heading_color", bind: heading}
+        - {name: text, type: text, box: [112, 52, w-112, h-52], style: body, min_style: small, max_lines: 2,
+           color: text_muted, bind: text}

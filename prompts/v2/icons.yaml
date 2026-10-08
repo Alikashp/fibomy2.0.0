@@ -27,3 +27,6 @@ icons:
   - shield
   - refresh
   - link
+# Иконки макетов, которые модель не выбирает (рендерер: «против» в comparison.pros_cons)
+system:
+  - x

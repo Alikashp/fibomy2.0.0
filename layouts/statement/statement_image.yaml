@@ -1,0 +1,20 @@
+# Картинка слева на половину слайда со скруглением, утверждение и пояснение справа на цветном
+# фоне темы (05_LAYOUTS.md, 3.2; приём «градиент + картинка» из шаблона «Премиум»)
+id: statement.statement_image
+kind: statement
+family: image_split
+version: 1
+fallback: false
+background: brand
+panel: [896, 64, 960, 936]   # тема без цветных фонов (full_color: cover) — панель справа
+color_heavy: true
+applies_when: {image: required, title_max_chars: 110}
+elements:
+  - {name: image, type: image, box: [64, 64, 800, 936], bind: image, radius: true}
+  - {name: bar, type: rect, box: [940, 180, 140, 10], fill: accent, radius: 5}
+  - {name: statement, type: text, box: [940, 220, 900, 450], style: h1, min_style: h2, max_lines: 5,
+     color: on_brand, bind: title, anchor: bottom}
+  - {name: body, type: text, box: [940, 720, 900, 190], style: body, min_style: small, max_lines: 4,
+     color: on_brand, bind: content.body, optional: true}
+  - {name: footnote, type: text, box: [940, 944, 900, 40], style: small, min_style: min, max_lines: 1,
+     color: on_brand, bind: footnote, optional: true}

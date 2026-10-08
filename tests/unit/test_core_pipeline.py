@@ -298,7 +298,7 @@ class Routing(unittest.TestCase):
         import dialog
         data = {**self.BASE, "presentation_type": "doklad"}
         text = dialog.summary_text(data, "free")
-        self.assertIn("Графит тёмная", text)      # dark из старого профиля → graphite_dark
+        self.assertIn("Тёмная тёплая", text)      # dark из старого профиля → ember_dark
         self.assertIn("PPTX + PDF", text)
         kb = [b.callback_data for row in dialog.summary_keyboard(data).inline_keyboard for b in row]
         self.assertIn("sum:design", kb)
@@ -314,11 +314,16 @@ class Routing(unittest.TestCase):
 
     def test_theme_mapping(self):
         import dialog
-        self.assertEqual(dialog.theme_for("light"), "graphite_light")
-        self.assertEqual(dialog.theme_for("dark"), "graphite_dark")
-        self.assertEqual(dialog.theme_for("azure_coral"), "azure_coral")
-        self.assertEqual(dialog.theme_for("forest"), "fresh_green")
-        self.assertEqual(dialog.theme_for("fresh_green", ["graphite_light"]), "graphite_light")
+        # схемы старого движка и темы сессий 1–3 → темы сессии 4 (D-063)
+        self.assertEqual(dialog.theme_for("light"), "business_slate")
+        self.assertEqual(dialog.theme_for("dark"), "ember_dark")
+        self.assertEqual(dialog.theme_for("forest"), "mint_coral")
+        self.assertEqual(dialog.theme_for("graphite_light"), "business_slate")
+        self.assertEqual(dialog.theme_for("graphite_dark"), "ember_dark")
+        self.assertEqual(dialog.theme_for("azure_coral"), "mint_coral")
+        self.assertEqual(dialog.theme_for("fresh_green"), "mint_coral")
+        self.assertEqual(dialog.theme_for("sunny_cream"), "sunny_cream")
+        self.assertEqual(dialog.theme_for("mint_coral", ["business_slate"]), "business_slate")
 
     def test_topic_threshold_200(self):
         import dialog
@@ -351,7 +356,7 @@ class Routing(unittest.TestCase):
         payload = rows[0][1]
         req = DeckRequest.model_validate(payload)
         self.assertEqual((req.input.topic, req.theme_id, req.slides_count, req.watermark, req.audience),
-                         ("Как работает фотосинтез", "graphite_dark", 9, True, "students"))
+                         ("Как работает фотосинтез", "ember_dark", 9, True, "students"))
         self.assertIsNone(req.input.material)
         self.assertEqual(req.client.chat_id, chat.id)
         self.assertEqual(req.client.status_message_id, chat.sent[0].message_id)

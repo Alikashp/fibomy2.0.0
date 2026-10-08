@@ -1,0 +1,13 @@
+# Промпт картинки = смысл слайда (image_query плана) + внешность людей (appearance.yaml)
+# + стиль темы (палитра, настроение) + общие правила. Хвост (стиль темы + правила) одинаков
+# у всех картинок колоды — единый стиль внутри колоды.
+rules: >-
+  photorealistic photograph, natural light, high detail, clean composition with calm background;
+  no text, no letters, no words, no numbers, no logos, no watermarks, no signs, no captions;
+  prefer scenes, places and objects; no close-up faces, no hands in the foreground
+themes:
+  business_slate: "cool blue and slate grey tones, calm professional atmosphere, soft daylight"
+  ember_dark: "warm cinematic lighting, dark background with deep orange and crimson highlights"
+  sunny_cream: "bright warm sunlight, cream and golden yellow tones, cheerful and airy"
+  mint_coral: "fresh natural daylight, green and teal tones with soft coral accents, airy"
+default: "natural colors, soft daylight"

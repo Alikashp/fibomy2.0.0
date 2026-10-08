@@ -2,14 +2,17 @@
 
 from typing import Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 SCHEMA_VERSION = 1
 
 PresentationType = Literal["doklad", "pitch_deck"]
 Language = Literal["ru", "en", "uz", "kk"]
 Audience = Literal["general", "students", "colleagues", "management", "clients", "investors"]
-ThemeId = Literal["graphite_light", "graphite_dark", "azure_coral", "fresh_green"]
+# Темы сессии 4 (D-063) и старые id сессий 1–3: старые принимаются и переводятся на новые
+# (themes/*.yaml, поле replaces) — у бота в профиле и у клиентов API в запросах.
+ThemeId = Literal["business_slate", "ember_dark", "sunny_cream", "mint_coral",
+                  "graphite_light", "graphite_dark", "azure_coral", "fresh_green"]
 SourceMode = Literal["strict", "extend"]
 
 # Сообщение длиннее — это текст-материал, а не тема (вопрос 8, D-039)
@@ -64,13 +67,24 @@ class DeckRequest(_Model):
     audience: Audience = "general"
     slides_count: Optional[int] = Field(default=None, ge=4, le=20,
                                         description="null — число задаёт сюжет (питч-дек, 11)")
-    theme_id: ThemeId = "graphite_light"
-    image_mode: Literal["none", "web", "ai"] = "web"
+    theme_id: ThemeId = "business_slate"
+    # web (Pexels) не используется с сессии 4 (D-006): строки decks прошлых колод читаются как ai
+    image_mode: Literal["none", "web", "ai"] = "ai"
     author: Optional[Author] = None
     watermark: bool = True
     seed: Optional[int] = None
     parent_deck_id: Optional[str] = None
     webhook_url: Optional[str] = None
+
+    @field_validator("theme_id", mode="after")
+    @classmethod
+    def _current_theme(cls, value: str) -> str:
+        from core.models.theme import resolve_theme_id
+        return resolve_theme_id(value)
+
+    @property
+    def images(self) -> bool:
+        return self.image_mode != "none"
 
     @property
     def mode(self) -> Literal["topic", "material"]:

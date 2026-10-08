@@ -1,9 +1,12 @@
-# Карточки: 3 в ряд, 2×2 или 3×2 (05_LAYOUTS.md, 3.3)
+# Карточки: 3 в ряд, 2×2 или 3×2 (05_LAYOUTS.md, 3.3). Карточка — по стилю темы (заливка или
+# обводка, цветная полоса), иконка в градиентной подложке, заголовок пункта цветом темы;
+# высота карточек — по содержимому, блок по центру зоны контента (раздел 8, требования 2–3).
 id: bullets.cards_grid
 kind: bullets
 family: cards
-version: 1
+version: 2
 fallback: true
+header: true
 applies_when: {image: forbidden, items: {min: 3, max: 6}}
 elements:
   - {name: title, type: text, box: [80, 80, 1760, 176], style: h1, min_style: h2, max_lines: 2,
@@ -14,32 +17,32 @@ items:
   bind: content.items
   arrangements:
     3:
-      grid: {area: [80, 280, 1760, 640], cols: 3, rows: 1, gap: 40}
+      grid: {area: [80, 280, 1760, 640], cols: 3, rows: 1, gap: 40, compact: center, pad: 40}
       elements:
-        - {name: card, type: rect, box: [0, 0, w, h], fill: surface, radius: true}
-        - {name: icon, type: icon, box: [32, 32, 64, 64], color: primary, bind: icon}
-        - {name: heading, type: text, box: [32, 120, w-64, 96], style: h3, min_style: body, max_lines: 2,
-           color: text, bind: heading}
-        - {name: text, type: text, box: [32, 232, w-64, h-264], style: body, min_style: small, max_lines: 8,
+        - {name: card, type: card, box: [0, 0, w, h]}
+        - {name: icon, type: icon, box: [40, 40, 80, 80], color: primary, bind: icon, plate: true}
+        - {name: heading, type: text, box: [40, 144, w-80, 96], style: h3, min_style: body, max_lines: 2,
+           color: "@heading_color", bind: heading}
+        - {name: text, type: text, box: [40, 248, w-80, h-288], style: body, min_style: small, max_lines: 8,
            color: text_muted, bind: text}
     4:
-      grid: {area: [80, 280, 1760, 640], cols: 2, rows: 2, gap: 40}
+      grid: {area: [80, 280, 1760, 640], cols: 2, rows: 2, gap: 40, compact: center, pad: 32}
       elements:
-        - {name: card, type: rect, box: [0, 0, w, h], fill: surface, radius: true}
-        - {name: icon, type: icon, box: [32, 32, 64, 64], color: primary, bind: icon}
-        - {name: heading, type: text, box: [120, 32, w-152, 48], style: h3, min_style: body, max_lines: 1,
-           color: text, bind: heading}
-        - {name: text, type: text, box: [120, 88, w-152, 180], style: body, min_style: small, max_lines: 4,
+        - {name: card, type: card, box: [0, 0, w, h]}
+        - {name: icon, type: icon, box: [40, 32, 72, 72], color: primary, bind: icon, plate: true}
+        - {name: heading, type: text, box: [136, 32, w-176, 48], style: h3, min_style: body, max_lines: 1,
+           color: "@heading_color", bind: heading}
+        - {name: text, type: text, box: [136, 88, w-176, 180], style: body, min_style: small, max_lines: 4,
            color: text_muted, bind: text}
     5:
-      grid: {area: [80, 280, 1760, 640], cols: 3, rows: 2, gap: 40, center_last_row: true}
+      grid: {area: [80, 280, 1760, 640], cols: 3, rows: 2, gap: 40, center_last_row: true, compact: center, pad: 32}
       elements: &small_card
-        - {name: card, type: rect, box: [0, 0, w, h], fill: surface, radius: true}
-        - {name: icon, type: icon, box: [w-80, 32, 48, 48], color: primary, bind: icon}
-        - {name: heading, type: text, box: [32, 32, w-128, 96], style: h3, min_style: body, max_lines: 2,
-           color: text, bind: heading}
-        - {name: text, type: text, box: [32, 136, w-64, 140], style: body, min_style: small, max_lines: 3,
+        - {name: card, type: card, box: [0, 0, w, h]}
+        - {name: icon, type: icon, box: [w-88, 32, 56, 56], color: primary, bind: icon, plate: true}
+        - {name: heading, type: text, box: [36, 32, w-136, 96], style: h3, min_style: body, max_lines: 2,
+           color: "@heading_color", bind: heading}
+        - {name: text, type: text, box: [36, 136, w-72, 140], style: body, min_style: small, max_lines: 3,
            color: text_muted, bind: text}
     6:
-      grid: {area: [80, 280, 1760, 640], cols: 3, rows: 2, gap: 40}
+      grid: {area: [80, 280, 1760, 640], cols: 3, rows: 2, gap: 40, compact: center, pad: 32}
       elements: *small_card

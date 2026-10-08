@@ -1,16 +1,18 @@
-# Тема по центру, акцентная линия, автор снизу (05_LAYOUTS.md, 3.1)
+# Тема по центру на цветном фоне (градиент brand → brand_2), акцентная линия, автор снизу
+# (05_LAYOUTS.md, 3.1; цветной титул — раздел 8, требование 1)
 id: title.cover_center
 kind: title
 family: cover
-version: 1
+version: 2
 fallback: true
+background: brand
 applies_when: {image: forbidden}
 elements:
-  - {name: accent_line, type: rect, box: [880, 216, 160, 8], fill: primary}
+  - {name: accent_line, type: rect, box: [880, 216, 160, 8], fill: accent, radius: 4}
   # Тема пользователя дословно (G-05): не обрезается, только шаги кегля до h2
   - {name: title, type: text, box: [160, 250, 1600, 432], style: display, min_style: h2, max_lines: 3,
-     color: text, bind: meta.title, align: center, anchor: middle, never_truncate: true}
+     color: on_brand, bind: meta.title, align: center, anchor: middle, never_truncate: true}
   - {name: subtitle, type: text, box: [160, 710, 1600, 110], style: h3, min_style: body, max_lines: 2,
-     color: text_muted, bind: content.subtitle, align: center, optional: true}
+     color: on_brand, bind: content.subtitle, align: center, optional: true}
   - {name: author, type: text, box: [160, 850, 1600, 90], style: body, min_style: small, max_lines: 2,
-     color: text_muted, bind: content.author, align: center, optional: true}
+     color: on_brand, bind: content.author, align: center, optional: true}

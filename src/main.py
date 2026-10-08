@@ -986,7 +986,7 @@ def deck_request(data: dict, *, user_id: int, chat_id: int, status_message_id: i
         audience=data["audience"],
         slides_count=int(data["slide_count"]) if data.get("slide_count") else None,
         theme_id=dialog.theme_for(data.get("color_scheme"), enabled_theme_ids()),
-        image_mode="none",   # картинки — сессия 4
+        image_mode="ai",     # ИИ-картинки всем в фазе 1 (ТЗ 11, вопрос 11; D-067)
         author=author,
         watermark=watermark,
     )

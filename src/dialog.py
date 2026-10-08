@@ -39,21 +39,22 @@ AUDIENCES = {
 }
 DEFAULT_AUDIENCE = "general"
 
-# Темы оформления нового движка (themes/<id>.yaml, D-037). В фазе 1 все темы всем (D-040).
+# Темы оформления нового движка (themes/<id>.yaml, сессия 4, D-063). В фазе 1 все темы всем (D-040).
 # В данных сводки и в профиле (users.last_color_scheme) хранится id темы.
 THEMES = {
-    "graphite_light": "☀️ Графит светлая",
-    "graphite_dark":  "🌙 Графит тёмная",
-    "azure_coral":    "🌊 Лазурь",
-    "fresh_green":    "🌿 Свежая зелёная",
+    "business_slate": "💼 Деловая серо-синяя",
+    "ember_dark":     "🔥 Тёмная тёплая",
+    "sunny_cream":    "🌼 Молочная с жёлтым",
+    "mint_coral":     "🌿 Мята и коралл",
 }
-DEFAULT_THEME = "graphite_light"
-# Цветовые схемы старого движка (до 01.10.2026) → темы (04_CONTRACTS.md, 8.2)
-THEME_BY_LEGACY_SCHEME = {"light": "graphite_light", "dark": "graphite_dark", "forest": "fresh_green",
-                          "ember": "azure_coral"}
+DEFAULT_THEME = "business_slate"
+# Цветовые схемы старого движка (до 01.10.2026) → темы (04_CONTRACTS.md, 8.2). Темы сессий 1–3
+# (graphite_light и т. д.) переводит core.models.theme.resolve_theme_id (поле replaces в YAML).
+THEME_BY_LEGACY_SCHEME = {"light": "business_slate", "dark": "ember_dark", "forest": "mint_coral",
+                          "ember": "ember_dark"}
 # Питч-дек до сессии 5 (D-054) рисует старый движок: тема → его цветовая схема
-LEGACY_SCHEME_BY_THEME = {"graphite_light": "light", "graphite_dark": "dark", "azure_coral": "light",
-                          "fresh_green": "forest"}
+LEGACY_SCHEME_BY_THEME = {"business_slate": "light", "ember_dark": "dark", "sunny_cream": "light",
+                          "mint_coral": "forest"}
 
 # Число слайдов доклада. Границы — UserRequest.slide_count_hint (5–20).
 DOKLAD_SLIDE_COUNTS = (5, 7, 9, 12, 15)
@@ -87,7 +88,9 @@ def engine_for(data: dict) -> str:
 
 def theme_for(value: str | None, enabled: list[str] | tuple[str, ...] | None = None) -> str:
     """id темы из сводки или профиля; старые схемы переводятся, неизвестное — тема по умолчанию."""
-    theme = value if value in THEMES else THEME_BY_LEGACY_SCHEME.get(value or "", DEFAULT_THEME)
+    from core.models.theme import legacy_theme_ids
+    theme = value if value in THEMES else THEME_BY_LEGACY_SCHEME.get(
+        value or "", legacy_theme_ids().get(value or "", DEFAULT_THEME))
     return theme if enabled is None or theme in enabled else DEFAULT_THEME
 
 

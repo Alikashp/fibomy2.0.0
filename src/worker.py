@@ -17,6 +17,7 @@ aiogram-хендлера в main.py и блокировала бота на 60-9
   движок до сессии 5 (D-038, D-054);
 - deliver_webhook_job(deck_id) — webhook колоды API (api.webhook);
 - delete_message_job(chat_id, message_id) — удаление сообщения с ключом API (bot/admin.py);
+- notify_admins_job(text) — сообщение владельцам: клиент API израсходовал 80% / 100% лимита (api.limit_alerts);
 - generate_presentation_job — старый движок (HTML → PDF), удаляется в сессии 6.
 
 Пайплайн старой задачи:
@@ -62,7 +63,7 @@ from core.storage import files as deck_files
 from core.storage.progress import set_progress
 from core.storage.redis import close_redis
 from api.webhook import deliver_webhook_job
-from bot.admin import delete_message_job
+from bot.admin import delete_message_job, notify_admins_job
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -515,7 +516,8 @@ async def shutdown(ctx: dict) -> None:
 class WorkerSettings:
     # generate_presentation_job (старый движок) — для питч-дека до сессии 5
     # и для задач, поставленных до деплоя (08_MIGRATION.md, 2)
-    functions = [generate_deck_job, deliver_webhook_job, delete_message_job, generate_presentation_job]
+    functions = [generate_deck_job, deliver_webhook_job, delete_message_job, notify_admins_job,
+                 generate_presentation_job]
     on_startup = startup
     on_shutdown = shutdown
     redis_settings = RedisSettings.from_dsn(settings.redis_url)

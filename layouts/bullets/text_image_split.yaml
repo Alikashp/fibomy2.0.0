@@ -1,0 +1,33 @@
+# Пункты слева, картинка справа на половину слайда со скруглением (сессия 4: «текст + картинка»)
+id: bullets.text_image_split
+kind: bullets
+family: image_split
+version: 1
+fallback: false
+header: true
+applies_when: {image: required, items: {min: 3, max: 4}}
+elements:
+  - {name: title, type: text, box: [80, 80, 840, 176], style: h1, min_style: h2, max_lines: 2,
+     color: text, bind: title, anchor: middle}
+  - {name: image, type: image, box: [1000, 64, 856, 936], bind: image, radius: true}
+  - {name: footnote, type: text, box: [80, 944, 840, 40], style: small, min_style: min, max_lines: 1,
+     color: text_muted, bind: footnote, optional: true}
+items:
+  bind: content.items
+  arrangements:
+    3:
+      grid: {area: [80, 296, 840, 624], cols: 1, rows: 3, gap: 24, compact: center, pad: 8}
+      elements: &point
+        - {name: icon, type: icon, box: [0, 0, 64, 64], color: primary, bind: icon, plate: true}
+        - {name: heading, type: text, box: [88, 0, w-88, 48], style: h3, min_style: body, max_lines: 1,
+           color: "@heading_color", bind: heading}
+        - {name: text, type: text, box: [88, 50, w-88, h-50], style: body, min_style: small, max_lines: 3,
+           color: text_muted, bind: text}
+    4:
+      grid: {area: [80, 296, 840, 624], cols: 1, rows: 4, gap: 16, compact: center, pad: 8}
+      elements:
+        - {name: icon, type: icon, box: [0, 0, 64, 64], color: primary, bind: icon, plate: true}
+        - {name: heading, type: text, box: [88, 0, w-88, 48], style: h3, min_style: body, max_lines: 1,
+           color: "@heading_color", bind: heading}
+        - {name: text, type: text, box: [88, 50, w-88, h-50], style: body, min_style: small, max_lines: 2,
+           color: text_muted, bind: text}

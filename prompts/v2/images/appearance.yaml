@@ -1,0 +1,6 @@
+# Внешность людей на картинках по языку колоды (требование владельца, сессия 4).
+# Указывается в промпте всегда: без указания модель рисует людей азиатской внешности.
+ru: "any people in the picture are of European appearance"
+en: "any people in the picture are of European appearance"
+kk: "any people in the picture are of Central Asian (Kazakh) appearance"
+uz: "any people in the picture are of Central Asian (Uzbek) appearance"

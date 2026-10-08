@@ -1,0 +1,27 @@
+# Шевроны в ряд (градиент темы, название шага на шевроне), описание под каждым (05_LAYOUTS.md, 3.5)
+id: process.chevrons
+kind: process
+family: columns
+version: 1
+fallback: false
+header: true
+applies_when: {image: forbidden, items: {min: 3, max: 4}, label_max_chars: 22}
+elements:
+  - {name: title, type: text, box: [80, 80, 1760, 176], style: h1, min_style: h2, max_lines: 2,
+     color: text, bind: title, anchor: middle}
+  - {name: footnote, type: text, box: [80, 944, 1760, 40], style: small, min_style: min, max_lines: 1,
+     color: text_muted, bind: footnote, optional: true}
+items:
+  bind: content.steps
+  arrangements:
+    3:
+      grid: {area: [80, 300, 1760, 600], cols: 3, rows: 1, gap: 8}
+      elements: &chev
+        - {name: chevron, type: chevron, box: [0, 0, w, 150], fill: $brand}
+        - {name: label, type: text, box: [60, 27, w-140, 96], style: h3, min_style: body, max_lines: 2,
+           color: on_brand, bind: label, anchor: middle}
+        - {name: text, type: text, box: [0, 190, w-48, 400], style: body, min_style: small, max_lines: 9,
+           color: text_muted, bind: text}
+    4:
+      grid: {area: [80, 300, 1760, 600], cols: 4, rows: 1, gap: 8}
+      elements: *chev

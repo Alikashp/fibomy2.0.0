@@ -59,6 +59,7 @@ class PlannedSlide(BaseModel):
 
 class OutlineDeck(BaseModel):
     subtitle: str
+    cover_image_query: Optional[str] = None
     slides: list[PlannedSlide]
 
 
@@ -97,6 +98,7 @@ def outline_schema(kinds: tuple[str, ...], min_slides: int, max_slides: int) -> 
         }),
         "deck": S.obj({
             "subtitle": S.string(description="подзаголовок титула — здесь допускается переформулировка темы"),
+            "cover_image_query": S.nullable(S.string(description="картинка титула: сцена по теме, на английском")),
             "slides": S.array(planned, min_items=min_slides, max_items=max_slides),
         }),
     })
