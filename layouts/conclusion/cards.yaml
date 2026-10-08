@@ -1,0 +1,29 @@
+# Выводы карточками в ряд: номер в фигуре темы, вывод (05_LAYOUTS.md, 3.9); высота — по содержимому
+id: conclusion.cards
+kind: conclusion
+family: cards
+version: 1
+fallback: false
+header: true
+applies_when: {image: forbidden, items: {min: 2, max: 4}}
+elements:
+  - {name: title, type: text, box: [80, 80, 1760, 176], style: h1, min_style: h2, max_lines: 2,
+     color: text, bind: title, anchor: middle}
+  - {name: footnote, type: text, box: [80, 944, 1760, 40], style: small, min_style: min, max_lines: 1,
+     color: text_muted, bind: footnote, optional: true}
+items:
+  bind: content.items
+  arrangements:
+    2:
+      grid: {area: [80, 300, 1760, 600], cols: 2, rows: 1, gap: 40, compact: center, pad: 40}
+      elements: &card
+        - {name: card, type: card, box: [0, 0, w, h]}
+        - {name: badge, type: badge, box: [40, 40, 72, 72], style: h2, fill: $brand, color: on_brand, bind: $index}
+        - {name: text, type: text, box: [40, 136, w-80, h-176], style: h3, min_style: body, max_lines: 8,
+           color: text, bind: text}
+    3:
+      grid: {area: [80, 300, 1760, 600], cols: 3, rows: 1, gap: 40, compact: center, pad: 40}
+      elements: *card
+    4:
+      grid: {area: [80, 300, 1760, 600], cols: 4, rows: 1, gap: 32, compact: center, pad: 40}
+      elements: *card

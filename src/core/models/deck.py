@@ -47,6 +47,10 @@ class Fit(BaseModel):
     shortened: list[str] = Field(default_factory=list)
     variant_from: Optional[str] = None
     truncated: bool = False
+    # Высота по содержимому (05_LAYOUTS.md, 8, требование 3): область повторяющихся элементов
+    # и боксы отдельных элементов после подгонки; рендерер рисует по ним
+    items_area: Optional[list[float]] = None
+    boxes: dict[str, list[float]] = Field(default_factory=dict)
 
 
 class Check(BaseModel):

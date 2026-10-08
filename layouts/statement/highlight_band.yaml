@@ -1,0 +1,19 @@
+# Утверждение на цветной полосе во всю ширину (05_LAYOUTS.md, 3.2): предпочтителен для role = ask
+id: statement.highlight_band
+kind: statement
+family: band
+version: 1
+fallback: false
+color_heavy: true
+applies_when: {image: forbidden, title_max_chars: 120}
+decor:
+  - {set: content}
+  - {set: band, region: [0, 300, 1920, 420]}
+elements:
+  - {name: band, type: rect, box: [0, 300, 1920, 420], fill: $brand}
+  - {name: statement, type: text, box: [160, 340, 1440, 340], style: h1, min_style: h2, max_lines: 3,
+     color: on_brand, bind: title, anchor: middle}
+  - {name: body, type: text, box: [160, 760, 1600, 140], style: body, min_style: small, max_lines: 3,
+     color: text_muted, bind: content.body, optional: true}
+  - {name: footnote, type: text, box: [80, 944, 1760, 40], style: small, min_style: min, max_lines: 1,
+     color: text_muted, bind: footnote, optional: true}

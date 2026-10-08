@@ -1,0 +1,18 @@
+# Тема слева сверху, цветная полоса снизу (больше трети слайда) с автором (05_LAYOUTS.md, 3.1)
+id: title.cover_band
+kind: title
+family: band
+version: 1
+fallback: false
+applies_when: {image: forbidden}
+decor:
+  - {set: band, region: [0, 676, 1920, 404]}
+elements:
+  - {name: band, type: rect, box: [0, 676, 1920, 404], fill: $brand}
+  - {name: accent_line, type: rect, box: [80, 80, 160, 10], fill: $brand, radius: 5}
+  - {name: title, type: text, box: [80, 110, 1760, 432], style: display, min_style: h2, max_lines: 3,
+     color: text, bind: meta.title, anchor: bottom, never_truncate: true}
+  - {name: subtitle, type: text, box: [80, 566, 1760, 100], style: h3, min_style: body, max_lines: 2,
+     color: text_muted, bind: content.subtitle, optional: true}
+  - {name: author, type: text, box: [80, 800, 1200, 110], style: body, min_style: small, max_lines: 2,
+     color: on_brand, bind: content.author, anchor: middle, optional: true}

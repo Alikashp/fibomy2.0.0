@@ -12,7 +12,8 @@ from core.models.request import DeckRequest
 from core.paths import PROMPTS_V2_DIR
 from core.planning.outline import (available_kinds, build_prompts, content_slide_count, normalize_plan,
                                    plan_errors)
-from core.selection.select import SlideNeed, select_deck
+from core.models.layout import load_layouts, variants_of
+from core.selection.select import SlideNeed, applicable, reselect_comparison, select_deck, without_image
 
 TOPIC = DeckRequest(input={"topic": "Как устроен городской транспорт"}, slides_count=9)
 
@@ -66,9 +67,9 @@ class PlanFixes(unittest.TestCase):
         resp = outline(n=7)
         resp.deck.slides[1].items_planned = 9
         resp.deck.slides[-1].items_planned = 1
-        resp.deck.slides[4].items_planned = 1      # metrics: 2–4
+        resp.deck.slides[4].items_planned = 9      # metrics: 1–4 (одно число — metrics.big_number)
         slides = self.fix(resp)
-        self.assertEqual((slides[1].items_planned, slides[-1].items_planned, slides[4].items_planned), (6, 2, 2))
+        self.assertEqual((slides[1].items_planned, slides[-1].items_planned, slides[4].items_planned), (6, 2, 4))
         self.assertIsNone(slides[0].items_planned)  # statement
         self.assertIsNone(slides[3].items_planned)  # comparison
 
@@ -130,23 +131,82 @@ class Selection(unittest.TestCase):
              SlideNeed("s03", "bullets", items=4), SlideNeed("s04", "conclusion", items=3),
              SlideNeed("s05", "closing")]
 
-    def test_one_variant_per_kind_and_deterministic(self):
+    def test_deterministic_and_kind_preserved(self):
         a = select_deck(self.NEEDS, seed=7)
         b = select_deck(self.NEEDS, seed=7)
         self.assertEqual([c.variant for c in a], [c.variant for c in b])
-        self.assertEqual([c.variant for c in a], ["title.cover_center", "statement.big_quote", "bullets.cards_grid",
-                                                  "conclusion.numbered_takeaways", "closing.thanks_center"])
+        self.assertEqual([c.variant.split(".")[0] for c in a], ["title", "statement", "bullets", "conclusion",
+                                                                "closing"])
         self.assertTrue(all(c.reason is None for c in a))
+        self.assertFalse(any(load_layouts()[c.variant].image_slot for c in a), "без картинки — без слота")
 
-    def test_long_statement_falls_back_to_bullets(self):
-        need = SlideNeed("s02", "statement", title="очень длинное утверждение " * 12)
-        choice = select_deck([need], seed=1)[0]
-        self.assertEqual((choice.kind, choice.variant, choice.items), ("bullets", "bullets.cards_grid", 3))
-        self.assertIn("kind_fallback", choice.reason)
+    def test_diversity_metrics(self):
+        """05_LAYOUTS.md, 4.4: нет двух одинаковых вариантов подряд, ≥ 60% уникальных, разные seed
+        дают разные колоды (≥ 50% различий там, где у kind больше одного варианта)."""
+        kinds = ["statement", "bullets", "process", "bullets", "comparison", "metrics", "statement", "bullets",
+                 "process", "bullets", "conclusion"]
+        items = {"bullets": 4, "process": 4, "metrics": 3, "conclusion": 3}
+        needs = lambda: [SlideNeed("s01", "title", title="Тема")] + [  # noqa: E731
+            SlideNeed(f"s{i:02d}", k, items=items.get(k), title="Короткое утверждение")
+            for i, k in enumerate(kinds, start=2)] + [SlideNeed(f"s{len(kinds) + 2:02d}", "closing")]
+        diffs = []
+        for seed in range(1, 21):
+            a = [c.variant for c in select_deck(needs(), seed)]
+            self.assertFalse(any(x == y for x, y in zip(a, a[1:])), a)
+            content = a[1:-1]
+            self.assertGreaterEqual(len(set(content)) / len(content), 0.6, a)
+            b = [c.variant for c in select_deck(needs(), seed + 100)]
+            # позиции, где у kind больше одного применимого варианта (с учётом расстановки цветных)
+            L, last, multi = load_layouts(), None, []
+            for i, (n, v) in enumerate(zip(needs(), a)):
+                n.index, n.total = i + 1, len(a)
+                if len([x for x in variants_of(n.kind) if applicable(x, n, last)]) > 1:
+                    multi.append(i)
+                if L[v].color_heavy or n.kind == "title":
+                    last = i + 1
+            diffs.append(sum(a[i] != b[i] for i in multi) / len(multi))
+        self.assertGreaterEqual(sum(diffs) / len(diffs), 0.5)
 
-    def test_items_out_of_range_fall_back(self):
-        choice = select_deck([SlideNeed("s03", "bullets", items=8)], seed=1)[0]
-        self.assertEqual((choice.variant, choice.items), ("bullets.cards_grid", 6))
+    def test_color_slides_spaced(self):
+        """Цветные варианты (пауза, полоса, картинка на цвете) — не ближе трёх слайдов к титулу, финалу и друг к другу."""
+        needs = [SlideNeed("s01", "title", title="Тема")] + [
+            SlideNeed(f"s{i:02d}", "statement", title="Короткое утверждение") for i in range(2, 12)] + \
+            [SlideNeed("s12", "closing")]
+        L = load_layouts()
+        for seed in range(1, 30):
+            chosen = select_deck([SlideNeed(**n.__dict__) for n in needs], seed)
+            colored = [i for i, c in enumerate(chosen, start=1)
+                       if L[c.variant].color_heavy or c.kind in ("title", "closing")]
+            self.assertTrue(all(b - a >= 3 for a, b in zip(colored, colored[1:])), (seed, colored))
+
+    def test_image_variants_only_with_image(self):
+        L = load_layouts()
+        with_img = select_deck([SlideNeed("s01", "title", title="Тема", has_image=True),
+                                SlideNeed("s02", "statement", title="Утверждение"),
+                                SlideNeed("s03", "bullets", items=3, has_image=True),
+                                SlideNeed("s04", "closing")], seed=3)
+        self.assertEqual(with_img[0].variant, "title.cover_split_image")
+        self.assertTrue(L[with_img[2].variant].image_slot)
+        self.assertFalse(L[with_img[1].variant].image_slot)
+        # картинка не пришла — тот же kind, вариант без картинки
+        alt = without_image(with_img[2], SlideNeed("s03", "bullets", items=3, has_image=True), 3, {})
+        self.assertEqual(alt.kind, "bullets")
+        self.assertFalse(L[alt.variant].image_slot)
+        self.assertEqual(alt.reason, "image_missing")
+        title = without_image(with_img[0], SlideNeed("s01", "title", title="Тема", has_image=True), 3, {})
+        self.assertIn(title.variant, ("title.cover_center", "title.cover_band"))
+
+    def test_pros_cons_by_polarity(self):
+        need = SlideNeed("s02", "comparison")
+        self.assertEqual(select_deck([need], 1)[0].variant, "comparison.two_columns")
+        self.assertEqual(reselect_comparison("comparison.two_columns", "pros_cons"), "comparison.pros_cons")
+        self.assertEqual(reselect_comparison("comparison.two_columns", "before_after"), "comparison.pros_cons")
+        self.assertEqual(reselect_comparison("comparison.pros_cons", "neutral"), "comparison.two_columns")
+
+    def test_one_number_is_big_number(self):
+        self.assertEqual(select_deck([SlideNeed("s02", "metrics", "results", items=1)], 1)[0].variant,
+                         "metrics.big_number")
+        self.assertEqual(select_deck([SlideNeed("s02", "metrics", items=3)], 1)[0].variant, "metrics.kpi_cards")
 
 
 if __name__ == "__main__":

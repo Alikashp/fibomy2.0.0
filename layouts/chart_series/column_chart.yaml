@@ -1,16 +1,18 @@
-# Столбчатая диаграмма + карточка с выводом (05_LAYOUTS.md, 3.7). Данные — из dataset кодом (D-028).
+# Столбчатая диаграмма + вывод на градиентной панели темы (05_LAYOUTS.md, 3.7). Данные — из dataset кодом (D-028).
 id: chart_series.column_chart
 kind: chart_series
 family: chart
-version: 1
+version: 2
 fallback: true
+header: true
 applies_when: {image: forbidden, points: {min: 2, max: 12}, series: {max: 3}}
 elements:
   - {name: title, type: text, box: [80, 80, 1760, 176], style: h1, min_style: h2, max_lines: 2,
      color: text, bind: title, anchor: middle}
   - {name: chart, type: chart, box: [80, 280, 1200, 640], bind: data, chart: column}
-  - {name: insight_card, type: rect, box: [1320, 280, 520, 640], fill: surface, radius: true}
-  - {name: insight, type: text, box: [1352, 312, 456, 576], style: body, min_style: small, max_lines: 11,
-     color: text, bind: content.insight}
+  - {name: insight_card, type: rect, box: [1320, 280, 520, 640], fill: $brand, radius: true}
+  - {name: insight_icon, type: icon, box: [1364, 324, 64, 64], color: on_brand, bind: "const:bulb"}
+  - {name: insight, type: text, box: [1364, 412, 432, 468], style: body, min_style: small, max_lines: 9,
+     color: on_brand, bind: content.insight}
   - {name: footnote, type: text, box: [80, 944, 1760, 40], style: small, min_style: min, max_lines: 1,
      color: text_muted, bind: footnote, optional: true}

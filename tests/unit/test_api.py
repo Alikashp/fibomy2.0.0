@@ -119,7 +119,9 @@ class CreateDeck(ApiCase):
         self.assertEqual(req["client"]["kind"], "api")
         self.assertEqual(req["client"]["api_client_id"], self.client.id)
         self.assertIsNone(req["client"]["chat_id"])
-        self.assertEqual((req["slides_count"], req["language"], req["theme_id"]), (7, "en", "graphite_dark"))
+        # старый id темы принимается и переводится на новую тему (сессия 4, D-063)
+        self.assertEqual((req["slides_count"], req["language"], req["theme_id"]), (7, "en", "ember_dark"))
+        self.assertEqual(req["image_mode"], "ai", "ИИ-картинки по умолчанию")
         self.assertIsNone(req["input"]["material"])
         self.assertIsNone(req["source_mode"], "по теме source_mode не передаётся")
         self.assertTrue(req["watermark"])
@@ -273,6 +275,31 @@ class Limits(ApiCase):
         r = self.h.http.post("/v1/decks", json={"input": {"topic": TOPIC}},
                              headers={**headers, "Idempotency-Key": "again"})
         self.assertEqual(r.status_code, 200)
+
+    def test_limit_alerts_80_and_100_once_a_day(self):
+        """Владельцу — по одному сообщению на порог в сутки: 80% и 100% суточного лимита."""
+        client, key = self.h.new_client("Второй бот", daily_limit=5)
+        headers = self.h.auth(key)
+        with mock.patch.object(settings, "admin_telegram_ids", "111,222"):
+            codes = [self.h.http.post("/v1/decks", json={"input": {"topic": TOPIC}}, headers=headers).status_code
+                     for _ in range(7)]
+        self.assertEqual(codes, [202] * 5 + [429] * 2)
+        alerts = [args[0] for name, args, _ in self.h.pool.jobs if name == "notify_admins_job"]
+        self.assertEqual(len(alerts), 2, alerts)
+        self.assertIn("80%", alerts[0])
+        self.assertIn("4 из 5", alerts[0])
+        self.assertIn("исчерпал", alerts[1])
+        self.assertIn("/apikey limit Второй бот 15", alerts[1])
+
+    def test_limit_alert_levels_and_no_admins(self):
+        from api import limit_alerts
+        self.assertEqual([limit_alerts.level(u, 10) for u in (7, 8, 9, 10, 11)], [None, 80, 80, 100, 100])
+        self.assertEqual(limit_alerts.level(1, 1), 100)
+        self.assertIsNone(limit_alerts.level(3, 0))
+        client, key = self.h.new_client("без админов", daily_limit=1)
+        with mock.patch.object(settings, "admin_telegram_ids", ""):
+            self.h.http.post("/v1/decks", json={"input": {"topic": TOPIC}}, headers=self.h.auth(key))
+        self.assertFalse([j for j in self.h.pool.jobs if j[0] == "notify_admins_job"])
 
     def test_decks_per_minute(self):
         client, key = self.h.new_client("быстрый", decks_per_min=1)
@@ -477,15 +504,31 @@ class Misc(ApiCase):
 
     def test_themes(self):
         body = self.h.http.get("/v1/themes", headers=self.headers).json()
-        ids = {t["id"] for t in body["themes"]}
-        self.assertEqual(ids, {"graphite_light", "graphite_dark", "azure_coral", "fresh_green"})
+        ids = [t["id"] for t in body["themes"]]
+        self.assertEqual(ids, ["business_slate", "ember_dark", "sunny_cream", "mint_coral"])
         for theme in body["themes"]:
             self.assertEqual(set(theme), {"id", "name", "mode", "tags"})
             self.assertIn("ru", theme["name"])
 
     def test_disabled_theme_rejected(self):
-        with mock.patch("api.app.enabled_theme_ids", return_value=["graphite_light"]):
+        with mock.patch("api.app.enabled_theme_ids", return_value=["business_slate"]):
             self.assertError(self.post({"input": {"topic": TOPIC}, "theme_id": "azure_coral"}), 400, "BAD_REQUEST")
+
+    def test_old_theme_ids_accepted(self):
+        """Клиенты API со старыми id тем продолжают работать: id переводится на новую тему."""
+        expect = {"graphite_light": "business_slate", "graphite_dark": "ember_dark", "azure_coral": "mint_coral",
+                  "fresh_green": "mint_coral", "sunny_cream": "sunny_cream", "business_slate": "business_slate"}
+        for old, new in expect.items():
+            r = self.post({"input": {"topic": TOPIC}, "theme_id": old})
+            self.assertEqual(r.status_code, 202, (old, r.text))
+            self.assertEqual(self.h.run(load_deck, r.json()["id"]).request["theme_id"], new, old)
+        self.assertError(self.post({"input": {"topic": TOPIC}, "theme_id": "neon"}), 400, "BAD_REQUEST")
+
+    def test_image_mode(self):
+        r = self.post({"input": {"topic": TOPIC}, "image_mode": "none"})
+        self.assertEqual(r.status_code, 202, r.text)
+        self.assertEqual(self.h.run(load_deck, r.json()["id"]).request["image_mode"], "none")
+        self.assertError(self.post({"input": {"topic": TOPIC}, "image_mode": "web"}), 400, "BAD_REQUEST")
 
     def test_unknown_route_and_method(self):
         self.assertError(self.h.http.get("/v1/nothing"), 404, "NOT_FOUND")

@@ -1,26 +1,37 @@
-# Две панели с заголовками и пунктами (05_LAYOUTS.md, 3.4): 2 стороны, 2–4 пункта у каждой.
+# Две панели: заголовок стороны — на градиентной шапке, под ней пункты (05_LAYOUTS.md, 3.4).
+# Высота панелей — по содержимому, пункты идут друг за другом (раздел 8, требование 3).
 id: comparison.two_columns
 kind: comparison
 family: panels
-version: 1
+version: 2
 fallback: true
+header: true
 applies_when: {image: forbidden}
+compact:
+  area: [80, 280, 1760, 640]
+  align: center
+  pad: 40
+  panels: [left_panel, right_panel]
+  stacks: [[left_point1, left_point2, left_point3, left_point4], [right_point1, right_point2, right_point3, right_point4]]
+  gap: 22
 elements:
   - {name: title, type: text, box: [80, 80, 1760, 176], style: h1, min_style: h2, max_lines: 2,
      color: text, bind: title, anchor: middle}
-  - {name: left_panel, type: rect, box: [80, 280, 860, 640], fill: surface, radius: true}
-  - {name: right_panel, type: rect, box: [980, 280, 860, 640], fill: surface, radius: true}
-  - {name: left_header, type: text, box: [120, 320, 780, 63], style: h2, min_style: h3, max_lines: 1,
-     color: primary, bind: content.left.header}
-  - {name: right_header, type: text, box: [1020, 320, 780, 63], style: h2, min_style: h3, max_lines: 1,
-     color: primary, bind: content.right.header}
-  - {name: left_point1, type: text, box: [120, 410, 780, 90], style: body, min_style: small, max_lines: 2, color: text, bind: content.left.points.0, format: "•  {}", optional: true}
-  - {name: left_point2, type: text, box: [120, 528, 780, 90], style: body, min_style: small, max_lines: 2, color: text, bind: content.left.points.1, format: "•  {}", optional: true}
-  - {name: left_point3, type: text, box: [120, 646, 780, 90], style: body, min_style: small, max_lines: 2, color: text, bind: content.left.points.2, format: "•  {}", optional: true}
-  - {name: left_point4, type: text, box: [120, 764, 780, 90], style: body, min_style: small, max_lines: 2, color: text, bind: content.left.points.3, format: "•  {}", optional: true}
-  - {name: right_point1, type: text, box: [1020, 410, 780, 90], style: body, min_style: small, max_lines: 2, color: text, bind: content.right.points.0, format: "•  {}", optional: true}
-  - {name: right_point2, type: text, box: [1020, 528, 780, 90], style: body, min_style: small, max_lines: 2, color: text, bind: content.right.points.1, format: "•  {}", optional: true}
-  - {name: right_point3, type: text, box: [1020, 646, 780, 90], style: body, min_style: small, max_lines: 2, color: text, bind: content.right.points.2, format: "•  {}", optional: true}
-  - {name: right_point4, type: text, box: [1020, 764, 780, 90], style: body, min_style: small, max_lines: 2, color: text, bind: content.right.points.3, format: "•  {}", optional: true}
+  - {name: left_panel, type: card, box: [80, 280, 860, 640]}
+  - {name: right_panel, type: card, box: [980, 280, 860, 640]}
+  - {name: left_cap, type: rect, box: [80, 280, 860, 96], fill: $brand, radius: top}
+  - {name: right_cap, type: rect, box: [980, 280, 860, 96], fill: $brand, radius: top}
+  - {name: left_header, type: text, box: [120, 296, 780, 63], style: h2, min_style: h3, max_lines: 1,
+     color: on_brand, bind: content.left.header, anchor: middle}
+  - {name: right_header, type: text, box: [1020, 296, 780, 63], style: h2, min_style: h3, max_lines: 1,
+     color: on_brand, bind: content.right.header, anchor: middle}
+  - {name: left_point1, type: text, box: [120, 400, 760, 90], style: body, min_style: small, max_lines: 2, color: text, bind: content.left.points.0, format: "•  {}", optional: true}
+  - {name: left_point2, type: text, box: [120, 512, 760, 90], style: body, min_style: small, max_lines: 2, color: text, bind: content.left.points.1, format: "•  {}", optional: true}
+  - {name: left_point3, type: text, box: [120, 624, 760, 90], style: body, min_style: small, max_lines: 2, color: text, bind: content.left.points.2, format: "•  {}", optional: true}
+  - {name: left_point4, type: text, box: [120, 736, 760, 90], style: body, min_style: small, max_lines: 2, color: text, bind: content.left.points.3, format: "•  {}", optional: true}
+  - {name: right_point1, type: text, box: [1020, 400, 760, 90], style: body, min_style: small, max_lines: 2, color: text, bind: content.right.points.0, format: "•  {}", optional: true}
+  - {name: right_point2, type: text, box: [1020, 512, 760, 90], style: body, min_style: small, max_lines: 2, color: text, bind: content.right.points.1, format: "•  {}", optional: true}
+  - {name: right_point3, type: text, box: [1020, 624, 760, 90], style: body, min_style: small, max_lines: 2, color: text, bind: content.right.points.2, format: "•  {}", optional: true}
+  - {name: right_point4, type: text, box: [1020, 736, 760, 90], style: body, min_style: small, max_lines: 2, color: text, bind: content.right.points.3, format: "•  {}", optional: true}
   - {name: footnote, type: text, box: [80, 944, 1760, 40], style: small, min_style: min, max_lines: 1,
      color: text_muted, bind: footnote, optional: true}

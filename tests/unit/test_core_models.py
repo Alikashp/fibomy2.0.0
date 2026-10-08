@@ -22,7 +22,10 @@ class Request(unittest.TestCase):
 
     def test_defaults_and_total(self):
         r = DeckRequest(input={"topic": "Как работает фотосинтез"})
-        self.assertEqual((r.mode, r.total_slides, r.theme_id, r.presentation_type), ("topic", 9, "graphite_light", "doklad"))
+        self.assertEqual((r.mode, r.total_slides, r.theme_id, r.presentation_type), ("topic", 9, "business_slate", "doklad"))
+        self.assertEqual(r.image_mode, "ai")
+        # старые id тем (сессии 1–3) переводятся на новые (D-063)
+        self.assertEqual(DeckRequest(input={"topic": "Тема"}, theme_id="graphite_dark").theme_id, "ember_dark")
         self.assertEqual(DeckRequest(presentation_type="pitch_deck", input={"topic": "Тема"}).total_slides, 11)
 
     def test_topic_limit_200(self):
@@ -76,9 +79,11 @@ class Schemas(unittest.TestCase):
         self.assertTrue(S.is_strict(schema))
         items = schema["properties"]["items"]
         self.assertEqual((items["minItems"], items["maxItems"]), (3, 4))
-        # вместимость — минимум по раскладкам 3 и 4 (05_LAYOUTS.md, 3.3: 37 и 30 знаков)
-        self.assertEqual(items["items"]["properties"]["heading"]["maxLength"], 30)
-        self.assertEqual(items["items"]["properties"]["text"]["maxLength"], 126)
+        # вместимость — минимум по раскладкам 3 и 4 (05_LAYOUTS.md, 3.3: 36 и 28 знаков)
+        self.assertEqual(items["items"]["properties"]["heading"]["maxLength"], 28)
+        self.assertEqual(items["items"]["properties"]["text"]["maxLength"], 122)
+        comparison, _ = content_schema("comparison", layouts["comparison.two_columns"], None)
+        self.assertEqual(comparison["properties"]["polarity"]["enum"], ["neutral", "pros_cons", "before_after"])
         self.assertIn("- пунктов: от 3 до 4", lines)
         for kind, variant, n in (("statement", "statement.big_quote", None),
                                  ("conclusion", "conclusion.numbered_takeaways", 3)):
@@ -92,12 +97,17 @@ class Schemas(unittest.TestCase):
 
 class Layouts(unittest.TestCase):
 
-    def test_catalog_session_2(self):
+    def test_catalog_session_4(self):
+        """22 варианта 05_LAYOUTS.md + пауза statement.color_pause и два варианта «текст + картинка» (сессия 4)."""
         ids = set(load_layouts())
-        self.assertEqual(ids, {"title.cover_center", "statement.big_quote", "bullets.cards_grid",
-                               "conclusion.numbered_takeaways", "closing.thanks_center", "metrics.kpi_cards",
-                               "chart_series.column_chart", "chart_series.line_chart", "chart_share.donut",
-                               "comparison.two_columns", "process.vertical_steps"})
+        self.assertEqual(ids, {
+            "title.cover_center", "title.cover_band", "title.cover_split_image",
+            "statement.big_quote", "statement.highlight_band", "statement.statement_image", "statement.color_pause",
+            "bullets.icon_list", "bullets.cards_grid", "bullets.numbered_columns", "bullets.text_image_split",
+            "bullets.image_numbered", "comparison.two_columns", "comparison.pros_cons",
+            "process.horizontal_steps", "process.chevrons", "process.vertical_steps",
+            "metrics.big_number", "metrics.kpi_cards", "chart_series.column_chart", "chart_series.line_chart",
+            "chart_share.donut", "conclusion.numbered_takeaways", "conclusion.cards", "closing.thanks_center"})
         for kind in ("title", "statement", "bullets", "conclusion", "closing", "metrics", "chart_series",
                      "chart_share", "comparison", "process"):
             self.assertTrue(any(v.fallback for v in variants_of(kind)), kind)
@@ -110,13 +120,16 @@ class Layouts(unittest.TestCase):
             ("title.cover_center", None, "subtitle"): (120, 144),
             ("statement.big_quote", None, "statement"): (118, 248),
             ("statement.big_quote", None, "body"): (194, 418),
-            ("bullets.cards_grid", 3, "item.heading"): (37, 45),
-            ("bullets.cards_grid", 3, "item.text"): (180, 316),
-            ("bullets.cards_grid", 4, "item.heading"): (30, 35),
-            ("bullets.cards_grid", 4, "item.text"): (126, 202),
-            ("bullets.cards_grid", 6, "item.text"): (67, 115),
+            ("statement.color_pause", None, "statement"): (129, 225),
+            ("bullets.cards_grid", 3, "item.heading"): (36, 43),
+            ("bullets.cards_grid", 3, "item.text"): (172, 279),
+            ("bullets.cards_grid", 4, "item.heading"): (28, 34),
+            ("bullets.cards_grid", 4, "item.text"): (122, 198),
+            ("bullets.cards_grid", 6, "item.text"): (64, 111),
             ("bullets.cards_grid", 3, "title"): (73, 102),
-            ("conclusion.numbered_takeaways", 5, "item.text"): (124, 147),
+            ("bullets.text_image_split", 3, "item.text"): (99, 172),
+            ("conclusion.numbered_takeaways", 5, "item.text"): (124, 149),
+            ("metrics.big_number", 1, "item.value"): (7, 12),
             ("closing.thanks_center", None, "title"): (22, 37),
         }
         for (variant, n, slot), (base, minimum) in expect.items():
@@ -125,14 +138,19 @@ class Layouts(unittest.TestCase):
 
     def test_elements_inside_slide_and_text_inside_margins(self):
         for spec in load_layouts().values():
-            groups = [spec.elements()]
+            groups = [(spec.elements(), False)]
             if spec.arrangements:
                 for n in spec.arrangements:
-                    groups += spec.item_elements(n)
-            for group in groups:
+                    cells = spec.item_elements(n)
+                    groups += [(cell, i == len(cells) - 1) for i, cell in enumerate(cells)]
+            for group, last in groups:
                 for e in group:
+                    if e.skip_last and last:
+                        continue                      # соединитель последнего элемента не рисуется
                     b = e.box
-                    self.assertTrue(0 <= b.x and 0 <= b.y and b.x + b.w <= 1920 and b.y + b.h <= 1000,
+                    # колонтитул (y ≥ 1000) свободен; заходить туда может только декоративная полоса «в край»
+                    bottom = 1080 if e.type == "rect" and e.name == "band" else 1000
+                    self.assertTrue(0 <= b.x and 0 <= b.y and b.x + b.w <= 1920 and b.y + b.h <= bottom,
                                     (spec.id, e.name, b))
                     if e.is_text:
                         self.assertTrue(80 <= b.x and b.x + b.w <= 1840 + 0.01, (spec.id, e.name, b))
@@ -141,7 +159,7 @@ class Layouts(unittest.TestCase):
 class Themes(unittest.TestCase):
 
     def test_four_themes_contrast(self):
-        self.assertEqual(all_theme_ids(), ["azure_coral", "fresh_green", "graphite_dark", "graphite_light"])
+        self.assertEqual(all_theme_ids(), ["business_slate", "ember_dark", "sunny_cream", "mint_coral"])
         for tid in all_theme_ids():
             t = load_theme(tid)
             for a, b in t.contrast_pairs:
@@ -159,6 +177,31 @@ class Themes(unittest.TestCase):
 
     def test_all_themes_enabled_since_session_2(self):
         self.assertTrue(all(load_theme(t).enabled for t in all_theme_ids()))
+
+    def test_tokens_and_style_pairs(self):
+        """Все токены на месте; пары, которые задаёт style темы (цитата, пауза, номер), — тоже ≥ 4.5:1."""
+        from core.models.theme import COLOR_TOKENS
+        for tid in all_theme_ids():
+            t = load_theme(tid)
+            self.assertEqual(set(COLOR_TOKENS) - set(t.colors), set(), tid)
+            st = t.style
+            pairs = [(st.get("quote_text", "primary"), st.get("quote_plate", "surface_alt")),
+                     ("text_muted", st.get("quote_plate", "surface_alt")),
+                     (st.get("badge_text", "on_primary"), st.get("badge_fill", "primary")),
+                     (st.get("pause_text", "on_brand"), "accent" if st.get("pause") == "accent" else "brand"),
+                     ("on_paper", "paper")] + ([("text", "paper"), ("text_muted", "paper")] if t.mode == "light" else [])
+            for a, b in pairs:
+                self.assertGreaterEqual(contrast_ratio(t.colors[a], t.colors[b]), 4.5, (tid, a, b))
+            self.assertIn(st["header"], ("plate", "underline", "marker", "bar"), tid)
+            self.assertIn(st["badge"], ("circle", "square", "flag", "pennant", "chevron"), tid)
+            self.assertTrue({"cover", "content"} <= set(t.decor), tid)
+
+    def test_old_theme_ids_map_to_new(self):
+        from core.models.theme import legacy_theme_ids, resolve_theme_id
+        self.assertEqual(legacy_theme_ids(), {"graphite_light": "business_slate", "graphite_dark": "ember_dark",
+                                              "azure_coral": "mint_coral", "fresh_green": "mint_coral"})
+        self.assertEqual(load_theme("graphite_dark").id, "ember_dark")   # DeckSpec прошлых колод рисуется
+        self.assertEqual(resolve_theme_id("нет такой"), "business_slate")
 
 
 def delta_e2000(a: str, b: str) -> float:

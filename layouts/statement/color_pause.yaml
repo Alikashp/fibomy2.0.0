@@ -1,0 +1,19 @@
+# Цветной слайд-пауза: весь слайд в цвете темы (градиент brand или, у «молочной», жёлтый), утверждение крупно, пояснение — в белой
+# карточке (сессия 4, приём из шаблонов-ориентиров владельца; не чаще одного на 3 слайда)
+id: statement.color_pause
+kind: statement
+family: pause
+version: 1
+fallback: false
+background: pause
+color_heavy: true
+applies_when: {image: forbidden, title_max_chars: 140}
+elements:
+  - {name: accent_line, type: rect, box: [120, 170, 160, 10], fill: "@pause_text", radius: 5}
+  - {name: statement, type: text, box: [120, 200, 1560, 360], style: h1, min_style: h2, max_lines: 4,
+     color: "@pause_text", bind: title, anchor: bottom}
+  - {name: body_card, type: card, box: [120, 620, 1300, 280], tone: paper, when: content.body}
+  - {name: body, type: text, box: [176, 664, 1188, 192], style: h3, min_style: body, max_lines: 4,
+     color: on_paper, bind: content.body, anchor: middle, optional: true}
+  - {name: footnote, type: text, box: [120, 944, 1600, 40], style: small, min_style: min, max_lines: 1,
+     color: "@pause_text", bind: footnote, optional: true}

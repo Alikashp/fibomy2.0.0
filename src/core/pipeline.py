@@ -1,12 +1,14 @@
 """generate_deck: порядок этапов, дедлайн, деградация (03_ARCHITECTURE.md, 3, 4, 6).
 
-INGEST → OUTLINE → SELECT → CONTENT (параллельно) → FIT → RENDER → CONVERT.
+INGEST → OUTLINE → SELECT → CONTENT ∥ IMAGES → FIT → RENDER → CONVERT.
 DELIVER (отправка файлов) делает адаптер: бот / API. Здесь же — запись
 результата в decks (run_deck).
 
-Без картинок (сессия 4); CONVERT упал — PPTX отдаётся без PDF (отдельная задача PDF —
-сессия 5). Материал: INGEST → SourceDigest с datasets, диаграммы из таблиц кодом,
-проверка чисел по источнику после CONTENT.
+Картинки (сессия 4, D-067): ИИ-картинки SiliconFlow параллельно с CONTENT, не больше
+per_deck на колоду (титул + слайды с image_query плана); не успела — вариант без
+картинки. CONVERT упал — PPTX отдаётся без PDF (отдельная задача PDF — сессия 5).
+Материал: INGEST → SourceDigest с datasets, диаграммы из таблиц кодом, проверка чисел
+по источнику после CONTENT.
 """
 
 import asyncio
@@ -20,6 +22,7 @@ from typing import Awaitable, Callable
 
 from config import settings
 from core import i18n
+from core import images as IMG
 from core.checks.facts import slide_errors, source_numbers, strip_unknown
 from core.content.fill import fallback_content, fill_slide, system_prompt, FALLBACK_VARIANT
 from core.ingest import IngestError, ingest
@@ -37,12 +40,13 @@ from core.paths import THEMES_DIR
 from core.planning.outline import plan_deck
 from core.render.pdf.convert import ConvertError, pptx_to_pdf
 from core.render.pptx.renderer import render_pptx
-from core.selection.select import SlideNeed, select_deck
+from core.models.layout import load_layouts
+from core.selection.select import SlideNeed, reselect_comparison, select_deck, without_image
 from logging_setup import stage as log_stage
 
 logger = logging.getLogger(__name__)
 
-ENGINE_VERSION = "core-2026-10-01"
+ENGINE_VERSION = "core-2026-10-08"
 RESERVE_SECONDS = 25        # RENDER + CONVERT + DELIVER после CONTENT (03_ARCHITECTURE.md, 4.2)
 
 Progress = Callable[..., Awaitable[None]]
@@ -111,11 +115,36 @@ def _apply_chart_content(slide: Slide, language: str) -> None:
         slide.content["legend"] = legend(data, language)
 
 
-def _footnote_source(request: DeckRequest) -> str:
-    material = request.input.material
-    name = material.name if material and material.kind == "document" and material.name else None
-    return i18n.text(i18n.FOOTNOTE_SOURCE_FILE, request.language).format(name=name) if name \
-        else i18n.text(i18n.FOOTNOTE_SOURCE_TEXT, request.language)
+def deck_title(topic: str) -> str:
+    """Тема пользователя на титуле дословно, но с заглавной первой буквой (требование владельца)."""
+    topic = topic.strip()
+    return topic[:1].upper() + topic[1:]
+
+
+def image_kinds() -> set[str]:
+    return {s.kind for s in load_layouts().values() if s.image_slot and s.kind != "title"}
+
+
+def plan_images(request: DeckRequest, outline, plan) -> dict[int, str]:
+    """Каким слайдам колоды нужна картинка → {номер слайда: запрос}. Титул — первым (запрос
+    deck.cover_image_query или первый image_query плана), затем слайды с image_query, которые
+    умеют показывать картинку (утверждение, пункты 3–4), не подряд и не слайд-запрос."""
+    if not request.images or not IMG.enabled():
+        return {}
+    budget, slots = IMG.per_deck(), {}
+    cover = outline.deck.cover_image_query or next((p.image_query for p in plan if p.image_query), None)
+    if cover and budget > 0:
+        slots[1], budget = cover, budget - 1
+    kinds, last = image_kinds(), 1
+    for i, p in enumerate(plan, start=2):
+        if budget <= 0:
+            break
+        if not p.image_query or p.kind not in kinds or p.role == "ask" or i - last < 2:
+            continue
+        if p.kind == "bullets" and not 3 <= (p.items_planned or 0) <= 4:
+            continue
+        slots[i], budget, last = p.image_query, budget - 1, i
+    return slots
 
 
 async def generate_deck(deck_id: str, request: DeckRequest, progress: Progress | None = None,
@@ -149,13 +178,15 @@ async def generate_deck(deck_id: str, request: DeckRequest, progress: Progress |
         except LLMError as e:
             raise DeckError("OUTLINE_FAILED", str(e)) from e
 
-    # 3 SELECT: титул + план + финал
+    # 3 SELECT: титул + план + финал; картинки — тем слайдам, которым их выделил план картинок
+    title = deck_title(request.input.topic)
+    image_slots = plan_images(request, outline, plan)
     with log_stage("select", timings):
         total = len(plan) + 2
-        needs = [SlideNeed(slide_id(1), "title", "other", title=request.input.topic)]
+        needs = [SlideNeed(slide_id(1), "title", "other", title=title, has_image=1 in image_slots)]
         for i, (p, data) in enumerate(zip(plan, datas), 2):
             needs.append(SlideNeed(
-                slide_id(i), p.kind, p.role, p.items_planned, p.title,
+                slide_id(i), p.kind, p.role, p.items_planned, p.title, has_image=i in image_slots,
                 points=len(data["categories"]) if data else None, series=len(data["series"]) if data else None,
                 axis=data.get("axis") if data else None, share_sum=data.get("share_sum") if data else None))
         needs.append(SlideNeed(slide_id(total), "closing", "other"))
@@ -164,9 +195,20 @@ async def generate_deck(deck_id: str, request: DeckRequest, progress: Progress |
             if choice.reason:
                 degradations.append(("select", need.slide_id, choice.reason))
 
+    # 5 IMAGES — параллельно с CONTENT: задачи стартуют сейчас, результат забирается после CONTENT
+    layouts = load_layouts()
+    jobs = []
+    for i, (need, choice) in enumerate(zip(needs, choices), start=1):
+        layout = layouts[choice.variant]
+        if i in image_slots and layout.image_slot:
+            box = next(e.box for e in layout.elements() if e.type == "image")
+            jobs.append(IMG.ImageJob(need.slide_id, image_slots[i], box.w / box.h))
+    images_started = time.monotonic()
+    image_tasks = IMG.start(jobs, request.theme_id, request.language, seed) if jobs else {}
+
     author = request.author.line if request.author else None
     slides: list[Slide] = [Slide(
-        id=slide_id(1), index=1, kind="title", variant=choices[0].variant, title=request.input.topic,
+        id=slide_id(1), index=1, kind="title", variant=choices[0].variant, title=title,
         content={"subtitle": outline.deck.subtitle, "author": author},
     )]
 
@@ -221,10 +263,20 @@ async def generate_deck(deck_id: str, request: DeckRequest, progress: Progress |
             kind, data = "statement", None
         if reason:
             degradations.append(("content", slide_id(i), reason))
+        if kind == "comparison":
+            variant = reselect_comparison(variant, content.get("polarity"))
         slide = Slide(id=slide_id(i), index=i, kind=kind, role=planned.role, variant=variant,
                       plan=planned, title=planned.title, content=content, data=data)
         _apply_chart_content(slide, request.language)
         slides.append(slide)
+
+    # 5 IMAGES: ждём не дольше таймаута картинки от старта; не успела — вариант без картинки
+    image_files: dict[str, bytes] = {}
+    assets: dict[str, dict] = {}
+    if image_tasks:
+        with log_stage("images", timings):
+            image_files, assets = await _collect_images(image_tasks, images_started, slides, needs, choices, seed,
+                                                        usage, degradations)
 
     # 6a FIT: числа — из источника (режим «по материалу», ТЗ 3.3.3)
     if request.mode == "material":
@@ -236,27 +288,31 @@ async def generate_deck(deck_id: str, request: DeckRequest, progress: Progress |
         id=slide_id(total), index=total, kind="closing", variant=choices[-1].variant,
         title=i18n.text(i18n.THANKS, request.language),
         content={"title": i18n.text(i18n.THANKS, request.language), "body": None, "author": author},
+        notes=i18n.text(i18n.IMAGES_AI, request.language) if assets else "",
     ))
 
-    # Сноска у слайдов с числами: «по теме» — оценка (ТЗ 3.3.3), по материалу — источник (D-017, D-025)
-    note = i18n.text(i18n.FOOTNOTE_ESTIMATE, request.language) if request.mode == "topic" else _footnote_source(request)
-    for s in slides[1:-1]:
-        if _has_digits(s):
-            s.footnote = note
+    # Сноска у слайдов с числами «по теме» — оценка (ТЗ 3.3.3). По материалу сноски нет:
+    # «по данным: <файл>» убрана по решению владельца (сессия 4)
+    if request.mode == "topic":
+        note = i18n.text(i18n.FOOTNOTE_ESTIMATE, request.language)
+        for s in slides[1:-1]:
+            if _has_digits(s):
+                s.footnote = note
 
     spec = DeckSpec(
         id=deck_id,
         meta=Meta(
-            title=request.input.topic, subtitle=outline.deck.subtitle, language=request.language,
+            title=title, subtitle=outline.deck.subtitle, language=request.language,
             presentation_type=request.presentation_type, audience=request.audience, mode=request.mode,
             source_mode=request.source_mode, genre=outline.analysis.genre, theme_id=request.theme_id,
-            seed=seed, image_mode="none", watermark=request.watermark,
+            seed=seed, image_mode="ai" if assets else "none", watermark=request.watermark,
             author=request.author.model_dump() if request.author else None,
             slides_requested=request.total_slides,
             versions=Versions(engine=ENGINE_VERSION, prompts=P.version(), layouts=layouts_version(),
                               themes=_theme_version(request.theme_id)),
         ),
         slides=slides,
+        assets=assets,
     )
     for stage_name, sid, reason in degradations:
         spec.degrade(stage_name, reason, sid)
@@ -270,8 +326,8 @@ async def generate_deck(deck_id: str, request: DeckRequest, progress: Progress |
     await progress("render")
     with log_stage("render", timings):
         try:
-            pptx = render_pptx(spec, watermark=False)
-            pptx_for_pdf = render_pptx(spec, watermark=True) if request.watermark else pptx
+            pptx = render_pptx(spec, watermark=False, images=image_files)
+            pptx_for_pdf = render_pptx(spec, watermark=True, images=image_files) if request.watermark else pptx
         except Exception as e:
             logger.exception("RENDER failed")
             raise DeckError("RENDER_FAILED", str(e)) from e
@@ -297,6 +353,47 @@ async def generate_deck(deck_id: str, request: DeckRequest, progress: Progress |
         "cost_rub": usage.cost_rub, "durations_ms": timings,
     })
     return DeckResult(spec=spec, pptx=pptx, pdf=pdf, durations_ms=timings, usage=usage, warnings=warnings)
+
+
+async def _collect_images(tasks: dict, started: float, slides: list[Slide], needs, choices, seed: int,
+                          usage: DeckUsage, degradations: list) -> tuple[dict[str, bytes], dict[str, dict]]:
+    """Результаты картинок → файлы и DeckSpec.assets; слайды без картинки — вариант без неё."""
+    timeout = float(IMG.config()["timeout_seconds"]) + 1
+    pending = [t for t in tasks.values() if not t.done()]
+    if pending:
+        await asyncio.wait(pending, timeout=max(0.0, started + timeout - time.monotonic()))
+    files, assets = {}, {}
+    used: dict[str, int] = {}
+    for s in slides:
+        used[s.variant] = used.get(s.variant, 0) + 1
+    stage = usage.stage("images")
+    by_id = {s.id: s for s in slides}
+    for sid, task in tasks.items():
+        result = task.result() if task.done() and not task.cancelled() and task.exception() is None else None
+        if not task.done():
+            task.cancel()
+        slide = by_id.get(sid)
+        if slide is None:
+            continue
+        stage.calls += 1
+        stage.models.add(IMG.model_id())
+        if result and result.data:
+            stage.cost_rub = (stage.cost_rub or 0) + result.cost_rub
+            files[result.asset_id] = result.data
+            assets[result.asset_id] = {"provider": IMG.PROVIDER, "model": IMG.model_id(), "prompt": result.prompt,
+                                       "ms": result.ms, "cost_rub": result.cost_rub}
+            slide.image = result.asset_id
+            continue
+        if result is None:
+            # не завершилась за таймаут — цена не списывается (картинку не получили)
+            reason = "timeout"
+        else:
+            reason = result.error or "error"
+        i = slide.index - 1
+        alt = without_image(choices[i], needs[i], seed, used)
+        degradations.append(("images", sid, f"image_missing:{reason}"[:200]))
+        slide.variant = alt.variant
+    return files, assets
 
 
 async def _check_facts(slides: list[Slide], digest: SourceDigest, request: DeckRequest, client: LLMClient,

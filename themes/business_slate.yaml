@@ -1,0 +1,83 @@
+# Тема оформления (docs/design/05_LAYOUTS.md, 6; контракт — 04_CONTRACTS.md, 6.2).
+# Светлая деловая, серо-синяя (в духе шаблона Focus, docs/design/references/): светло-серый фон,
+# белые карточки, тёмно-синий градиент на титуле и в плашке заголовка, номера во флажках,
+# янтарный акцент, геометрия — диагональные полосы. Тема по умолчанию (сессия 4, D-063).
+id: business_slate
+name: {ru: "Деловая серо-синяя", en: "Business slate"}
+mode: light
+tags: [business, academic]
+free: true                  # фаза 1: все темы всем (вопрос 12)
+enabled: true
+replaces: [graphite_light]  # старые id, которые переводятся на эту тему (бот, API, DeckSpec)
+fonts: {heading: Arial, body: Arial}
+colors:
+  bg: "#F1F3F6"
+  surface: "#FFFFFF"
+  surface_alt: "#E3E8EF"
+  primary: "#205279"         # числа, номера, полосы карточек, заголовки пунктов
+  on_primary: "#FFFFFF"
+  brand: "#0F2440"           # большие цветные площади: градиент brand → brand_2
+  brand_2: "#2D6CA8"
+  on_brand: "#FFFFFF"
+  accent: "#F2A33A"          # декор и плашки (не цвет мелкого текста)
+  on_accent: "#1F2A40"
+  paper: "#FFFFFF"           # карточки на цветном фоне (слайд-пауза)
+  on_paper: "#1F2A40"
+  text: "#1F2A40"
+  text_muted: "#545F7D"
+  border: "#CDD5E1"
+  on_status: "#FFFFFF"         # текст и иконки на шапках positive / negative
+  positive: "#1E7A46"
+  negative: "#B3261E"
+# Серии и сектора диаграмм по порядку: графика ≥ 3:1 к bg и surface, первые пять
+# попарно различимы (CIEDE2000 ≥ 20), шестой — нейтральный для «прочее».
+chart: ["#2B63B5", "#D2620A", "#11917F", "#8E44AD", "#C7385A", "#6B7480"]
+typescale: {hero: 96, display: 60, h1: 36, h2: 26, h3: 20, body: 18, small: 14, min: 12}
+style:
+  radius: 12                # скругление карточек, единиц сетки
+  image_radius: 20          # скругление картинок
+  gradient_angle: 30        # угол градиента brand → brand_2, градусы
+  card: fill                # fill — заливка surface; outline — обводка
+  card_stripe: left         # цветная полоса карточки: left / top / none
+  stripe_fill: primary      # цвет полосы: токен или $brand (градиент)
+  header: plate             # оформление заголовка: plate / underline / marker / bar
+  badge: pennant            # фигура номера: circle / square / flag / pennant / chevron
+  quote_plate: paper       # плашка цитаты statement.big_quote
+  quote_text: brand_2
+  icon_plate: gradient      # иконка в градиентной фигуре
+# Декоративные фигуры темы: нативные фигуры PPTX (custGeom), цвет — токены темы.
+# Наборы: cover — цветной фон (титул, финал, пауза), band — цветная полоса,
+# content — содержательные слайды, header — поверх плашки заголовка.
+# box — в координатах области (w, h — её размер); всё, что вышло за область, обрезается.
+decor:
+  cover:
+    - {shape: polygon, points: [[w-760, 0], [w, 0], [w, 760]], fill: on_brand, alpha: 0.06}
+    - {shape: polygon, points: [[w-430, 0], [w-330, 0], [w, 330], [w, 430]], fill: on_brand, alpha: 0.10}
+    - {shape: polygon, points: [[w-230, 0], [w-140, 0], [w, 140], [w, 230]], fill: accent}
+    - {shape: polygon, points: [[0, h-300], [300, h], [0, h]], fill: on_brand, alpha: 0.07}
+    - {shape: polygon, points: [[0, h-170], [170, h], [100, h], [0, h-100]], fill: accent}
+  band:
+    - {shape: polygon, points: [[w-420, 0], [w-280, 0], [w-420, h], [w-560, h]], fill: on_brand, alpha: 0.10}
+    - {shape: polygon, points: [[w-200, 0], [w-120, 0], [w-260, h], [w-340, h]], fill: accent}
+  header:
+    - {shape: polygon, points: [[w-120, 0], [w-70, 0], [w-10, h], [w-60, h]], fill: on_brand, alpha: 0.14}
+    - {shape: polygon, points: [[w-40, 0], [w, 0], [w, h], [w+20, h]], fill: accent}
+  content: []
+# Пары «текст / фон», которые реально встречаются в макетах; тест — не ниже 4.5:1
+contrast_pairs:
+  - [text, bg]
+  - [text, surface]
+  - [text, surface_alt]
+  - [text_muted, bg]
+  - [text_muted, surface]
+  - [primary, bg]
+  - [primary, surface]
+  - [on_primary, primary]
+  - [on_brand, brand]
+  - [on_brand, brand_2]
+  - [on_accent, accent]
+  - [on_paper, paper]
+  - [positive, surface]
+  - [negative, surface]
+  - [on_status, positive]
+  - [on_status, negative]

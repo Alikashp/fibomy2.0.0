@@ -251,6 +251,18 @@ async def _delete(bot: Bot, chat_id: int, message_id: int) -> None:
         logger.warning("Secret message not deleted", extra={"error": str(e)})
 
 
+async def notify_admins_job(ctx: dict, text: str) -> dict:
+    """Задача воркера: сообщение всем ADMIN_TELEGRAM_IDS в личку (лимит клиента API, api.limit_alerts)."""
+    sent = 0
+    for admin_id in sorted(admin_ids()):
+        try:
+            await ctx["bot"].send_message(admin_id, text, parse_mode="HTML")
+            sent += 1
+        except Exception as e:  # noqa: BLE001 — админ не начинал чат с ботом или заблокировал его
+            logger.warning("Admin notification not delivered", extra={"admin_id": admin_id, "error": str(e)})
+    return {"sent": sent}
+
+
 async def delete_message_job(ctx: dict, chat_id: int, message_id: int) -> dict:
     """Задача воркера: удалить сообщение с ключом (бот и воркер — один Telegram-бот)."""
     await _delete(ctx["bot"], chat_id, message_id)

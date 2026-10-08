@@ -25,16 +25,10 @@ def text(table: dict[str, str], language: str) -> str:
 def lang_tag(language: str) -> str:
     return LANG_TAGS.get(language, "ru-RU")
 
-# Сноска у слайдов с числами по материалу пользователя (ставит код)
-FOOTNOTE_SOURCE_FILE = {
-    "ru": "по данным: {name}",
-    "en": "Source: {name}",
-    "uz": "Manba: {name}",
-    "kk": "Дереккөз: {name}",
-}
-FOOTNOTE_SOURCE_TEXT = {
-    "ru": "по данным: ваш текст",
-    "en": "Source: your text",
-    "uz": "Manba: sizning matningiz",
-    "kk": "Дереккөз: сіздің мәтініңіз",
+# Заметки последнего слайда, если в колоде есть ИИ-картинки (сессия 4)
+IMAGES_AI = {
+    "ru": "Изображения сгенерированы ИИ",
+    "en": "Images are AI-generated",
+    "uz": "Rasmlar sun'iy intellekt tomonidan yaratilgan",
+    "kk": "Суреттерді жасанды интеллект жасаған",
 }

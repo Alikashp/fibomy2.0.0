@@ -23,7 +23,7 @@ class Defaults(unittest.TestCase):
     def test_new_user(self):
         p = dialog.default_params({}, "en-US", "free")
         self.assertEqual(p, {"language": "en", "slide_count": 9, "audience": "general",
-                             "color_scheme": "graphite_light", "source_mode": "strict"})
+                             "color_scheme": "business_slate", "source_mode": "strict"})
 
     def test_unsupported_telegram_language_falls_back_to_ru(self):
         self.assertEqual(dialog.default_params({}, "de", "free")["language"], "ru")
@@ -31,15 +31,17 @@ class Defaults(unittest.TestCase):
 
     def test_last_choice_wins(self):
         profile = {"last_language": "kk", "last_slide_count": 12, "last_audience": "students",
-                   "last_color_scheme": "azure_coral", "source_mode": "extend"}
+                   "last_color_scheme": "sunny_cream", "source_mode": "extend"}
         p = dialog.default_params(profile, "en", "free")
         self.assertEqual(p, {"language": "kk", "slide_count": 12, "audience": "students",
-                             "color_scheme": "azure_coral", "source_mode": "extend"})
+                             "color_scheme": "sunny_cream", "source_mode": "extend"})
 
     def test_legacy_scheme_becomes_theme(self):
-        """Профиль со схемой старого движка: light → graphite_light, forest → fresh_green (04_CONTRACTS.md, 8.2)."""
-        for old, theme in (("light", "graphite_light"), ("dark", "graphite_dark"), ("forest", "fresh_green"),
-                           ("ember", "azure_coral"), ("???", "graphite_light"), (None, "graphite_light")):
+        """Профиль со схемой старого движка или темой сессий 1–3 → тема сессии 4 (04_CONTRACTS.md, 8.2; D-063)."""
+        for old, theme in (("light", "business_slate"), ("dark", "ember_dark"), ("forest", "mint_coral"),
+                           ("ember", "ember_dark"), ("graphite_light", "business_slate"),
+                           ("graphite_dark", "ember_dark"), ("azure_coral", "mint_coral"),
+                           ("fresh_green", "mint_coral"), ("???", "business_slate"), (None, "business_slate")):
             self.assertEqual(dialog.default_params({"last_color_scheme": old}, None, "free")["color_scheme"], theme)
 
     def test_last_choices_by_type(self):
@@ -83,11 +85,11 @@ class SummaryScreen(unittest.TestCase):
         """Все четыре темы доступны на бесплатном тарифе (вопрос 12), текущая отмечена."""
         _, kb = dialog.change_screen("design", {**self.DATA, "color_scheme": "graphite_dark"}, "free")
         cbs = callbacks(kb)
-        for theme in ("graphite_light", "graphite_dark", "azure_coral", "fresh_green"):
+        for theme in ("business_slate", "ember_dark", "sunny_cream", "mint_coral"):
             self.assertIn(f"set:color_scheme:{theme}", cbs)
         self.assertNotIn("set:color_scheme:locked", cbs)
         labels = [b.text for row in kb.inline_keyboard for b in row]
-        self.assertIn("✓ 🌙 Графит тёмная", labels)
+        self.assertIn("✓ 🔥 Тёмная тёплая", labels)
 
     def test_every_change_screen_returns_to_summary(self):
         for param in ("lang", "slides", "aud", "mode", "design", "type"):
@@ -253,7 +255,7 @@ class Flow(unittest.TestCase):
                    ("lang", "set:language:uz", "O'zbek"),
                    ("aud", "set:audience:students", "Студенты"),
                    ("slides", "set:slide_count:5", "Слайдов: <b>5</b>"),
-                   ("design", "set:color_scheme:fresh_green", "Свежая зелёная")]
+                   ("design", "set:color_scheme:mint_coral", "Мята и коралл")]
 
         async def change():
             for param, choice, expected in changes:
@@ -272,7 +274,7 @@ class Flow(unittest.TestCase):
         self.run_(change())
         self.assertEqual(len(chat.alerts), 2)
         data = self.run_(self.state.get_data())
-        self.assertEqual(data["color_scheme"], "fresh_green")
+        self.assertEqual(data["color_scheme"], "mint_coral")
         self.assertEqual(data["source_type"], "document")        # материал не потерялся
         self.assertIn("Итоги 2025 года", chat.last.body)
         self.assertIn("Проверьте параметры", chat.last.body)
@@ -358,8 +360,8 @@ class GenerateRequest(unittest.TestCase):
         material = rows[0]["input"]["material"]
         self.assertEqual((material["kind"], material["ref"]), ("text", "redis:abc"))
         self.assertEqual(uploads[0], (("материал " * 10).encode(), "text/plain"))
-        self.assertEqual((rows[0]["source_mode"], rows[0]["slides_count"], rows[0]["theme_id"]),
-                         ("extend", 12, "graphite_dark"))
+        self.assertEqual((rows[0]["source_mode"], rows[0]["slides_count"], rows[0]["theme_id"]),  # старая тема → новая
+                         ("extend", 12, "ember_dark"))
         # питч-дек — старый движок до сессии 3, тема → его схема
         name, _, pitch_kw = jobs[1]
         self.assertEqual(name, "generate_presentation_job")

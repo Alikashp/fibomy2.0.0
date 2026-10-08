@@ -1,0 +1,17 @@
+# Тема слева на цветном фоне, картинка справа на половину слайда со скруглением (05_LAYOUTS.md, 3.1)
+id: title.cover_split_image
+kind: title
+family: image_split
+version: 1
+fallback: false
+background: brand
+applies_when: {image: required, title_max_chars: 100}
+elements:
+  - {name: accent_line, type: rect, box: [80, 150, 160, 8], fill: accent, radius: 4}
+  - {name: title, type: text, box: [80, 180, 820, 432], style: display, min_style: h2, max_lines: 3,
+     color: on_brand, bind: meta.title, anchor: middle, never_truncate: true}
+  - {name: subtitle, type: text, box: [80, 650, 820, 110], style: h3, min_style: body, max_lines: 2,
+     color: on_brand, bind: content.subtitle, optional: true}
+  - {name: author, type: text, box: [80, 820, 820, 90], style: body, min_style: small, max_lines: 2,
+     color: on_brand, bind: content.author, optional: true}
+  - {name: image, type: image, box: [992, 64, 864, 936], bind: image, radius: true}

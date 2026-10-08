@@ -4,19 +4,27 @@
 
     id, kind, family, version, fallback
     applies_when: {items: {min, max}, image: forbidden|required|optional, title_max_chars}
+    background: bg | brand    # brand — весь слайд в градиенте brand → brand_2 (титул, финал, пауза)
+    header: true | false      # оформление заголовка по теме (style.header) — у содержательных слайдов
+    color_heavy: true         # «цветной» слайд: не чаще одного на 3 слайда (selection)
+    decor: [{set: cover|band|content|header, region: [x, y, w, h]}]   # по умолчанию — по background
+    compact: {area: [x, y, w, h], align: center|top}   # высота панелей по содержимому (fitter)
     elements:            # элементы слайда в порядке отрисовки (z-порядок)
       - {name, type, box: [x, y, w, h], ...}
     items:               # повторяющиеся элементы (пункты, выводы), если есть
       bind: content.items
       arrangements:
-        <n>: {grid: {area, cols, rows, gap, center_last_row}, elements: [...]}
+        <n>: {grid: {area, cols, rows, gap, center_last_row, compact: center|top}, elements: [...]}
 
 Внутри arrangements координаты элемента — относительно ячейки; в выражениях
-доступны w и h ячейки («w-64»). Типы элементов: text, rect, line, icon, badge (кружок с номером), chart
-(нативная диаграмма: chart = column | line | donut, данные — Slide.data).
-fill: $chart — цвет серии chart_N по номеру элемента.
+доступны w и h ячейки («w-64»). Типы элементов: text, rect, line, card (карточка по стилю темы:
+заливка или обводка, цветная полоса), icon (plate: true — в фигуре-подложке темы), badge (номер
+в фигуре темы: круг, квадрат, флажок, шеврон), chevron (стрелка процесса), image (картинка слайда,
+скругление по теме), chart (нативная диаграмма: chart = column | line | donut, данные — Slide.data).
+fill: токен темы; $chart — цвет серии chart_N по номеру элемента; $brand — градиент brand → brand_2.
 У text: style, min_style, max_lines, color, bind, align (left|center|right),
-anchor (top|middle|bottom), optional, never_truncate.
+anchor (top|middle|bottom), optional, never_truncate. when: <bind> — элемент рисуется, только
+если по bind есть значение (карточка пояснения). «@имя» в fill и color — значение из style темы.
 
 Вместимость (max_chars) в YAML не хранится — её считает код по геометрии и
 формуле 05_LAYOUTS.md, 2 (capacity()). Так таблицы документа, промпт и рендер
@@ -81,8 +89,14 @@ class Element:
     optional: bool = False
     never_truncate: bool = False
     fmt: str | None = None
-    radius: bool = False
+    radius: Any = False
     chart: str | None = None
+    alpha: float | None = None
+    line: str | None = None
+    plate: bool = False
+    tone: str | None = None
+    when: str | None = None        # рисовать, только если по этому bind есть значение
+    skip_last: bool = False        # у последнего из повторяющихся элементов не рисовать (соединитель)
 
     @property
     def is_text(self) -> bool:
@@ -97,7 +111,9 @@ def _element(raw: dict, w: float = 0, h: float = 0, dx: float = 0, dy: float = 0
         max_lines=int(raw.get("max_lines", 1)), color=raw.get("color", "text"), fill=raw.get("fill"),
         bind=raw.get("bind"), align=raw.get("align", "left"), anchor=raw.get("anchor", "top"),
         optional=bool(raw.get("optional", False)), never_truncate=bool(raw.get("never_truncate", False)),
-        fmt=raw.get("format"), radius=bool(raw.get("radius", False)), chart=raw.get("chart"),
+        fmt=raw.get("format"), radius=raw.get("radius", False), chart=raw.get("chart"),
+        alpha=raw.get("alpha"), line=raw.get("line"), plate=bool(raw.get("plate", False)), tone=raw.get("tone"),
+        when=raw.get("when"), skip_last=bool(raw.get("skip_last", False)),
     )
 
 
@@ -112,6 +128,11 @@ class LayoutSpec:
     raw_elements: list[dict]
     items_bind: str | None = None
     arrangements: dict[int, dict] = field(default_factory=dict)
+    background: str = "bg"
+    header: bool = False
+    color_heavy: bool = False
+    decor: list[dict] | None = None
+    compact: dict | None = None
 
     @property
     def variant(self) -> str:
@@ -126,10 +147,14 @@ class LayoutSpec:
     def elements(self) -> list[Element]:
         return [_element(e) for e in self.raw_elements]
 
-    def item_cells(self, n: int) -> list[Box]:
-        """Ячейки раскладки для n элементов."""
+    @property
+    def image_slot(self) -> bool:
+        return any(e.get("type") == "image" for e in self.raw_elements)
+
+    def item_cells(self, n: int, area: list[float] | None = None) -> list[Box]:
+        """Ячейки раскладки для n элементов. area — область сетки после подгонки высоты (Fit.items_area)."""
         grid = self.arrangements[n]["grid"]
-        ax, ay, aw, ah = (float(v) for v in grid["area"])
+        ax, ay, aw, ah = (float(v) for v in (area or grid["area"]))
         cols, rows, gap = int(grid["cols"]), int(grid["rows"]), float(grid.get("gap", 0))
         cw = (aw - gap * (cols - 1)) / cols
         ch = (ah - gap * (rows - 1)) / rows
@@ -141,10 +166,10 @@ class LayoutSpec:
             cells.append(Box(ax + offset + c * (cw + gap), ay + r * (ch + gap), cw, ch))
         return cells
 
-    def item_elements(self, n: int) -> list[list[Element]]:
+    def item_elements(self, n: int, area: list[float] | None = None) -> list[list[Element]]:
         """Элементы каждого из n повторяющихся элементов в абсолютных координатах."""
         raw = self.arrangements[n]["elements"]
-        return [[_element(e, cell.w, cell.h, cell.x, cell.y) for e in raw] for cell in self.item_cells(n)]
+        return [[_element(e, cell.w, cell.h, cell.x, cell.y) for e in raw] for cell in self.item_cells(n, area)]
 
     def text_slots(self, n: int | None = None) -> dict[str, Element]:
         """Текстовые слоты: общие и (для n) первого элемента — для вместимости."""
@@ -190,6 +215,8 @@ def _load(path) -> LayoutSpec:
         fallback=bool(raw.get("fallback", False)), applies_when=raw.get("applies_when") or {},
         raw_elements=raw.get("elements") or [], items_bind=items.get("bind"),
         arrangements={int(k): v for k, v in (items.get("arrangements") or {}).items()},
+        background=raw.get("background", "bg"), header=bool(raw.get("header", False)),
+        color_heavy=bool(raw.get("color_heavy", False)), decor=raw.get("decor"), compact=raw.get("compact"),
     )
 
 

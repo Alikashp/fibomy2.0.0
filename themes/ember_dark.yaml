@@ -1,0 +1,80 @@
+# Тема оформления (docs/design/05_LAYOUTS.md, 6; контракт — 04_CONTRACTS.md, 6.2).
+# Тёмная с тёплым градиентом (в духе шаблона «Премиум», docs/design/references/): почти чёрный фон,
+# градиент малиновый → жжёный оранжевый, оранжевые числа, иконки в градиентных квадратах,
+# декор — дуги и кольца (сессия 4, D-063).
+id: ember_dark
+name: {ru: "Тёмная тёплая", en: "Ember dark"}
+mode: dark
+tags: [business, tech, bold]
+free: true
+enabled: true
+replaces: [graphite_dark]
+fonts: {heading: Arial, body: Arial}
+colors:
+  bg: "#0F0F11"
+  surface: "#19191C"
+  surface_alt: "#232327"
+  primary: "#FF6A3D"
+  on_primary: "#0F0F11"
+  brand: "#8F1D3A"
+  brand_2: "#C2410C"
+  on_brand: "#FFFFFF"
+  accent: "#FF6A3D"
+  on_accent: "#0F0F11"
+  paper: "#FFFFFF"
+  on_paper: "#1C1A20"
+  text: "#F5F3F0"
+  text_muted: "#B7B7B7"
+  border: "#2D2D31"
+  on_status: "#0F0F11"         # текст и иконки на шапках positive / negative
+  positive: "#6FCF97"
+  negative: "#F28B82"
+chart: ["#FF8A3D", "#5AA9F0", "#3FD0B0", "#C08CF5", "#F2738C", "#C9CDD4"]
+typescale: {hero: 96, display: 60, h1: 36, h2: 26, h3: 20, body: 18, small: 14, min: 12}
+style:
+  radius: 16
+  image_radius: 16
+  gradient_angle: 45
+  card: fill
+  card_stripe: top
+  stripe_fill: $brand          # полоса карточки — градиент темы
+  title_color: primary        # заголовки слайдов оранжевые, как в «Премиуме»
+  header: underline
+  badge: circle
+  quote_plate: surface       # плашка цитаты statement.big_quote
+  quote_text: primary
+  icon_plate: gradient
+decor:
+  cover:
+    - {shape: arc, center: [w-180, h-60], radius: 520, thickness: 3, start: 0, end: 360, fill: on_brand, alpha: 0.35}
+    - {shape: arc, center: [w-180, h-60], radius: 380, thickness: 40, start: 180, end: 300, fill: on_brand, alpha: 0.16}
+    - {shape: arc, center: [w-180, h-60], radius: 250, thickness: 3, start: 0, end: 360, fill: on_brand, alpha: 0.35}
+    - {shape: circle, center: [210, 130], radius: 46, fill: primary}
+    - {shape: arc, center: [210, 130], radius: 92, thickness: 3, start: 0, end: 360, fill: on_brand, alpha: 0.4}
+  band:
+    - {shape: arc, center: [w-160, h], radius: 260, thickness: 3, start: 0, end: 360, fill: on_brand, alpha: 0.35}
+    - {shape: arc, center: [w-160, h], radius: 170, thickness: 28, start: 180, end: 300, fill: primary}
+  header: []
+  content:
+    - {shape: arc, center: [w, 0], radius: 230, thickness: 26, start: 90, end: 180,
+       fill: {gradient: [brand_2, primary]}}
+    - {shape: arc, center: [w, 0], radius: 180, thickness: 3, start: 90, end: 180, fill: primary, alpha: 0.6}
+    - {shape: circle, center: [w-40, 270], radius: 10, fill: primary}
+    - {shape: polygon, points: [[0, h-10], [w, h-10], [w, h], [0, h]], fill: {gradient: [brand, primary], angle: 0}}
+contrast_pairs:
+  - [text, bg]
+  - [text, surface]
+  - [text, surface_alt]
+  - [text_muted, bg]
+  - [text_muted, surface]
+  - [primary, bg]
+  - [primary, surface]
+  - [on_primary, primary]
+  - [on_brand, brand]
+  - [on_brand, brand_2]
+  - [on_accent, accent]
+  - [on_paper, paper]
+  - [positive, surface]
+  - [negative, surface]
+  - [on_status, positive]
+  - [on_status, negative]

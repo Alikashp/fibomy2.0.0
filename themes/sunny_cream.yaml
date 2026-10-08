@@ -1,0 +1,86 @@
+# Тема оформления (docs/design/05_LAYOUTS.md, 6; контракт — 04_CONTRACTS.md, 6.2).
+# Яркая молочная (в духе шаблона «Креативный», docs/design/references/): молочный фон, жёлтые
+# обводки карточек и номера в жёлтых квадратах, чёрный титул и финал с жёлтым текстом, жёлтый
+# слайд-пауза с белыми карточками; декор — свои круги, полукруги и точки (сессия 4, D-063).
+id: sunny_cream
+name: {ru: "Молочная с жёлтым", en: "Sunny cream"}
+mode: light
+tags: [bright, education, creative]
+free: true
+enabled: true
+replaces: []
+fonts: {heading: Arial, body: Arial}
+colors:
+  bg: "#FDFCF3"
+  surface: "#FFFFFF"
+  surface_alt: "#F6F1DA"
+  primary: "#142111"
+  on_primary: "#FFC000"
+  brand: "#141414"
+  brand_2: "#2B2B2B"
+  on_brand: "#FFC000"
+  accent: "#FFC000"
+  on_accent: "#142111"
+  paper: "#FFFFFF"
+  on_paper: "#142111"
+  text: "#142111"
+  text_muted: "#3E443E"
+  border: "#E2DCC4"
+  on_status: "#FFFFFF"         # текст и иконки на шапках positive / negative
+  positive: "#1E7A3C"
+  negative: "#B3261E"
+chart: ["#1E1E1E", "#E8590C", "#2B6CB0", "#2B8A57", "#C2255C", "#7C766D"]
+typescale: {hero: 96, display: 60, h1: 36, h2: 26, h3: 20, body: 18, small: 14, min: 12}
+style:
+  radius: 20
+  image_radius: 40
+  gradient_angle: 45
+  card: outline              # белая карточка с жёлтой обводкой
+  card_line: accent
+  card_stripe: top
+  stripe_fill: accent
+  accent_fill: accent        # черты и соединители — жёлтые (brand у этой темы чёрный)
+  header: marker
+  badge: square
+  badge_fill: accent         # номера — в жёлтых квадратах
+  badge_text: on_accent
+  pause: accent              # слайд-пауза — жёлтый фон, белые карточки
+  pause_text: on_accent
+  quote_plate: accent       # плашка цитаты statement.big_quote
+  quote_text: text
+  icon_plate: accent
+decor:
+  cover:
+    - {shape: circle, center: [w-130, h-90], radius: 230, fill: accent}
+    - {shape: arc, center: [w-130, h-90], radius: 330, thickness: 5, start: 0, end: 360, fill: accent}
+    - {shape: arc, center: [150, 0], radius: 190, thickness: 190, start: 0, end: 180, fill: accent, alpha: 0.25}
+    - {shape: dots, box: [w-520, 70, 200, 120], rows: 3, cols: 5, size: 14, fill: accent}
+  band:
+    - {shape: circle, center: [w-170, h-30], radius: 190, fill: accent}
+    - {shape: dots, box: [w-520, 50, 170, 90], rows: 3, cols: 5, size: 12, fill: accent}
+  pause:
+    - {shape: circle, center: [w-110, h-80], radius: 210, fill: paper, alpha: 0.55}
+    - {shape: dots, box: [w-420, 70, 200, 120], rows: 3, cols: 5, size: 14, fill: primary}
+  header: []
+  content:
+    - {shape: arc, center: [w, 0], radius: 130, thickness: 130, start: 90, end: 180, fill: accent}
+    - {shape: circle, center: [w+40, h+60], radius: 320, fill: accent}
+    - {shape: arc, center: [w+40, h+60], radius: 380, thickness: 5, start: 180, end: 270, fill: accent}
+    - {shape: dots, box: [20, h-140, 40, 64], rows: 3, cols: 2, size: 10, fill: primary}
+contrast_pairs:
+  - [text, bg]
+  - [text, surface]
+  - [text, surface_alt]
+  - [text_muted, bg]
+  - [text_muted, surface]
+  - [primary, bg]
+  - [primary, surface]
+  - [on_primary, primary]
+  - [on_brand, brand]
+  - [on_brand, brand_2]
+  - [on_accent, accent]
+  - [on_paper, paper]
+  - [positive, surface]
+  - [negative, surface]
+  - [on_status, positive]
+  - [on_status, negative]

@@ -34,10 +34,21 @@ buf = io.BytesIO()
 font.save(buf)
 pil_font = ImageFont.truetype(io.BytesIO(buf.getvalue()), int(SIZE * 0.9))
 
-names = yaml.safe_load((ROOT / "prompts/v2/icons.yaml").read_text(encoding="utf-8"))["icons"]
+icons = yaml.safe_load((ROOT / "prompts/v2/icons.yaml").read_text(encoding="utf-8"))
+names = icons["icons"] + icons.get("system", [])
 OUT.mkdir(parents=True, exist_ok=True)
 for name in names:
     img = Image.new("LA", (SIZE, SIZE), (0, 0))
+    if name == "x" and name not in codes:
+        # В шрифте шаблона нет «x» — рисуем крест линиями той же толщины, что у Tabler (2 из 24)
+        d, a, b, w = ImageDraw.Draw(img), SIZE * 0.27, SIZE * 0.73, int(SIZE * 0.085)
+        for p0, p1 in (((a, a), (b, b)), ((a, b), (b, a))):
+            d.line([p0, p1], fill=(0, 255), width=w)
+            for x, y in (p0, p1):
+                d.ellipse([x - w / 2, y - w / 2, x + w / 2, y + w / 2], fill=(0, 255))
+        img.save(OUT / f"{name}.png", optimize=True)
+        print(name)
+        continue
     ImageDraw.Draw(img).text((SIZE / 2, SIZE / 2), chr(codes[name]), font=pil_font, fill=(0, 255), anchor="mm")
     img.save(OUT / f"{name}.png", optimize=True)
     print(name)

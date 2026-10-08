@@ -45,12 +45,17 @@ class DeckCreate(_Request):
     audience: Audience = "general"
     slides_count: Optional[int] = Field(default=None, ge=4, le=20,
                                         description="Всего слайдов вместе с титулом и финалом; по умолчанию 9")
-    theme_id: ThemeId = Field(default="graphite_light", description="id из GET /v1/themes")
+    theme_id: ThemeId = Field(default="graphite_light",
+                              description="id из GET /v1/themes. Старые id (graphite_light, graphite_dark, "
+                                          "azure_coral, fresh_green) принимаются и переводятся на новые темы; "
+                                          "по умолчанию — business_slate")
     author: Optional[Author] = None
     webhook_url: Optional[str] = Field(default=None, max_length=2000,
                                        description="https://… — POST со статусом колоды по готовности")
     seed: Optional[int] = Field(default=None, ge=0, le=2 ** 31 - 1,
                                 description="Повторяемый выбор вариантов слайдов; обычно не нужен")
+    image_mode: Literal["ai", "none"] = Field(
+        default="ai", description="ai — ИИ-картинки на титуле и 2 слайдах (по умолчанию), none — без картинок")
 
 
 class Progress(BaseModel):

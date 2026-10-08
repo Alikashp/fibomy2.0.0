@@ -1,9 +1,10 @@
-# Нумерованные выводы строками (05_LAYOUTS.md, 3.9)
+# Нумерованные выводы строками: номер в фигуре темы, вывод, разделитель (05_LAYOUTS.md, 3.9)
 id: conclusion.numbered_takeaways
 kind: conclusion
 family: list
-version: 1
+version: 2
 fallback: true
+header: true
 applies_when: {image: forbidden, items: {min: 2, max: 5}}
 elements:
   - {name: title, type: text, box: [80, 80, 1760, 176], style: h1, min_style: h2, max_lines: 2,
@@ -14,22 +15,22 @@ items:
   bind: content.items
   arrangements:
     2:
-      grid: {area: [80, 280, 1760, 640], cols: 1, rows: 2, gap: 24}
+      grid: {area: [80, 280, 1760, 640], cols: 1, rows: 2, gap: 24, compact: center, pad: 24}
       elements: &row3
-        - {name: number, type: text, box: [0, 0, 96, 88], style: h1, color: accent, bind: $index, format: "{:02d}"}
-        - {name: rule, type: line, box: [120, h-1, w-120, 2], fill: border}
-        - {name: text, type: text, box: [120, 0, w-120, h-12], style: h3, min_style: body, max_lines: 3,
+        - {name: badge, type: badge, box: [0, 0, 72, 72], style: h2, fill: primary, color: on_primary, bind: $index}
+        - {name: rule, type: line, box: [112, h-3, w-112, 3], fill: "@accent_fill", alpha: 0.5, skip_last: true}
+        - {name: text, type: text, box: [112, 0, w-112, h-12], style: h3, min_style: body, max_lines: 3,
            color: text, bind: text}
     3:
-      grid: {area: [80, 280, 1760, 640], cols: 1, rows: 3, gap: 24}
+      grid: {area: [80, 280, 1760, 640], cols: 1, rows: 3, gap: 24, compact: center, pad: 24}
       elements: *row3
     4:
-      grid: {area: [80, 280, 1760, 640], cols: 1, rows: 4, gap: 24}
+      grid: {area: [80, 280, 1760, 640], cols: 1, rows: 4, gap: 24, compact: center, pad: 24}
       elements: &row2
-        - {name: number, type: text, box: [0, 0, 96, 88], style: h1, color: accent, bind: $index, format: "{:02d}"}
-        - {name: rule, type: line, box: [120, h-1, w-120, 2], fill: border}
-        - {name: text, type: text, box: [120, 0, w-120, h-12], style: h3, min_style: body, max_lines: 2,
+        - {name: badge, type: badge, box: [0, 0, 72, 72], style: h2, fill: primary, color: on_primary, bind: $index}
+        - {name: rule, type: line, box: [112, h-3, w-112, 3], fill: "@accent_fill", alpha: 0.5, skip_last: true}
+        - {name: text, type: text, box: [112, 0, w-112, h-12], style: h3, min_style: body, max_lines: 2,
            color: text, bind: text}
     5:
-      grid: {area: [80, 280, 1760, 640], cols: 1, rows: 5, gap: 24}
+      grid: {area: [80, 280, 1760, 640], cols: 1, rows: 5, gap: 24, compact: center, pad: 24}
       elements: *row2

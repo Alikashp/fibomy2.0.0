@@ -1,15 +1,19 @@
-# Крупная кавычка, утверждение, пояснение (05_LAYOUTS.md, 3.2)
+# Плашка цитаты, кавычка в фигуре темы, утверждение цветом темы, пояснение (05_LAYOUTS.md, 3.2; раздел 8)
 id: statement.big_quote
 kind: statement
 family: quote
-version: 1
+version: 2
 fallback: true
 applies_when: {image: forbidden, title_max_chars: 150}
 elements:
-  - {name: quote_mark, type: text, box: [80, 200, 180, 240], style: hero, color: accent, bind: "const:«"}
+  - {name: plate, type: rect, box: [80, 150, 1760, 760], fill: "@quote_plate", radius: true}
+  - {name: stripe, type: rect, box: [80, 150, 32, 760], fill: "@accent_fill", radius: 16}
+  - {name: quote_badge, type: rect, box: [80, 104, 208, 208], fill: $brand, radius: 104}
+  - {name: quote_mark, type: text, box: [80, 124, 208, 208], style: hero, color: on_brand, bind: "const:“",
+     align: center, anchor: middle}
   # Утверждение — это заголовок слайда (title), набранный крупнее
   - {name: statement, type: text, box: [260, 250, 1440, 400], style: h1, min_style: h2, max_lines: 4,
-     color: text, bind: title, anchor: bottom}
+     color: "@quote_text", bind: title, anchor: bottom}
   - {name: body, type: text, box: [260, 690, 1440, 170], style: body, min_style: small, max_lines: 3,
      color: text_muted, bind: content.body, optional: true}
   - {name: footnote, type: text, box: [80, 944, 1760, 40], style: small, min_style: min, max_lines: 1,

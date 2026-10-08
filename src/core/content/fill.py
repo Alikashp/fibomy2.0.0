@@ -76,9 +76,13 @@ class Side(BaseModel):
     points: list[str] = Field(min_length=1)
 
 
+POLARITIES = ["neutral", "pros_cons", "before_after"]
+
+
 class ComparisonContent(BaseModel):
     left: Side
     right: Side
+    polarity: str = "neutral"
 
 
 class Step(BaseModel):
@@ -172,8 +176,8 @@ def content_schema(kind: str, layout: LayoutSpec, n: int | None) -> tuple[dict, 
     if kind == "comparison":
         head, point = caps["left_header"], caps["left_point1"]
         side = S.obj({"header": S.string(head), "points": S.array(S.string(point), *COMPARISON_POINTS)})
-        return S.obj({"left": side, "right": side}), [
-            "- две стороны: left и right",
+        return S.obj({"left": side, "right": side, "polarity": S.enum(POLARITIES)}), [
+            "- две стороны: left и right; polarity — neutral, pros_cons или before_after",
             f"- заголовок стороны (header): до {head} знаков",
             f"- пунктов у каждой стороны: от {COMPARISON_POINTS[0]} до {COMPARISON_POINTS[1]}, пункт — до {point} знаков"]
     if kind == "process":
@@ -210,6 +214,8 @@ def content_errors(kind: str, parsed: BaseModel, layout: LayoutSpec, n: int | No
         if not lo <= len(parsed.steps) <= hi:
             errors.append(f"шагов {len(parsed.steps)}, нужно от {lo} до {hi}")
     if kind == "comparison":
+        if parsed.polarity not in POLARITIES:
+            errors.append(f"polarity вне списка {POLARITIES}")
         for name, side in (("left", parsed.left), ("right", parsed.right)):
             if not COMPARISON_POINTS[0] <= len(side.points) <= COMPARISON_POINTS[1]:
                 errors.append(f"{name}: пунктов {len(side.points)}, нужно от 2 до 4")

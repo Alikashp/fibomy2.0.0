@@ -31,7 +31,7 @@ OUTLINE_ATTEMPTS = 2
 OUTLINE_VISIBLE_TOKENS = 5000
 
 # Пределы числа элементов по kind (схемы CONTENT, 04_CONTRACTS.md, 4.2)
-ITEM_LIMITS = {"bullets": (3, 6), "conclusion": (2, 5), "process": (3, 6), "metrics": (2, 4)}
+ITEM_LIMITS = {"bullets": (3, 6), "conclusion": (2, 5), "process": (3, 6), "metrics": (1, 4)}
 TOPIC_FORBIDDEN = {"chart_series", "chart_share"}  # ТЗ 3.3.3, вопрос 9
 CHART_KINDS = {"chart_series", "chart_share"}
 BULLETS_MAX_SHARE = 0.4
@@ -216,7 +216,8 @@ def normalize_plan(resp: OutlineResponse, request: DeckRequest, n: int, kinds: t
                     degrade(f"chart_without_data->bullets:{e}")
                     s.kind, s.dataset = "bullets", None
         lo_hi = ITEM_LIMITS.get(s.kind)
-        s.items_planned = min(max(s.items_planned or lo_hi[0], lo_hi[0]), lo_hi[1]) if lo_hi else None
+        default = 3 if s.kind == "metrics" else lo_hi[0] if lo_hi else None
+        s.items_planned = min(max(s.items_planned or default, lo_hi[0]), lo_hi[1]) if lo_hi else None
         datas.append(data)
 
     for remark in diversity_remarks([s.kind for s in slides if s.role != "ask"]):

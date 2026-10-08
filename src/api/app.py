@@ -21,7 +21,7 @@ from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from api import API_VERSION, limits, store
+from api import API_VERSION, limit_alerts, limits, store
 from api.auth import parse_authorization
 from api.errors import ApiError
 from api.schemas import DeckCreate, DeckStatus, ErrorResponse, Health, Themes, Usage
@@ -31,7 +31,7 @@ from bot.delivery import safe_filename
 from config import settings
 from core.models.ids import new_deck_id
 from core.models.request import DeckRequest
-from core.models.theme import enabled_theme_ids, load_theme
+from core.models.theme import enabled_theme_ids, load_theme, resolve_theme_id
 from core.pipeline import ENGINE_VERSION
 from core.storage import files as deck_files
 from core.storage.progress import get_progress
@@ -240,6 +240,7 @@ def create_app(*, arq_pool=None, manage_resources: bool = True) -> FastAPI:
                 return _deck_response(request, deck, 200)
             now = datetime.now(timezone.utc)
             reset = store.next_day(now)
+            await limit_alerts.notify(request.app.state.arq, client, used)
             raise ApiError(429, "DAILY_LIMIT_EXCEEDED",
                            f"Исчерпан суточный лимит ключа: {client.daily_limit} колод. Счётчик обнулится "
                            f"в {reset:%H:%M} UTC.",
@@ -255,6 +256,7 @@ def create_app(*, arq_pool=None, manage_resources: bool = True) -> FastAPI:
             raise ApiError(503, "SERVICE_UNAVAILABLE", "Очередь генерации недоступна. Повторите запрос через минуту.")
         logger.info("API deck enqueued", extra={"deck_id": deck_id, "api_client_id": client.id,
                                                 "mode": deck_request.mode})
+        await limit_alerts.notify(request.app.state.arq, client, used + 1)
         return _deck_response(request, deck, 202,
                               extra_headers={"X-Daily-Remaining": str(max(0, client.daily_limit - used - 1))})
 
@@ -403,7 +405,7 @@ def _check_params(params: DeckCreate) -> None:
     if params.presentation_type != "doklad":
         raise ApiError(400, "UNSUPPORTED_TYPE",
                        f"Тип «{params.presentation_type[:40]}» не поддерживается. Сейчас доступен только \"doklad\".")
-    if params.theme_id not in enabled_theme_ids():
+    if resolve_theme_id(params.theme_id) not in enabled_theme_ids():
         raise ApiError(400, "BAD_REQUEST", f"Тема {params.theme_id} недоступна. Список — GET /v1/themes.")
     if params.webhook_url is not None and not url_ok(params.webhook_url):
         raise ApiError(400, "BAD_REQUEST", "webhook_url — адрес http:// или https://.")
@@ -421,8 +423,8 @@ def _deck_request(params: DeckCreate, client: ApiClient, material: dict | None) 
         language=params.language,
         audience=params.audience,
         slides_count=params.slides_count,
-        theme_id=params.theme_id,
-        image_mode="none",
+        theme_id=resolve_theme_id(params.theme_id),
+        image_mode=params.image_mode,
         author=params.author.model_dump() if params.author else None,
         watermark=client.watermark,
         seed=params.seed,

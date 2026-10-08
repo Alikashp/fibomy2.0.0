@@ -360,7 +360,7 @@ class NavigatorDeck(unittest.TestCase):
         self.assertEqual(shares[0].data["series"][0]["values"], [46, 27, 18, 9])
         self.assertEqual([x["label"] for x in shares[0].content["legend"]],
                          ["документы", "переписки", "люди", "задачи"])
-        self.assertEqual(series[0].footnote, "по данным: ваш текст")
+        self.assertIsNone(series[0].footnote, "сноски «по данным: …» по материалу нет (сессия 4)")
         # «в 6,6 раза» не из источника → перегенерация с ошибками → исправлено
         metrics = next(s for s in spec.slides if s.kind == "metrics")
         self.assertEqual([i["value"] for i in metrics.content["items"]], ["2 400", "8 000"])

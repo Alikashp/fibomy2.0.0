@@ -52,8 +52,15 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
 
     # ── Картинки ─────────────────────────────────────────────────────────────
+    # Старый движок (питч-дек до сессии 5): Unsplash / Pexels. Новый движок — ИИ-картинки.
     unsplash_access_key: str = ""
     pexels_api_key: str = ""
+    # ИИ-картинки нового движка (ТЗ 3.6, D-067): SiliconFlow, Z-Image-Turbo. Нужен воркеру;
+    # без ключа колоды собираются без картинок. Параметры — prompts/v2/images/config.yaml.
+    siliconflow_api_key: str = ""
+    siliconflow_base_url: str = "https://api.siliconflow.com/v1"
+    siliconflow_model: str = ""         # пусто — model из config.yaml (Tongyi-MAI/Z-Image-Turbo)
+    images_per_deck: int = 0            # 0 — per_deck из config.yaml
 
     # ── S3-совместимое хранилище: файлы пользователя, PDF старого движка, файлы
     # колод API (D-042, D-058). Пусто — не используется: файлы — в Redis с TTL.

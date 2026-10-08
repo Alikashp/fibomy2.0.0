@@ -1,15 +1,18 @@
-# Линейная диаграмма во всю ширину + вывод строкой (05_LAYOUTS.md, 3.7): ось — время, 4–24 точки.
+# Линейная диаграмма во всю ширину + вывод строкой на градиентной полосе темы (05_LAYOUTS.md, 3.7):
+# ось — время, 4–24 точки.
 id: chart_series.line_chart
 kind: chart_series
 family: chart
-version: 1
+version: 2
 fallback: false
+header: true
 applies_when: {image: forbidden, axis: time, points: {min: 4, max: 24}, series: {max: 3}}
 elements:
   - {name: title, type: text, box: [80, 80, 1760, 176], style: h1, min_style: h2, max_lines: 2,
      color: text, bind: title, anchor: middle}
-  - {name: chart, type: chart, box: [80, 280, 1760, 560], bind: data, chart: line}
-  - {name: insight, type: text, box: [80, 860, 1760, 76], style: body, min_style: small, max_lines: 1,
-     color: text, bind: content.insight}
+  - {name: chart, type: chart, box: [80, 280, 1760, 540], bind: data, chart: line}
+  - {name: insight_band, type: rect, box: [80, 840, 1760, 88], fill: $brand, radius: true}
+  - {name: insight, type: text, box: [120, 846, 1680, 76], style: body, min_style: small, max_lines: 1,
+     color: on_brand, bind: content.insight, anchor: middle}
   - {name: footnote, type: text, box: [80, 944, 1760, 40], style: small, min_style: min, max_lines: 1,
      color: text_muted, bind: footnote, optional: true}

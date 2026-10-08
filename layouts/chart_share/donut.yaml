@@ -3,15 +3,17 @@
 id: chart_share.donut
 kind: chart_share
 family: chart
-version: 1
+version: 2
 fallback: true
+header: true
 applies_when: {image: forbidden, points: {min: 2, max: 6}, share_sum: {min: 95, max: 105}}
 elements:
   - {name: title, type: text, box: [80, 80, 1760, 176], style: h1, min_style: h2, max_lines: 2,
      color: text, bind: title, anchor: middle}
   - {name: chart, type: chart, box: [80, 280, 760, 640], bind: data, chart: donut}
-  - {name: insight, type: text, box: [920, 800, 920, 120], style: body, min_style: small, max_lines: 2,
-     color: text, bind: content.insight}
+  - {name: insight_card, type: card, box: [920, 784, 920, 152]}
+  - {name: insight, type: text, box: [956, 800, 848, 120], style: body, min_style: small, max_lines: 2,
+     color: text, bind: content.insight, anchor: middle}
   - {name: footnote, type: text, box: [80, 944, 1760, 40], style: small, min_style: min, max_lines: 1,
      color: text_muted, bind: footnote, optional: true}
 items:
@@ -20,11 +22,11 @@ items:
     2:
       grid: {area: [920, 300, 920, 144], cols: 1, rows: 2, gap: 16}
       elements: &legend
-        - {name: swatch, type: rect, box: [0, 16, 32, 32], fill: $chart}
+        - {name: swatch, type: rect, box: [0, 16, 32, 32], fill: $chart, radius: 8}
         - {name: label, type: text, box: [48, 0, w-248, 64], style: body, min_style: small, max_lines: 1,
            color: text, bind: label, anchor: middle}
         - {name: value, type: text, box: [w-200, 0, 200, 64], style: h3, min_style: body, max_lines: 1,
-           color: text, bind: value, align: right, anchor: middle, never_truncate: true}
+           color: primary, bind: value, align: right, anchor: middle, never_truncate: true}
     3:
       grid: {area: [920, 300, 920, 224], cols: 1, rows: 3, gap: 16}
       elements: *legend
