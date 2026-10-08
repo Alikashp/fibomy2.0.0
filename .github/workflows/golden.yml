@@ -82,6 +82,8 @@ jobs:
         options: --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      # ИИ-картинки (сессия 4): без секрета колоды golden собираются без картинок — так и пишется в отчёте
+      SILICONFLOW_API_KEY: ${{ secrets.SILICONFLOW_API_KEY }}
       # Дефолты — как в проде; переопределяются переменными репозитория
       OPENAI_BASE_URL: ${{ vars.OPENAI_BASE_URL || 'https://api.proxyapi.ru/openai/v1' }}
       OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'gpt-6-luna' }}

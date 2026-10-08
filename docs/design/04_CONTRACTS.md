@@ -46,8 +46,10 @@
     "language": {"enum": ["ru", "en", "uz", "kk"], "description": "фаза 2: 15 языков"},
     "audience": {"enum": ["general", "students", "colleagues", "management", "clients", "investors"]},
     "slides_count": {"type": ["integer", "null"], "minimum": 4, "maximum": 20, "description": "null — число задаёт сюжет (питч-дек, 11)"},
-    "theme_id": {"enum": ["graphite_light", "graphite_dark", "azure_coral", "fresh_green"]},
-    "image_mode": {"enum": ["none", "web", "ai"], "default": "web"},
+    "theme_id": {"enum": ["business_slate", "ember_dark", "sunny_cream", "mint_coral",
+                          "graphite_light", "graphite_dark", "azure_coral", "fresh_green"],
+                 "description": "сессия 4: старые id принимаются и переводятся на новые (D-063)"},
+    "image_mode": {"enum": ["none", "web", "ai"], "default": "ai", "description": "web (Pexels) не используется (D-067)"},
     "author": {"type": ["object", "null"], "properties": {"name": {"type": ["string", "null"]}, "group": {"type": ["string", "null"]}}},
     "watermark": {"type": "boolean"},
     "seed": {"type": ["integer", "null"], "description": "null — код выбирает случайный и пишет в DeckSpec"},
@@ -260,11 +262,10 @@ r3: Предзаказ | 4,7 | 10 | новый канал
         "truncated": {"type": "boolean"}}},
       "checks": {"type": "array", "items": {"type": "object", "properties": {"code": {"type": "string"}, "severity": {"enum": ["fixed", "warning", "error"]}}}},
       "user_locked": {"type": "boolean", "default": false, "description": "фаза 4: слайд правил пользователь — массовые операции его не перегенерируют"}}},
-    "ImageAsset": {"type": "object", "properties": {
-      "provider": {"enum": ["pexels", "siliconflow"]}, "provider_id": {"type": "string"},
-      "author": {"type": ["string", "null"]}, "author_url": {"type": ["string", "null"]}, "license": {"type": "string"},
-      "storage_key": {"type": "string"}, "width": {"type": "integer"}, "height": {"type": "integer"},
-      "query": {"type": "string"}}}
+    "ImageAsset": {"type": "object", "description": "сессия 4 (D-067): файл не в DeckSpec — передаётся рендереру отдельно",
+      "properties": {
+      "provider": {"enum": ["siliconflow"]}, "model": {"type": "string"}, "prompt": {"type": "string"},
+      "ms": {"type": "integer"}, "cost_rub": {"type": "number"}}}
   }
 }
 ```
@@ -331,48 +332,26 @@ items:
 - вместимость для промпта и схемы — `capacity()` по формуле `05_LAYOUTS.md`, 2; `min_style` — нижний шаг fitter'а; `never_truncate` — текст не обрезается (тема на титуле);
 - `bind` — путь в `Slide` / `DeckSpec` (`title`, `meta.title`, `footnote`, `content.<поле>`, поле пункта, `$index`, `const:<текст>`).
 
-### 6.2 Theme — пример `themes/graphite_light.yaml`
+### 6.2 Theme — `themes/<id>.yaml`
+
+С сессии 4 (D-063, D-064) — четыре темы `business_slate`, `ember_dark`, `sunny_cream`, `mint_coral`; полный пример — `themes/business_slate.yaml`, токены и стиль всех тем — `05_LAYOUTS.md`, 6. Поля:
 
 ```yaml
-id: graphite_light
-name: {ru: "Графит светлая", en: "Graphite light"}
-mode: light
-tags: [business, academic]
-free: true                  # фаза 1: все темы всем (вопрос 12)
-enabled: true               # доступна в боте и API (с сессии 2 — все четыре)
+id, name: {ru, en}, mode: light | dark, tags, free, enabled
+replaces: [graphite_light]     # старые id, которые переводятся на эту тему (бот, API, DeckSpec)
 fonts: {heading: Arial, body: Arial}
-colors:
-  bg: "#FFFFFF"
-  surface: "#F2F4F7"
-  surface_alt: "#E4E8EE"
-  primary: "#1F4E79"
-  accent: "#B4530F"
-  text: "#1A1F29"
-  text_muted: "#4A5565"
-  on_primary: "#FFFFFF"
-  border: "#CBD2DC"
-  positive: "#1E6B3A"
-  negative: "#A8261F"
-chart: ["#1F5FAD", "#D2620A", "#0F8A73", "#9B3FB8", "#C8364A", "#6B7280"]
+colors:                        # bg, surface, surface_alt, primary, on_primary, brand, brand_2, on_brand,
+                               # accent, on_accent, paper, on_paper, text, text_muted, border,
+                               # on_status, positive, negative
+chart: [6 цветов]
 typescale: {hero: 96, display: 60, h1: 36, h2: 26, h3: 20, body: 18, small: 14, min: 12}
-style:
-  radius: 8                 # 0 / 8 / 16
-  card: fill                # fill / outline
-  image: plain              # plain / rounded
-  decor: line               # none / line
-contrast_pairs:             # пары, которые реально встречаются в макетах; тест ≥ 4.5:1
-  - [text, bg]
-  - [text, surface]
-  - [text, surface_alt]
-  - [text_muted, bg]
-  - [text_muted, surface]
-  - [primary, bg]
-  - [primary, surface]
-  - [accent, bg]
-  - [accent, surface]
-  - [positive, surface]
-  - [negative, surface]
-  - [on_primary, primary]
+style:                         # radius, image_radius, gradient_angle, card (fill | outline), card_line,
+                               # card_stripe (left | top | none), stripe_fill, header (plate | underline |
+                               # marker | bar), badge (circle | square | pennant | flag | chevron), badge_fill,
+                               # badge_text, icon_plate, quote_plate, quote_text, pause, pause_text,
+                               # accent_fill, title_color
+decor: {cover: [...], band: [...], content: [...], header: [...], pause: [...]}   # фигуры custGeom
+contrast_pairs: [[text, bg], ...]                  # тест ≥ 4.5:1
 ```
 
 Остальные три темы — `themes/graphite_dark.yaml`, `azure_coral.yaml`, `fresh_green.yaml`; токены и контраст — `05_LAYOUTS.md`, 6.
@@ -409,7 +388,8 @@ contrast_pairs:             # пары, которые реально встре
     "language": {"enum": ["ru", "en", "uz", "kk"], "default": "ru"},
     "audience": {"enum": ["general", "students", "colleagues", "management", "clients", "investors"], "default": "general"},
     "slides_count": {"type": ["integer", "null"], "minimum": 4, "maximum": 20},
-    "theme_id": {"enum": ["graphite_light", "graphite_dark", "azure_coral", "fresh_green"], "default": "graphite_light"},
+    "theme_id": {"enum": ["business_slate", "ember_dark", "sunny_cream", "mint_coral", "graphite_light", "graphite_dark", "azure_coral", "fresh_green"], "default": "graphite_light"},
+    "image_mode": {"enum": ["ai", "none"], "default": "ai"},
     "author": {"type": ["object", "null"], "properties": {"name": {"type": ["string", "null"]}, "group": {"type": ["string", "null"]}}},
     "webhook_url": {"type": ["string", "null"], "maxLength": 2000},
     "seed": {"type": ["integer", "null"]}
@@ -417,7 +397,7 @@ contrast_pairs:             # пары, которые реально встре
 }
 ```
 
-Сервер подставляет в `DeckRequest`: `client = {"kind": "api", "api_client_id", "plan"}`, `watermark` — из настройки ключа, `image_mode = "none"` (картинки — сессия 4), материал — ссылкой `uploads/` (файл — по расширению имени: pdf, docx, pptx, txt, до 20 МБ). Профиля у клиента API нет: значения по умолчанию не запоминаются.
+Сервер подставляет в `DeckRequest`: `client = {"kind": "api", "api_client_id", "plan"}`, `watermark` — из настройки ключа, `image_mode` — из необязательного поля запроса (`ai` по умолчанию, `none`; сессия 4), `theme_id` — новый id (старые переводятся, D-063), материал — ссылкой `uploads/` (файл — по расширению имени: pdf, docx, pptx, txt, до 20 МБ). Профиля у клиента API нет: значения по умолчанию не запоминаются.
 
 ### 7.2 DeckStatus
 
@@ -522,7 +502,7 @@ contrast_pairs:             # пары, которые реально встре
 
 ### 8.2 Что происходит со старыми таблицами
 - `presentations` — перестаёт пополняться с сессии 1. Счётчик `users.presentations_count` остаётся источником лимита. Таблица удаляется миграцией в фазе 2, когда `decks` проработает неделю (`08_MIGRATION.md`) — это исключение из правила «миграции только добавляющие» (`CLAUDE.md`, с сессии 3), только отдельным решением владельца.
-- `users` — без изменений (колонки `last_*` из `0004` используются сводкой). `last_color_scheme` хранит `theme_id`: старые значения (`light`, `dark`, `forest`, `ember`) читаются через таблицу соответствия (`light` → `graphite_light`, `dark` → `graphite_dark`, прочие → тема по умолчанию).
+- `users` — без изменений (колонки `last_*` из `0004` используются сводкой). `last_color_scheme` хранит `theme_id`: старые значения (`light`, `dark`, `forest`, `ember`) читаются через таблицу соответствия (`light` → `business_slate`, `dark` и `ember` → `ember_dark`, `forest` → `mint_coral`; темы сессий 1–3 — по полю `replaces` темы; прочие → тема по умолчанию; сессия 4, D-063).
 
 ### 8.3 Миграция `0006_api_clients` (сессия 3)
 

@@ -105,6 +105,17 @@ def chart_data(variant: str, fixture: str) -> dict | None:
     return None
 
 
+def _applicable_title(layout: LayoutSpec, title: str) -> str:
+    """Самая длинная версия заголовка, которую вариант принимает (SELECT проверяет её по метрикам
+    шрифта: длинные слова max не попадут в вариант, где не влезут)."""
+    from core.selection.select import SlideNeed, applicable
+    words_ = title.split()
+    while len(words_) > 1 and not applicable(layout, SlideNeed("s01", layout.kind, title=" ".join(words_),
+                                                              has_image=True)):
+        words_.pop()
+    return " ".join(words_)
+
+
 def content_for(layout: LayoutSpec, fixture: str, seed: int) -> tuple[str, dict, int | None]:
     """→ (заголовок слайда, content, число элементов) варианта в заполнении fixture."""
     kind = layout.kind
@@ -122,6 +133,7 @@ def content_for(layout: LayoutSpec, fixture: str, seed: int) -> tuple[str, dict,
     if kind == "title":
         limit = layout.applies_when.get("title_max_chars", 200)
         title = words({"min": 18, "typical": 60, "max": limit}[fixture], fixture, seed, sentence=False)
+        title = _applicable_title(layout, title)
         return title, {"subtitle": words(int(cap("subtitle") * f), fixture, seed + 1),
                        "author": None if fixture == "min" else words(int(cap("author") * f), fixture, seed + 2,
                                                                       sentence=False)}, None
@@ -131,7 +143,7 @@ def content_for(layout: LayoutSpec, fixture: str, seed: int) -> tuple[str, dict,
                                         "author": words(40, fixture, seed + 3, sentence=False)}, None
     if kind == "statement":
         limit = layout.applies_when.get("title_max_chars", 150)
-        title = words(max(20, int(min(limit, cap("statement")) * f)), fixture, seed)
+        title = _applicable_title(layout, words(max(20, int(min(limit, cap("statement")) * f)), fixture, seed))
         return title, {"body": None if fixture == "min" and "pause" not in layout.id else
                        words(int(caps.get("body", 150) * f), fixture, seed + 1)}, None
     if kind == "bullets":

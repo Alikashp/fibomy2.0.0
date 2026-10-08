@@ -103,8 +103,12 @@ async def run(out: Path, themes: list[str], fixtures: list[str], variants: list[
         for fixture in fixtures:
             slides, images = build_slides(variants, fixture)
             fit_errors_by_variant = {}
-            for start in range(0, len(slides), CHUNK):
-                chunk = [s.model_copy(deep=True) for s in slides[start:start + CHUNK]]
+            # Тема титула — meta.title колоды: каждый вариант титула — своей колодой со своей темой
+            titles = [s for s in slides if s.kind == "title"]
+            rest = [s for s in slides if s.kind != "title"]
+            chunks = [[t] for t in titles] + [rest[i:i + CHUNK] for i in range(0, len(rest), CHUNK)]
+            for start, part in enumerate(chunks):
+                chunk = [s.model_copy(deep=True) for s in part]
                 spec = deck(theme_id, chunk, chunk[0].title if chunk[0].kind == "title" else "Галерея")
                 fit_deck(spec, theme)
                 for d in spec.degradations:
@@ -115,7 +119,7 @@ async def run(out: Path, themes: list[str], fixtures: list[str], variants: list[
                 pptx = label(render_pptx(spec, images=images), labels)
                 pdf_bytes = await pptx_to_pdf(pptx, timeout=180)
                 (out / "pptx").mkdir(exist_ok=True)
-                (out / "pptx" / f"{theme_id}_{fixture}_{start // CHUNK + 1}.pptx").write_bytes(pptx)
+                (out / "pptx" / f"{theme_id}_{fixture}_{start + 1}.pptx").write_bytes(pptx)
                 pdf = pdfium.PdfDocument(pdf_bytes)
                 prs = Presentation(io.BytesIO(pptx))
                 for page_no, (slide, slide_obj) in enumerate(zip(spec.slides, prs.slides)):

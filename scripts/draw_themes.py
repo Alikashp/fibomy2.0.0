@@ -17,8 +17,8 @@ from core.models.theme import all_theme_ids, load_theme  # noqa: E402
 
 FONT = ROOT / "fonts" / "LiberationSans-Regular.ttf"
 FONT_B = ROOT / "fonts" / "LiberationSans-Bold.ttf"
-PANEL_W, PANEL_H, HEAD = 480, 640, 34
-ORDER = ["graphite_light", "graphite_dark", "azure_coral", "fresh_green"]
+PANEL_W, PANEL_H, HEAD = 480, 700, 34
+ORDER = ["business_slate", "ember_dark", "sunny_cream", "mint_coral"]
 
 
 def f(size, bold=False):
@@ -33,25 +33,29 @@ def panel(theme) -> Image.Image:
     y = 12
     tokens = list(c.items())
     for name, value in tokens:
-        d.rectangle([12, y, 40, y + 22], fill=value, outline="#9AA3AF")
-        d.text((48, y + 3), f"{name} {value}", font=f(12), fill=c["text"])
-        y += 28
+        d.rectangle([12, y, 36, y + 20], fill=value, outline="#9AA3AF")
+        d.text((44, y + 3), f"{name} {value}", font=f(12), fill=c["text"])
+        y += 24
     for i, value in enumerate(theme.chart, start=1):
-        d.rectangle([12, y, 40, y + 22], fill=value, outline="#9AA3AF")
-        d.text((48, y + 3), f"chart_{i} {value}", font=f(12), fill=c["text"])
-        y += 28
+        d.rectangle([12, y, 36, y + 20], fill=value, outline="#9AA3AF")
+        d.text((44, y + 3), f"chart_{i} {value}", font=f(12), fill=c["text"])
+        y += 24
     x0 = 220
     d.rounded_rectangle([x0, 12, PANEL_W - 12, 132], radius=8, fill=c["surface"])
     d.text((x0 + 14, 22), "47,3", font=f(40, True), fill=c["primary"])
     d.text((x0 + 14, 74), "млн руб.", font=f(15, True), fill=c["text"])
     d.text((x0 + 14, 100), "выручка за квартал", font=f(13), fill=c["text_muted"])
-    d.rectangle([x0, 146, PANEL_W - 12, 206], fill=c["primary"])
-    d.text((x0 + 14, 164), "Нужно решение", font=f(18, True), fill=c["on_primary"])
+    a, b = (tuple(int(c[k].lstrip("#")[i:i + 2], 16) for i in (0, 2, 4)) for k in ("brand", "brand_2"))
+    for gx in range(x0, PANEL_W - 12):
+        t = (gx - x0) / (PANEL_W - 12 - x0)
+        d.line([gx, 146, gx, 206], fill=tuple(int(a[i] + (b[i] - a[i]) * t) for i in range(3)))
+    d.text((x0 + 14, 164), "Нужно решение", font=f(18, True), fill=c["on_brand"])
+    d.rectangle([PANEL_W - 60, 152, PANEL_W - 20, 200], fill=c["accent"])
     d.text((x0, 220), "Заголовок-вывод", font=f(19, True), fill=c["text"])
     d.text((x0, 248), "Основной текст пункта", font=f(14), fill=c["text"])
     d.text((x0, 270), "Подпись, приглушённый", font=f(14), fill=c["text_muted"])
-    d.text((x0, 292), "«", font=f(26, True), fill=c["accent"])
-    d.text((x0 + 22, 298), "акцент", font=f(14, True), fill=c["accent"])
+    d.text((x0, 298), "«", font=f(14, True), fill=c["primary"])
+    d.text((x0 + 22, 298), "primary", font=f(14, True), fill=c["primary"])
     d.text((x0 + 90, 298), "+41%", font=f(14, True), fill=c["positive"])
     d.text((x0 + 140, 298), "−6%", font=f(14, True), fill=c["negative"])
     # столбцы
@@ -86,7 +90,7 @@ def main():
     for i, tid in enumerate(ids):
         theme = load_theme(tid)
         x, y = (i % cols) * PANEL_W, (i // cols) * (PANEL_H + HEAD)
-        label = f"{tid} — {theme.name['ru']}" + ("" if theme.enabled else "  (в боте с сессии 3)")
+        label = f"{tid} — {theme.name['ru']}"
         d.text((x + 10, y + 8), label, font=f(16, True), fill="#111111")
         out.paste(panel(theme), (x, y + HEAD))
     path = ROOT / "docs/design/wireframes/00_themes.png"

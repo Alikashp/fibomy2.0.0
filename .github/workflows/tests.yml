@@ -82,3 +82,53 @@ jobs:
             deck="tests/fixtures/specs/${pair%%:*}.json"; case="${pair##*:}"
             python tests/golden/check_case.py "$deck" "$case" --md --no-fail | tee -a "$GITHUB_STEP_SUMMARY"
           done
+
+  # Стресс-галерея макетов (07_TESTING.md, 2; ТЗ 7.3): все варианты × 4 темы × 3 заполнения
+  # (min, typical, max) → проверки (геометрия, шрифты, вписывание, заполненность 40–75%, доля
+  # цвета темы) → одна PDF-книга и миниатюры. Артефакт gallery-pdf — по нему владелец утверждает
+  # дизайн. Нарушение проверок — красный job. Без ключей и без LLM.
+  gallery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      TELEGRAM_BOT_TOKEN: "123456:ci-dummy"
+      OPENAI_API_KEY: ci-dummy
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Зависимости
+        run: pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: LibreOffice и шрифты
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends libreoffice-impress fonts-liberation fonts-dejavu-core
+
+      - name: Галерея и проверки
+        run: |
+          set +e
+          python tests/gallery/build_gallery.py gallery_out
+          code=$?
+          set -e
+          cat gallery_out/report.md >> "$GITHUB_STEP_SUMMARY" || true
+          exit $code
+
+      - name: Артефакт gallery-pdf
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gallery-pdf
+          path: |
+            gallery_out/gallery.pdf
+            gallery_out/sheet_*.png
+            gallery_out/report.md
+            gallery_out/results.json
+          retention-days: 30
