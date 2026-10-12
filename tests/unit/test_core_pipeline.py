@@ -148,6 +148,44 @@ class Pipeline(unittest.TestCase):
         self.assertNotIn("Fibonacci.", texts(res.pptx))
         self.assertIn("Fibonacci.", texts(seen[0]))
 
+    def test_long_text_is_shortened_not_truncated(self):
+        """D-071: длинный ответ — повтор «сократи», затем FIT «сократи до N знаков»; многоточия нет нигде,
+        финальная проверка готового PPTX чистая."""
+        long = ("Хирург видит границы протоков и сосудов прямо на экране эндоскопа во время "
+                "лапароскопической операции и получает подсказку о безопасной траектории. ") * 4
+
+        def content(name, user):
+            if name == "slide_bullets":
+                return {"items": [{"heading": f"Пункт {i}", "text": long, "icon": "bulb"} for i in range(1, 5)]}
+            return fake_content(name, user)
+        fake = FakeOpenAI(content=content)
+        res = run(fake)
+        names = [c["response_format"]["json_schema"]["name"] for c in fake.calls]
+        self.assertIn("shorten", names)
+        texts = [sh.text_frame.text for sl in Presentation(io.BytesIO(res.pptx)).slides
+                 for sh in sl.shapes if sh.has_text_frame]
+        self.assertFalse([t for t in texts if "…" in t])
+        from core.checks.layout import check_pptx
+        self.assertEqual(check_pptx(res.pptx), [])
+
+    def test_garbage_text_regenerated_then_stripped(self):
+        """D-074: иероглиф и английское слово в русском тексте → перегенерация слайда с ошибками;
+        склейка названия из источника исправляется кодом."""
+        attempts = {"n": 0}
+
+        def content(name, user):
+            if name == "slide_statement":
+                attempts["n"] += 1
+                body = "Модели до 子 и рост earnings" if attempts["n"] == 1 else "Модели до 35 млрд параметров."
+                return {"body": body}
+            return fake_content(name, user)
+        fake = FakeOpenAI(content=content)
+        res = run(fake)
+        statement = next(s for s in res.spec.slides if s.kind == "statement")
+        self.assertEqual(statement.content["body"], "Модели до 35\u00a0млрд параметров.")
+        self.assertTrue(any(c["messages"][1]["content"].count("ОШИБКИ ПРОВЕРКИ ТЕКСТА") for c in fake.calls))
+        self.assertTrue(any(d.reason == "text_fixed" for d in res.spec.degradations))
+
     def test_progress_stages(self):
         stages = []
 

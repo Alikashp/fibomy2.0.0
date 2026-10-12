@@ -64,8 +64,24 @@ def fake_outline(n: int = 7, subtitle: str = "Как свет превращае
             "deck": {"subtitle": subtitle, "slides": slides}}
 
 
+def fake_shorten(user: str) -> dict:
+    """Ответ «сократи до N знаков» (fit/shorten.txt): целые слова до предела, законченной фразой."""
+    import re
+    texts = []
+    for m in re.finditer(r'^- id "(?P<id>[^"]+)", до (?P<n>\d+) знаков \([^)]*\): (?P<text>.*)$', user, re.M):
+        kept = ""
+        for word in m.group("text").split():
+            if len(f"{kept} {word}".strip()) > int(m.group("n")):
+                break
+            kept = f"{kept} {word}".strip()
+        texts.append({"id": m.group("id"), "text": (kept or m.group("text").split()[0]).rstrip(",;:—")})
+    return {"texts": texts}
+
+
 def fake_content(schema_name: str, user: str = "") -> dict:
-    """Ответ CONTENT по имени схемы slide_<kind>."""
+    """Ответ CONTENT по имени схемы slide_<kind>; shorten — сокращение FIT."""
+    if schema_name == "shorten":
+        return fake_shorten(user)
     kind = schema_name.split("_", 1)[1]
     if kind == "statement":
         return {"body": "Пояснение к утверждению: одно предложение с механизмом и примером."}
