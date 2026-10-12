@@ -115,7 +115,8 @@ curl -sS -X POST "$API/v1/decks" -H "Authorization: Bearer $KEY" -H "Content-Typ
 | `GET` | `/v1/decks/{id}` | статус колоды |
 | `GET` | `/v1/decks/{id}/files/pptx` | PPTX |
 | `GET` | `/v1/decks/{id}/files/pdf` | PDF |
-| `GET` | `/v1/themes` | темы оформления |
+| `GET` | `/v1/themes` | темы оформления: название, эмодзи, описание, цвета, ссылка на превью |
+| `GET` | `/v1/themes/{id}/preview.png` | PNG-превью темы — **без ключа** (раздел 3.4) |
 | `GET` | `/v1/usage` | лимиты ключа и сколько израсходовано сегодня |
 | `GET` | `/v1/health` | состояние сервиса (без ключа) |
 
@@ -129,7 +130,7 @@ curl -sS -X POST "$API/v1/decks" -H "Authorization: Bearer $KEY" -H "Content-Typ
 | `input.text` | строка до 200 000 знаков | `null` | Текст-материал. В работу идут первые 40 000 знаков (остальное — предупреждение `MATERIAL_TRUNCATED`). Не вместе с файлом |
 | `file` (multipart) | `.pdf`, `.docx`, `.pptx`, `.txt` до 20 МБ | — | Файл-материал. Тип — по расширению имени файла. PDF — до 50 страниц, PPTX — до 100 слайдов; скан без текстового слоя не читается |
 | `presentation_type` | `doklad` | `doklad` | Тип презентации. `pitch_deck` пока возвращает `400 UNSUPPORTED_TYPE` |
-| `slides_count` | целое 4–20 | `9` | Слайдов всего, вместе с титулом и финальным |
+| `slides_count` | целое 4–20 | `9` | Слайдов всего, вместе с титулом и финальным. Если текст слайда не влез даже после сокращения, слайд делится на два — колода бывает на 1–2 слайда длиннее (текст не обрезается, с 12.10.2026) |
 | `source_mode` | `strict` \| `extend` | `strict` | Только с материалом. `strict` — только факты материала; если материала мало, слайдов будет меньше (предупреждение `SLIDES_SHORT`). `extend` — ровно `slides_count` слайдов, недостающее — общими знаниями, без новых чисел. Без материала игнорируется |
 | `language` | `ru`, `en`, `uz`, `kk` | `ru` | Язык текста слайдов |
 | `audience` | `general`, `students`, `colleagues`, `management`, `clients`, `investors` | `general` | Для кого доклад: влияет на тон и подачу |
@@ -168,14 +169,60 @@ curl -sS -X POST "$API/v1/decks" -H "Authorization: Bearer $KEY" -H "Content-Typ
 
 ```json
 {"themes": [
-  {"id": "business_slate", "name": {"ru": "Деловая серо-синяя", "en": "Business slate"}, "mode": "light", "tags": ["business", "academic"]},
-  {"id": "ember_dark", "name": {"ru": "Тёмная тёплая", "en": "Ember dark"}, "mode": "dark", "tags": ["business", "tech", "bold"]},
-  {"id": "sunny_cream", "name": {"ru": "Молочная с жёлтым", "en": "Sunny cream"}, "mode": "light", "tags": ["bright", "education", "creative"]},
-  {"id": "mint_coral", "name": {"ru": "Мята и коралл", "en": "Mint coral"}, "mode": "light", "tags": ["bright", "education", "business"]}
+  {"id": "business_slate",
+   "name": {"ru": "Деловая серо-синяя", "en": "Business slate"},
+   "mode": "light", "tags": ["business", "academic"],
+   "emoji": "💼",
+   "description": {"ru": "Спокойная деловая: белый фон, тёмно-синий текст и один яркий синий акцент — для отчётов и защиты",
+                   "en": "Calm business look: white background, dark navy text and one bright blue accent — for reports and defences"},
+   "colors": {"background": "#FFFFFF", "text": "#14213D", "primary": "#2563EB", "accent": "#38BDF8", "brand": "#1D4ED8"},
+   "preview_url": "https://api.example.com/v1/themes/business_slate/preview.png?v=3f1c0a9b2e44"},
+  {"id": "ember_dark", "name": {"ru": "Тёмная тёплая", "en": "Ember dark"}, "mode": "dark", "emoji": "🔥", "…": "…"},
+  {"id": "sunny_cream", "name": {"ru": "Молочная с жёлтым", "en": "Sunny cream"}, "mode": "light", "emoji": "🌼", "…": "…"},
+  {"id": "mint_coral", "name": {"ru": "Мята и коралл", "en": "Mint coral"}, "mode": "light", "emoji": "🌿", "…": "…"}
 ]}
 ```
 
+| Поле | Что это |
+|---|---|
+| `id`, `name`, `mode`, `tags` | как раньше |
+| `emoji` | эмодзи для кнопки: «💼 Деловая серо-синяя» *(с 12.10.2026)* |
+| `description` | настроение темы одной строкой по языкам (`ru`, `en`) *(с 12.10.2026)* |
+| `colors` | основные цвета, hex: `background` — фон слайда, `text` — текст, `primary` — главный акцент (числа, номера), `accent` — второй акцент, `brand` — заливка титула и финала *(с 12.10.2026)* |
+| `preview_url` | абсолютная ссылка на PNG-превью: титул и содержательный слайд друг под другом, 960 × 1096 *(с 12.10.2026)* |
+
+**Превью — без ключа.** `GET /v1/themes/{id}/preview.png` отдаётся без заголовка `Authorization`: картинка не секретна, и её можно отдать Telegram прямо ссылкой — Telegram скачивает файл сам, а ключ API ему не передать. Ответ — `image/png`, `Cache-Control: public, max-age=86400`, `ETag` (на `If-None-Match` — `304`). Параметр `?v=` меняется, когда превью перерисовано, поэтому Telegram не покажет старую картинку из своего кэша. Неизвестная тема — `404 NOT_FOUND`. Превью собраны заранее из той же галереи, по которой владелец утверждает дизайн, и выглядят ровно как колода.
+
 Список может пополняться — не зашивайте его в код, берите из ответа (его можно кэшировать на сутки).
+
+**Как показать темы пользователю второго бота** — альбом превью и кнопки выбора (aiogram 3; Bot API — `sendMediaGroup` и `sendMessage` с `inline_keyboard`):
+
+```python
+import httpx
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
+
+API = "https://api.example.com"
+KEY = {"Authorization": "Bearer fib_…"}
+
+async def show_themes(bot, chat_id: int, lang: str = "ru") -> None:
+    async with httpx.AsyncClient(timeout=10) as http:
+        themes = (await http.get(f"{API}/v1/themes", headers=KEY)).json()["themes"]   # кэшируйте на сутки
+    # 1. Альбом: до 10 фото в одном сообщении, подпись — у каждого фото
+    album = [InputMediaPhoto(media=t["preview_url"],                          # ссылка, Telegram скачает сам
+                             caption=f"{t['emoji']} {t['name'][lang]}\n{t['description'].get(lang, '')}")
+             for t in themes if t.get("preview_url")]
+    if album:
+        await bot.send_media_group(chat_id, album)
+    # 2. Кнопки выбора — отдельным сообщением (к альбому кнопки не прикрепляются)
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=f"{t['emoji']} {t['name'][lang]}", callback_data=f"theme:{t['id']}")]
+        for t in themes])
+    await bot.send_message(chat_id, "Выберите дизайн презентации:", reply_markup=keyboard)
+
+# В обработчике callback_data «theme:<id>» передайте id в POST /v1/decks: {"theme_id": "<id>", …}
+```
+
+Без aiogram — то же через Bot API: `sendMediaGroup` с `media=[{"type": "photo", "media": "<preview_url>", "caption": "…"}]`, затем `sendMessage` с `reply_markup={"inline_keyboard": [[{"text": "💼 Деловая серо-синяя", "callback_data": "theme:business_slate"}], …]}`. Если Telegram не смог скачать картинку по ссылке (например, API закрыт фаерволом), скачайте PNG сами (ключ не нужен) и отправьте байтами, дальше пользуйтесь `file_id`.
 
 **Старые id тем (до 08.10.2026)** принимаются в `theme_id` и переводятся: `graphite_light` → `business_slate`, `graphite_dark` → `ember_dark`, `azure_coral` и `fresh_green` → `mint_coral`. В списке `GET /v1/themes` их нет.
 
@@ -483,4 +530,5 @@ if __name__ == "__main__":
 
 | Дата | Что изменилось | Нужно ли менять клиент |
 |---|---|---|
+| 12.10.2026 | `GET /v1/themes`: новые поля `emoji`, `description`, `colors`, `preview_url`; новый путь `GET /v1/themes/{id}/preview.png` (без ключа). Текст на слайдах больше никогда не обрезается (ни «…», ни обрыва): если не влезает — другой вариант слайда, сокращение моделью или два слайда, поэтому колода иногда на 1–2 слайда длиннее `slides_count`. Перед отдачей файл проходит проверку вёрстки; если исправить не удалось — колода `failed` с прежним кодом `RENDER_FAILED`. Пожелания из темы («со статистикой», «подробно») на титул не попадают, а учитываются в плане; регистр темы исправляется («ИТ», «России»). Числа — по правилам языка («98,79», «92–98 %» не разрываются) | Нет. По желанию — показывать темы альбомом превью и кнопками (раздел 3.4) |
 | 08.10.2026 | Новый дизайн слайдов и четыре новые темы: `GET /v1/themes` отдаёт `business_slate`, `ember_dark`, `sunny_cream`, `mint_coral`; старые id в `theme_id` принимаются и переводятся. Новое необязательное поле `image_mode` (`ai` по умолчанию) — ИИ-картинки в колодах; генерация с картинками может идти на несколько секунд дольше. Заголовок титула — тема с заглавной буквы. Сноски «по данным: <файл>» на слайдах больше нет | Нет. По желанию — брать темы из `GET /v1/themes` и передавать `image_mode = "none"`, если картинки не нужны |
