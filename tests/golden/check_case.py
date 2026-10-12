@@ -35,8 +35,10 @@ CASES = {
     "G-02": {"title": "ТЗ хакатона VK (pdf)", "material": True},
     "G-03": {"title": "Отчёт о продажах по теме, без файла", "material": False, "topic": "Итоги продаж за квартал"},
     "G-04": {"title": "Итоги пилота «Навигатор» (текст)", "material": True},
-    "G-05": {"title": "Требования стейкхолдеров по теме, студенты", "material": False,
-             "topic": "Управление требованиями стейкхолдеров в ИТ-стартапе"},
+    "G-05": {"title": "Тема с пожеланиями, по теме, студенты", "material": False,
+             "topic": "Управление требованиями в ит-стартапах со статистикой аналитикой и тж",
+             "title_expected": "Управление требованиями в ИТ-стартапах",
+             "wishes": r"статистик|аналитик|\bтж\b|и т\.?\s?д"},
 }
 
 
@@ -420,7 +422,16 @@ def check_topic(deck: dict, r: Report, case: str) -> None:
     topic = CASES[case].get("topic")
     title = deck["slides"][0].get("title") or ""
     norm_q = lambda t: re.sub(r"\s+", " ", re.sub(r"[«»\"'„“”]", "", t or "")).strip().lower()  # noqa: E731
-    r.check(norm_q(title) == norm_q(topic), "заголовок титула — тема пользователя дословно (G-05)", f"«{title}»")
+    expected = CASES[case].get("title_expected")
+    if expected:
+        # D-076: тема без пожеланий, регистр исправлен («ИТ»), пожелания — в плане, а не на титуле
+        r.check(norm_q(title) == norm_q(expected), f"заголовок титула — «{expected}» (тема без пожеланий)",
+                f"«{title}»")
+        r.check("ИТ" in title, "сокращение на титуле капсом («ИТ»)", f"«{title}»")
+        r.check(not re.search(CASES[case]["wishes"], title.lower()), "пожеланий на титуле нет", f"«{title}»")
+    else:
+        r.check(norm_q(title) == norm_q(topic), "заголовок титула — тема пользователя (без пожеланий — дословно)",
+                f"«{title}»")
     first = slides[0] if slides else {}
     if case == "G-05":
         r.check(first.get("role") == "definition", "второй слайд — определение темы и её происхождение",

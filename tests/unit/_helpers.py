@@ -46,7 +46,7 @@ TOPIC_KINDS = ["statement", "bullets", "process", "comparison", "metrics", "bull
 
 
 def fake_outline(n: int = 7, subtitle: str = "Как свет превращается в сахар", asks=None, kinds=None,
-                 datasets=None, genre="topic") -> dict:
+                 datasets=None, genre="topic", title_topic=None, wishes=None) -> dict:
     """Ответ OUTLINE: n содержательных слайдов разной формы, последний — выводы.
     datasets — {номер слайда с 0: {"id", "label_column", "value_columns", "rows"}} для диаграмм."""
     kinds = kinds or (TOPIC_KINDS if n == 7 else (["statement"] + ["bullets", "process"] * n)[:n - 1] + ["conclusion"])
@@ -61,7 +61,8 @@ def fake_outline(n: int = 7, subtitle: str = "Как свет превращае
             "image_query": None,
         })
     return {"analysis": {"genre": genre, "theses": [], "asks": asks or [], "missing": []},
-            "deck": {"subtitle": subtitle, "slides": slides}}
+            "deck": {"title_topic": title_topic, "user_wishes": wishes or [], "subtitle": subtitle,
+                     "slides": slides}}
 
 
 def fake_shorten(user: str) -> dict:
@@ -111,7 +112,8 @@ class FakeOpenAI:
     как провайдер без structured outputs."""
 
     def __init__(self, outline=None, content=fake_content, reject_json_schema=False, usage=None):
-        self.outline = outline if outline is not None else fake_outline()
+        self.outline = outline if outline is not None else fake_outline(
+            title_topic="Управление требованиями в ИТ-стартапах", wishes=["со статистикой", "аналитика"])
         self.content = content
         self.reject_json_schema = reject_json_schema
         self.usage = usage or {"prompt_tokens": 1000, "completion_tokens": 200,

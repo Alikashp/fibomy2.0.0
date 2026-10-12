@@ -17,7 +17,8 @@ from core.llm import client as llm_client
 from core.llm.client import LLMClient
 from core.models.request import DeckRequest
 
-TOPIC = "Управление требованиями стейкхолдеров в ИТ-стартапе"
+TOPIC = "Управление требованиями в ит-стартапах со статистикой аналитикой и тж"   # G-05 (D-076)
+TITLE = "Управление требованиями в ИТ-стартапах"
 
 
 def request(**kw) -> DeckRequest:
@@ -54,9 +55,9 @@ class Pipeline(unittest.TestCase):
         spec = res.spec
         self.assertEqual(len(spec.slides), 9)
         self.assertEqual([s.kind for s in spec.slides][::8], ["title", "closing"])
-        # G-05: заголовок титула — тема дословно, модель пишет только подзаголовок
-        self.assertEqual(spec.slides[0].title, TOPIC)
-        self.assertEqual(spec.meta.title, TOPIC)
+        # G-05: заголовок титула — тема пользователя без пожеланий, модель пишет подзаголовок
+        self.assertEqual(spec.slides[0].title, TITLE)          # тема без пожеланий, «ИТ» капсом (D-076)
+        self.assertEqual(spec.meta.title, TITLE)
         self.assertEqual(spec.slides[0].content["subtitle"], "Как свет превращается в сахар")
         self.assertEqual(spec.slides[-1].content["title"], "Спасибо за внимание")
         # сноска у слайдов с числами «по теме» (в fake_content у bullets есть «12 листьях»)
@@ -185,6 +186,28 @@ class Pipeline(unittest.TestCase):
         self.assertEqual(statement.content["body"], "Модели до 35\u00a0млрд параметров.")
         self.assertTrue(any(c["messages"][1]["content"].count("ОШИБКИ ПРОВЕРКИ ТЕКСТА") for c in fake.calls))
         self.assertTrue(any(d.reason == "text_fixed" for d in res.spec.degradations))
+
+    def test_title_topic_and_wishes(self):
+        """D-076: пожелания — в план (системный промпт CONTENT), не на титул; title_topic со словами не из
+        темы отвергается — на титуле исходная тема с исправленным регистром."""
+        fake = FakeOpenAI()
+        res = run(fake)
+        content_system = next(c["messages"][0]["content"] for c in fake.calls
+                              if c["response_format"]["json_schema"]["name"].startswith("slide_"))
+        self.assertIn("Пожелания пользователя к презентации: со статистикой; аналитика", content_system)
+        self.assertEqual(res.spec.meta.title, TITLE)
+        bad = FakeOpenAI(outline=fake_outline(title_topic="Требования в IT-компаниях"))
+        spec = run(bad).spec
+        self.assertEqual(spec.meta.title, "Управление требованиями в ИТ-стартапах со статистикой аналитикой и тж")
+        self.assertTrue(any(d.reason == "title_topic_rejected" for d in spec.degradations))
+
+    def test_title_case_rules(self):
+        from core.planning.title import deck_title
+        self.assertEqual(deck_title("экономика россии подробно для защиты", "Экономика России")[0], "Экономика России")
+        self.assertEqual(deck_title("упровление требованиями", "Управление требованиями")[0],
+                         "Управление требованиями")                          # опечатка пользователя
+        self.assertEqual(deck_title("ии в медицине", None)[0], "ИИ в медицине")
+        self.assertEqual(deck_title("Итоги продаж за квартал", "Итоги продаж за квартал"), ("Итоги продаж за квартал", None))
 
     def test_progress_stages(self):
         stages = []

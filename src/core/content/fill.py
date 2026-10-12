@@ -335,20 +335,23 @@ def data_block(data: dict | None, language: str = "ru", related: list[dict] | No
 
 # ── Промпты ──────────────────────────────────────────────────────────────────
 
-def outline_text(subtitle: str, plan: list[PlannedSlide]) -> str:
+def outline_text(subtitle: str, plan: list[PlannedSlide], wishes: list[str] | None = None) -> str:
     lines = ["Слайд 1 — титул: тема пользователя (ставит система). Подзаголовок: " + subtitle]
+    if wishes:
+        lines.insert(0, "Пожелания пользователя к презентации: " + "; ".join(wishes))
     for i, s in enumerate(plan, start=2):
         lines.append(f"Слайд {i} [{s.kind}, {s.role}]: {s.title} — {s.key_message}")
     lines.append(f"Слайд {len(plan) + 2} — финальный (ставит система).")
     return "\n".join(lines)
 
 
-def system_prompt(request: DeckRequest, digest: SourceDigest, subtitle: str, plan: list[PlannedSlide]) -> str:
+def system_prompt(request: DeckRequest, digest: SourceDigest, subtitle: str, plan: list[PlannedSlide],
+                  wishes: list[str] | None = None) -> str:
     common = P.common_blocks(mode=request.mode, source_mode=request.source_mode,
                              language=request.language, audience=request.audience)
     common.pop("audience")
     return P.render("content/system.txt", digest=digest_text(digest),
-                    outline=outline_text(subtitle, plan), **common)
+                    outline=outline_text(subtitle, plan, wishes), **common)
 
 
 def task_prompt(planned: PlannedSlide, index: int, total: int, kind: str, capacity_lines: list[str],

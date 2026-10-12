@@ -45,6 +45,7 @@ from core.models.request import DeckRequest
 from core.models.theme import load_theme
 from core.paths import THEMES_DIR
 from core.planning.outline import plan_deck
+from core.planning.title import deck_title
 from core.render.pdf.convert import ConvertError, pptx_to_pdf
 from core.render.pptx.renderer import render_pptx
 from core.models.layout import load_layouts
@@ -123,10 +124,6 @@ def _apply_chart_content(slide: Slide, language: str) -> None:
         slide.content["legend"] = legend(data, language)
 
 
-def deck_title(topic: str) -> str:
-    """Тема пользователя на титуле дословно, но с заглавной первой буквой (требование владельца)."""
-    topic = topic.strip()
-    return topic[:1].upper() + topic[1:]
 
 
 def image_kinds() -> set[str]:
@@ -187,7 +184,10 @@ async def generate_deck(deck_id: str, request: DeckRequest, progress: Progress |
             raise DeckError("OUTLINE_FAILED", str(e)) from e
 
     # 3 SELECT: титул + план + финал; картинки — тем слайдам, которым их выделил план картинок
-    title = deck_title(request.input.topic)
+    # Тема без пожеланий, регистр исправлен; слова — только из темы пользователя (D-076)
+    title, title_reason = deck_title(request.input.topic, outline.deck.title_topic, outline.deck.subtitle)
+    if title_reason:
+        degradations.append(("outline", slide_id(1), title_reason))
     image_slots = plan_images(request, outline, plan)
     with log_stage("select", timings):
         total = len(plan) + 2
@@ -222,7 +222,7 @@ async def generate_deck(deck_id: str, request: DeckRequest, progress: Progress |
 
     # 4 CONTENT — параллельно, до дедлайна этапа
     await progress("content", done=0, total=len(plan))
-    system = system_prompt(request, digest, outline.deck.subtitle, plan)
+    system = system_prompt(request, digest, outline.deck.subtitle, plan, outline.deck.user_wishes)
     done_count = 0
 
     def chart_data(data: dict | None, choice) -> dict | None:
