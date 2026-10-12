@@ -1,0 +1,22 @@
+{
+ "business_slate": {
+  "inputs": "483b95cc3d57cf32",
+  "png": "dc9ee2b09affec3b",
+  "bytes": 80638
+ },
+ "ember_dark": {
+  "inputs": "f0a2a95799328895",
+  "png": "2fe3a2a3f1b2998b",
+  "bytes": 112372
+ },
+ "sunny_cream": {
+  "inputs": "45cdadf2895103e8",
+  "png": "16cc5a1741004cc1",
+  "bytes": 100518
+ },
+ "mint_coral": {
+  "inputs": "eafd7507e183602d",
+  "png": "f1205967c81c7bd3",
+  "bytes": 106761
+ }
+}

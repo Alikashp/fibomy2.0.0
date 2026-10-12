@@ -5,6 +5,9 @@
 # тёмный слайд с градиентной панелью. Декор — дуги и кольца (сессия 4, D-063; правка владельца — D-070).
 id: ember_dark
 name: {ru: "Тёмная тёплая", en: "Ember dark"}
+emoji: "🔥"
+# Настроение темы одной строкой — GET /v1/themes (description) и превью для второго бота (D-077)
+description: {ru: "Тёмная тёплая: почти чёрный фон и янтарные акценты — для выступлений на экране в тёмном зале", en: "Dark and warm: near-black background with amber accents — for talks on a big screen in a dark room"}
 mode: dark
 tags: [business, tech, bold]
 free: true

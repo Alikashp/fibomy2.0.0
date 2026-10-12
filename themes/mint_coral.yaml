@@ -3,6 +3,9 @@
 # карточки с зелёной обводкой, декор — волны (сессия 4, D-063).
 id: mint_coral
 name: {ru: "Мята и коралл", en: "Mint coral"}
+emoji: "🌿"
+# Настроение темы одной строкой — GET /v1/themes (description) и превью для второго бота (D-077)
+description: {ru: "Мята и коралл: свежая зелёная с коралловым акцентом — легко и современно", en: "Mint and coral: fresh green with a coral accent — light and modern"}
 mode: light
 tags: [bright, education, business]
 free: true
