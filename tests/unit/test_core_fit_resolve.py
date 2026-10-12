@@ -134,6 +134,7 @@ class TextGarbage(unittest.TestCase):
 
     def test_allowed(self):
         for ok in ("end-to-end прогон, AI, API, KPI, Python, SaaS", "лицензия apache 2.0 или mit",
+                   "AI-навигация для IT-компаний, e-mail",
                    "Boston Scientific и Medtronic", "оценка α и β", "₽, №, °C, ×"):
             self.assertEqual(self.codes(ok), [], ok)
 

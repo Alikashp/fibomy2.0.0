@@ -104,13 +104,16 @@ def problems(text: str, language: str, known: Known) -> list[Problem]:
         letters = [c for c in word if c.isalpha()]
         if not letters:
             continue
-        scripts = {_script(c) for c in letters} - {"greek"}
         low = word.lower()
         if low in known.words or low in ALLOWED_LATIN:
             continue
-        if {"latin", "cyrillic"} <= scripts:
-            out.append(Problem("mixed", word))
+        # Части через дефис — отдельно: «AI-навигация», «IT-компания» — нормальные слова
+        parts = [p for p in re.split(r"-", word) if any(c.isalpha() for c in p)]
+        mixed = [p for p in parts if {"latin", "cyrillic"} <= {_script(c) for c in p if c.isalpha()}]
+        if mixed:
+            out += [Problem("mixed", p) for p in mixed if p.lower() not in known.words]
             continue
+        scripts = {_script(c) for c in letters} - {"greek"}
         if native and scripts and native not in scripts and scripts <= {"latin", "cyrillic"}:
             # чужой алфавит: строчными (не имя, не тикер, не аббревиатура) и длиннее двух букв
             if word == low and len(letters) >= 3:
