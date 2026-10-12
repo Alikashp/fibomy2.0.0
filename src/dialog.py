@@ -70,7 +70,9 @@ DEFAULT_SOURCE_MODE = "strict"
 # Сообщение длиннее — это не тема, а текст для презентации (вопрос 8, D-039;
 # DeckRequest.input.topic ≤ 200)
 TOPIC_MAX_CHARS = 200
-MATERIAL_MAX_CHARS = 30000  # ТЗ 3.1: текст в сообщении — до 30 000 знаков
+# Текст материала в сводке: склеенные части (bot/text_join, D-075) не обрезаются молча — дальше 40 000
+# знаков INGEST берёт начало и предупреждает «хватило на X из Y» (D-053)
+MATERIAL_MAX_CHARS = 100_000
 
 
 def has_material(data: dict) -> bool:
@@ -167,8 +169,15 @@ def _material_line(data: dict) -> str:
     if data.get("source_type") == "document":
         return f"файл «{_short(data.get('source_name') or 'документ', 40)}»"
     if data.get("source_type") == "text":
-        return f"ваш текст, {len(data.get('raw_text') or ''):,} симв.".replace(",", " ")
+        return text_size(data)
     return "нет — соберём по теме"
+
+
+def text_size(data: dict) -> str:
+    """«12 345 знаков» (и «из 3 сообщений», если Telegram разрезал текст)."""
+    n = f"{len(data.get('raw_text') or ''):,}".replace(",", " ")
+    parts = int(data.get("text_parts") or 1)
+    return f"{n} знаков" + (f" (из {parts} сообщений)" if parts > 1 else "")
 
 
 def summary_text(data: dict, plan: str) -> str:
@@ -177,7 +186,10 @@ def summary_text(data: dict, plan: str) -> str:
     lines.append(f"📝 Тема: <b>{_escape(_short(data.get('topic', '')))}</b>")
     lines.append(f"📂 Тип: <b>{TYPE_LABELS.get(ptype, ptype)}</b>")
     if ptype == "doklad":
-        lines.append(f"📎 Материал: <b>{_escape(_material_line(data))}</b>")
+        if data.get("source_type") == "text":
+            lines.append(f"📎 Текст: <b>{_escape(text_size(data))}</b>")
+        else:
+            lines.append(f"📎 Материал: <b>{_escape(_material_line(data))}</b>")
         if has_material(data):
             lines.append(f"📚 Режим: <b>{SOURCE_MODES[data.get('source_mode', DEFAULT_SOURCE_MODE)]}</b>")
     elif ptype == "pitch_deck":

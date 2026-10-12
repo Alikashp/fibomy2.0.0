@@ -35,6 +35,7 @@ from core.models.request import DeckRequest
 from core.models.theme import enabled_theme_ids
 from core.storage import decks as deck_store
 from bot import admin as bot_admin
+from bot.text_join import joiner as text_joiner
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -378,9 +379,18 @@ async def on_type(call: CallbackQuery, state: FSMContext):
     await state.set_state(Gen.entering_topic)
 
 
-def _text_material(text: str) -> dict:
-    return dict(source_type="text", raw_text=text[:dialog.MATERIAL_MAX_CHARS], source_name=None,
+def _text_material(text: str, parts: int = 1) -> dict:
+    return dict(source_type="text", raw_text=text[:dialog.MATERIAL_MAX_CHARS], source_name=None, text_parts=parts,
                 document_ref=None, document_mime_type=None, last_short_text_error_msg_id=None)
+
+
+async def _joined_text(message: Message) -> tuple[str, int] | None:
+    """Текст сообщения вместе с частями, на которые его разрезал Telegram (> 4096 знаков, D-075).
+    None — эту часть заберёт обработчик следующей."""
+    text = (message.text or "").strip()
+    if not text:
+        return "", 1
+    return await text_joiner.feed((message.chat.id, message.from_user.id), text)
 
 
 _NO_MATERIAL = dict(source_type="topic", raw_text=None, source_name=None,
@@ -405,13 +415,16 @@ async def on_topic(message: Message, state: FSMContext):
         await _show_summary(message, state, message.from_user.id, edit=False)
         return
 
-    text = (message.text or "").strip()
+    joined = await _joined_text(message)
+    if joined is None:
+        return
+    text, parts = joined
     if len(text) < 3:
         await message.answer("Тема слишком короткая — напишите хотя бы несколько слов.")
         return
     if len(text) > dialog.TOPIC_MAX_CHARS:
         if ptype == "doklad":
-            await state.update_data(topic=dialog.topic_from_text(text), **_text_material(text))
+            await state.update_data(topic=dialog.topic_from_text(text), **_text_material(text, parts))
         else:
             await state.update_data(topic=dialog.topic_from_text(text), brief=text[:BRIEF_MAX_CHARS])
         await _show_summary(message, state, message.from_user.id, edit=False)
@@ -724,11 +737,14 @@ async def on_material(message: Message, state: FSMContext):
         if not await _store_document(message, state):
             return
     elif message.text:
-        text = message.text.strip()
+        joined = await _joined_text(message)
+        if joined is None:
+            return
+        text, parts = joined
         if len(text) < 20:
             await _report_short_text_error(message, state, data)
             return
-        await state.update_data(**_text_material(text))
+        await state.update_data(**_text_material(text, parts))
     else:
         await message.answer("Пришлите текст сообщением или документ файлом.")
         return

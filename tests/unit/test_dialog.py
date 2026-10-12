@@ -239,6 +239,42 @@ class Flow(unittest.TestCase):
         self.assertEqual(data["source_type"], "text")
         self.assertIn("Режим: <b>📎 Только мой материал</b>", chat.last.body)
 
+    def test_text_split_by_telegram_is_joined(self):
+        """D-075: Telegram режет текст > 4096 знаков на части — бот склеивает части, пришедшие подряд,
+        и показывает одну сводку «Текст: N знаков»; ни одна компания не теряется."""
+        from bot.text_join import TextJoiner
+        companies = "\n".join(f"Компания {i}: выручка {i * 10} млн руб., рост {i} %. " + "Описание рынка и конкурентов. " * 25
+                              for i in range(1, 16))
+        chunks = [companies[i:i + 4096] for i in range(0, len(companies), 4096)]
+        self.assertGreaterEqual(len(chunks), 3)
+        chat = Chat()
+        self.start(chat, "doklad")
+        p = mock.patch.object(main, "text_joiner", TextJoiner(window=0.2))
+        p.start()
+        self.addCleanup(p.stop)
+
+        async def go():
+            async def send(k, chunk):
+                await asyncio.sleep(0.05 * k)
+                await main.on_topic(FakeMessage(chat, chunk), self.state)
+            before = len(chat.sent)
+            await asyncio.gather(*(send(k, c) for k, c in enumerate(chunks)))
+            return len(chat.sent) - before
+        summaries = self.run_(go())
+        self.assertEqual(summaries, 1)                               # одна сводка, а не по части на сообщение
+        data = self.run_(self.state.get_data())
+        for i in range(1, 16):
+            self.assertIn(f"Компания {i}:", data["raw_text"])
+        self.assertEqual(data["text_parts"], len(chunks))
+        n = f"{len(data['raw_text']):,}".replace(",", " ")
+        self.assertIn(f"Текст: <b>{n} знаков (из {len(chunks)} сообщений)</b>", chat.last.body)
+
+    def test_short_topic_is_not_delayed(self):
+        from bot.text_join import TextJoiner
+        joiner = TextJoiner(window=30)
+        result = self.run_(asyncio.wait_for(joiner.feed((1, 1), "Как работает нейросеть"), 1))
+        self.assertEqual(result, ("Как работает нейросеть", 1))
+
     def test_file_path_and_every_change(self):
         chat = Chat()
         self.start(chat, "doklad")
