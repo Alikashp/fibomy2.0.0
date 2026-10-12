@@ -24,10 +24,17 @@ from config import settings
 from core import i18n
 from core import images as IMG
 from core.checks.facts import slide_errors, source_numbers, strip_unknown
-from core.content.fill import fallback_content, fill_slide, system_prompt, FALLBACK_VARIANT
+from core.content.fill import (AXIS_TITLE_MAX, CATEGORY_LABEL_MAX, FALLBACK_VARIANT, fallback_content, fill_slide,
+                               system_prompt)
 from core.ingest import IngestError, ingest
 from core.planning.datasets import legend, related_columns
-from core.fitting.fitter import fit_deck
+from core.checks.layout import check_pptx
+from core.checks.text import Known, fix_glued, map_texts, problems, remove_fragments, slide_problems
+from core.fitting.fitter import Overflow, fit_deck
+from core.fitting.resolve import FitError, llm_shorten, regroup, renumber, resolve_deck
+from core.ingest.render import digest_text
+from core.models import bind as B
+from core.text.typography import typeset, typeset_value
 from core.llm import prompts as P
 from core.llm.client import DeckUsage, LLMClient, LLMError, get_client
 from core.models.deck import DeckSpec, Meta, Slide, Versions
@@ -104,12 +111,13 @@ def _apply_chart_content(slide: Slide, language: str) -> None:
     data = slide.data
     if not data:
         return
+    # Подпись длиннее предела не берётся (без обрезки, D-071): остаётся подпись из источника
     short = {c.get("row"): c.get("label") for c in (slide.content.get("category_labels") or [])
-             if c.get("row") and c.get("label")}
+             if c.get("row") and c.get("label") and len(c["label"]) <= CATEGORY_LABEL_MAX}
     for cat in data["categories"]:
         if short.get(cat["row"]):
             cat["label"] = short[cat["row"]]
-    if slide.content.get("value_axis_title"):
+    if slide.content.get("value_axis_title") and len(slide.content["value_axis_title"]) <= AXIS_TITLE_MAX:
         data["value_axis_title"] = slide.content["value_axis_title"]
     if slide.kind == "chart_share":
         slide.content["legend"] = legend(data, language)
@@ -278,7 +286,12 @@ async def generate_deck(deck_id: str, request: DeckRequest, progress: Progress |
             image_files, assets = await _collect_images(image_tasks, images_started, slides, needs, choices, seed,
                                                         usage, degradations)
 
-    # 6a FIT: числа — из источника (режим «по материалу», ТЗ 3.3.3)
+    # 6a Текст: мусор генерации — склейки кодом, остальное перегенерацией слайда, затем вычисткой (D-074)
+    known = Known.build(request.input.topic, digest_text(digest) if request.mode == "material" else "")
+    with log_stage("text_check", timings):
+        await _check_text(slides, request, known, client, usage, system, total, choices, degradations, deadline)
+
+    # 6b FIT: числа — из источника (режим «по материалу», ТЗ 3.3.3)
     if request.mode == "material":
         with log_stage("facts", timings):
             await _check_facts(slides[1:], digest, request, client, usage, system, total, choices, degradations,
@@ -317,20 +330,60 @@ async def generate_deck(deck_id: str, request: DeckRequest, progress: Progress |
     for stage_name, sid, reason in degradations:
         spec.degrade(stage_name, reason, sid)
 
-    # 6 FIT
-    theme = load_theme(request.theme_id)
-    with log_stage("fit", timings):
-        fit_deck(spec, theme)
+    # Пунктов больше, чем умеет вариант, — другой вариант или два слайда (пункты не теряются)
+    regrouped = []
+    for s in spec.slides:
+        parts = regroup(s, request.language) if s.kind not in ("title", "closing") else [s]
+        if len(parts) > 1:
+            spec.degrade("content", f"split_items:{s.variant}", s.id)
+        regrouped += parts
+    if len(regrouped) != len(spec.slides) and len(regrouped) <= 20:
+        spec.slides = regrouped
+        renumber(spec)
 
-    # 7 RENDER
+    # 6c Типографика: неразрывные числа, диапазоны, единицы; формат чисел по языку (D-071)
+    for s in spec.slides[1:-1]:
+        s.title = typeset(s.title, request.language)
+        s.content = typeset_value(s.content, request.language)
+    spec.slides[0].content["subtitle"] = typeset(spec.slides[0].content.get("subtitle") or "", request.language) or None
+
+    # 6 FIT: кегль → вариант → «сократи до N» → два слайда; обрезки нет (D-071)
+    theme = load_theme(request.theme_id)
+
+    async def shorten(slide: Slide, targets) -> dict[str, str] | None:
+        return await llm_shorten(client, usage, system, slide, targets)
+
+    with log_stage("fit", timings):
+        try:
+            overflows = fit_deck(spec, theme)
+            await resolve_deck(spec, theme, overflows, shorten=shorten, deadline=deadline)
+        except FitError as e:
+            logger.error("FIT failed — text does not fit without truncation", extra={"error": str(e)[:300]})
+            raise DeckError("RENDER_FAILED", f"fit: {e}") from e
+
+    # 7 RENDER + финальная проверка по готовому PPTX (D-072): ошибка вёрстки — исправление, иначе
+    # колода не отдаётся
     await progress("render")
     with log_stage("render", timings):
-        try:
-            pptx = render_pptx(spec, watermark=False, images=image_files)
-            pptx_for_pdf = render_pptx(spec, watermark=True, images=image_files) if request.watermark else pptx
-        except Exception as e:
-            logger.exception("RENDER failed")
-            raise DeckError("RENDER_FAILED", str(e)) from e
+        pptx = _render(spec, image_files, watermark=False)
+        for round_ in range(LAYOUT_ROUNDS + 1):
+            issues = check_pptx(pptx)
+            if not issues:
+                break
+            for issue in issues:
+                logger.warning("Layout check failed", extra={"slide": issue.slide, "shape": issue.shape,
+                                                             "code": issue.code, "detail": issue.detail})
+            if round_ == LAYOUT_ROUNDS:
+                raise DeckError("RENDER_FAILED", "layout check: " + "; ".join(str(i) for i in issues[:5]))
+            fixes = issue_overflows(spec, issues)
+            try:
+                await resolve_deck(spec, theme, fixes, shorten=shorten, deadline=deadline, ratio=0.85)
+            except FitError as e:
+                raise DeckError("RENDER_FAILED", f"layout fix: {e}") from e
+            for d in issues:
+                spec.degrade("check", f"layout:{d.code}:{d.shape}", slide_id(d.slide))
+            pptx = _render(spec, image_files, watermark=False)
+        pptx_for_pdf = _render(spec, image_files, watermark=True) if request.watermark else pptx
 
     # 8 CONVERT
     await progress("convert")
@@ -353,6 +406,107 @@ async def generate_deck(deck_id: str, request: DeckRequest, progress: Progress |
         "cost_rub": usage.cost_rub, "durations_ms": timings,
     })
     return DeckResult(spec=spec, pptx=pptx, pdf=pdf, durations_ms=timings, usage=usage, warnings=warnings)
+
+
+LAYOUT_ROUNDS = 2
+
+
+def _render(spec: DeckSpec, images: dict[str, bytes], watermark: bool) -> bytes:
+    try:
+        return render_pptx(spec, watermark=watermark, images=images)
+    except Exception as e:
+        logger.exception("RENDER failed")
+        raise DeckError("RENDER_FAILED", str(e)) from e
+
+
+def issue_overflows(spec: DeckSpec, issues) -> list[Overflow]:
+    """Ошибки финальной проверки → слоты, которые надо вписать заново (сократить, сменить вариант)."""
+    layouts = load_layouts()
+    out, seen = [], set()
+    for issue in issues:
+        if issue.slide > len(spec.slides):
+            continue
+        slide = spec.slides[issue.slide - 1]
+        name, item = issue.slot
+        key = (slide.id, name, item)
+        if key in seen:
+            continue
+        seen.add(key)
+        layout = layouts[slide.variant]
+        if item is None:
+            element = next((e for e in layout.elements() if e.name == name), None)
+            text = B.text_of(element, slide, spec) if element and element.is_text else None
+        else:
+            items = B.items_of(layout.items_bind, slide)
+            element = next((e for e in layout.item_elements(len(items))[item] if e.name == name), None) \
+                if len(items) in layout.arrangements and item < len(items) else None
+            text = B.text_of(element, slide, spec, item=items[item], index=item) if element else None
+        if element is None or not text:
+            continue
+        out.append(Overflow(slide_id=slide.id, key=name if item is None else f"item.{name}", element=name,
+                            text=text, item=item, lines=1, max_lines=1,
+                            overlong=[issue.detail] if issue.code == "word" else None,
+                            never_shorten=element.never_truncate or (element.bind or "").startswith("$")))
+    return out
+
+
+async def _check_text(slides: list[Slide], request: DeckRequest, known: Known, client: LLMClient, usage: DeckUsage,
+                      system: str, total: int, choices, degradations: list, deadline: float) -> None:
+    """Мусор в тексте: склейки — кодом; чужие знаки, обрывки, чужие слова — 1 перегенерация слайда с
+    перечнем ошибок; не помогло — фрагмент убирается. Заголовки и подзаголовок (их пишет OUTLINE) —
+    сразу вычисткой."""
+    lang = request.language
+
+    def clean_title(slide: Slide) -> None:
+        found = problems(slide.title, lang, known)
+        if found:
+            slide.title = remove_fragments(slide.title, found) or slide.title
+            degradations.append(("text", slide.id, "title:" + ",".join(sorted({p.code for p in found}))))
+
+    title_slide = slides[0]
+    sub = title_slide.content.get("subtitle")
+    if sub:
+        found = problems(sub, lang, known)
+        if found:
+            title_slide.content["subtitle"] = remove_fragments(sub, found) or None
+            degradations.append(("text", title_slide.id, "subtitle:" + ",".join(sorted({p.code for p in found}))))
+
+    targets = []
+    for slide in slides[1:]:
+        clean_title(slide)
+        found = slide_problems("", slide.content, lang, known)
+        glued = {path: [p for p in ps if p.code == "glued"] for path, ps in found.items()}
+        if any(glued.values()):
+            slide.content = map_texts(slide.content, lambda path, t: fix_glued(t, glued.get(path, [])))
+            degradations.append(("text", slide.id, "glued_fixed"))
+        rest = {path: [p for p in ps if p.code != "glued"] for path, ps in found.items()}
+        rest = {k: v for k, v in rest.items() if v}
+        if rest and slide.plan:
+            targets.append((slide, rest))
+
+    async def regenerate(slide: Slide, found: dict):
+        if deadline - time.monotonic() < RESERVE_SECONDS + 10:
+            return None
+        errors = [f"{path}: {p.message()}" for path, ps in found.items() for p in ps]
+        extra = P.render("fit/fix_text.txt", errors="\n".join(f"- {e}" for e in errors))
+        choice = choices[slide.index - 1]
+        content, variant, reason = await fill_slide(
+            client, usage, system, slide.plan, slide.kind, slide.variant, choice.items, index=slide.index,
+            total=total, slide_id=slide.id, data=slide.data, extra=extra, language=lang, stage="fit", attempts=1)
+        return None if reason else content
+
+    results = await asyncio.gather(*(regenerate(s, f) for s, f in targets), return_exceptions=True)
+    for (slide, found), fixed in zip(targets, results):
+        if isinstance(fixed, dict):
+            slide.content = fixed
+            _apply_chart_content(slide, lang)
+        left = slide_problems("", slide.content, lang, known)
+        if not left:
+            degradations.append(("text", slide.id, "text_fixed"))
+            continue
+        slide.content = map_texts(slide.content, lambda path, t: remove_fragments(t, left[path]) if path in left else t)
+        degradations.append(("text", slide.id, "text_stripped:" + "; ".join(
+            f"{p.code}:{p.fragment}" for ps in left.values() for p in ps)[:200]))
 
 
 async def _collect_images(tasks: dict, started: float, slides: list[Slide], needs, choices, seed: int,

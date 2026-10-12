@@ -3,7 +3,8 @@
 По готовому PPTX (python-pptx) и PNG страницы PDF:
 - фигуры в пределах слайда, текст — в полях (декор и картинки «в край» — исключение);
 - шрифт Arial, кегль из типошкалы темы, у фигур нет <p:style>, автоподбор выключен;
-- текст не обрезан fitter'ом на заполнениях min и typical;
+- текст влез без resolve на заполнениях min и typical; финальная проверка вёрстки готового
+  PPTX (core.checks.layout: вылет, слово шире слота, наложение, текст за фигурой, «…») — везде;
 - заполненность зоны контента 40–75% (typical, слайды с пунктами и панелями);
 - доля цвета темы на слайде: титул и финал ≥ 35%, с диаграммой ≥ 10%, остальные ≥ 6%;
 - у диаграмм столбцов и линий — подписи значений.
@@ -86,58 +87,9 @@ def chart_errors(slide_obj) -> list[str]:
 
 
 # ── Заполненность зоны контента ─────────────────────────────────────────────
+# Та же мера, что у прода (core.checks.layout.fill_share): fitter растягивает блок до 40% (D-073)
 
-CELL = 10
-
-
-def _text_extent(shape) -> list[tuple[float, float, float, float]]:
-    """Прямоугольники, которые реально занимает текст фигуры (по метрикам fitter'а)."""
-    x, y, w, h = box_of(shape)
-    tf = shape.text_frame
-    lines = []
-    for p in tf.paragraphs:
-        run = p.runs[0] if p.runs else None
-        if not run or not p.text.strip():
-            continue
-        pt = round(run.font.size.pt) if run.font.size else 18
-        bold = bool(run.font.bold)
-        for line in wrap(p.text, w, pt, bold):
-            lines.append((text_width(line, pt, bold), line_height(pt), p.alignment))
-    total = sum(lh for _, lh, _ in lines)
-    anchor = tf.vertical_anchor
-    top = y + {None: 0, 1: 0, 3: (h - total) / 2, 4: h - total}.get(anchor, 0) if anchor else y
-    out = []
-    for lw, lh, align in lines:
-        lx = x + (w - lw) / 2 if align == 2 else x + w - lw if align == 3 else x
-        out.append((lx, top, lw, lh))
-        top += lh
-    return out
-
-
-def fill_share(slide_obj) -> float:
-    """Доля зоны контента (сетка 10×10), занятой фигурами, картинками, диаграммами и текстом."""
-    zx, zy, zw, zh = ZONE
-    cols, rows = int(zw // CELL), int(zh // CELL)
-    covered = set()
-
-    def mark(x, y, w, h):
-        c0, c1 = max(0, int((x - zx) // CELL)), min(cols, int(math.ceil((x + w - zx) / CELL)))
-        r0, r1 = max(0, int((y - zy) // CELL)), min(rows, int(math.ceil((y + h - zy) / CELL)))
-        for r in range(r0, r1):
-            for c in range(c0, c1):
-                covered.add((r, c))
-
-    for shape in slide_obj.shapes:
-        if is_decor(shape) or shape.name in ("title", "footnote", "page_number", "footer", "gallery_label"):
-            continue
-        if shape.has_text_frame and not shape.text_frame.text.strip() and shape.shape_type == 17:
-            continue
-        if shape.shape_type == 17 or (shape.has_text_frame and shape.name.endswith((":number",))):
-            for ext in _text_extent(shape):
-                mark(*ext)
-            continue
-        mark(*box_of(shape))
-    return 100.0 * len(covered) / (cols * rows)
+from core.checks.layout import fill_share  # noqa: E402,F401
 
 
 # ── Доля цвета темы (PNG) ───────────────────────────────────────────────────

@@ -103,7 +103,8 @@ def from_deckspec(spec: dict) -> dict:
 def norm(text: str | None) -> str:
     if not text:
         return ""
-    text = text.lower().replace("ё", "е").replace(" ", " ")
+    # неразрывные пробелы и word joiner типографики (D-071) — как обычный текст
+    text = text.lower().replace("ё", "е").replace("\u00a0", " ").replace("\u202f", " ").replace("\u2060", "")
     return re.sub(r"[−–]", "-", text)
 
 

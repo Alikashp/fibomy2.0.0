@@ -32,3 +32,11 @@ IMAGES_AI = {
     "uz": "Rasmlar sun'iy intellekt tomonidan yaratilgan",
     "kk": "Суреттерді жасанды интеллект жасаған",
 }
+
+# Вторая половина слайда, который пришлось разбить на два: текст не влез (сессия 5, D-071)
+CONTINUED = {
+    "ru": "продолжение",
+    "en": "continued",
+    "uz": "davomi",
+    "kk": "жалғасы",
+}

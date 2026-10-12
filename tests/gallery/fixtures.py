@@ -1,7 +1,8 @@
 """Фикстуры стресс-галереи (07_TESTING.md, 2): содержание слайда каждого варианта
-в трёх заполнениях — min (минимум элементов, короткие тексты), typical (середина,
+в четырёх заполнениях — min (минимум элементов, короткие тексты), typical (середина,
 тексты ~70% вместимости, русский), max (максимум элементов, тексты на базовой
-вместимости, длинные казахские и немецкие слова).
+вместимости, длинные казахские и немецкие слова), real (тексты реальных колод настоящей
+длины: длинные заголовки и слова, диапазоны, проценты — real_texts.yaml, сессия 5).
 
 Без LLM: тексты собираются из словаря до нужной длины по вместимости слота
 (core.content.fill — та же вместимость, что в промпте CONTENT).
@@ -10,13 +11,17 @@
 import io
 import math
 import random
+from functools import lru_cache
+from pathlib import Path
+
+import yaml
 
 from PIL import Image, ImageDraw, ImageFilter
 
 from core.content.fill import _slot_caps, item_bounds
 from core.models.layout import LayoutSpec, capacity
 
-FIXTURES = ("min", "typical", "max")
+FIXTURES = ("min", "typical", "max", "real")
 
 RU = ("система данные процесс команда решение рынок клиент проект качество анализ результат модель "
       "отчёт продажи рост доля студент преподаватель занятие план задача этап проверка поддержка "
@@ -45,14 +50,59 @@ def words(n_chars: int, fixture: str, seed: int, sentence: bool = True) -> str:
 
 
 def share(fixture: str) -> float:
-    return {"min": 0.35, "typical": 0.7, "max": 1.0}[fixture]
+    return {"min": 0.35, "typical": 0.7, "max": 1.0, "real": 1.0}[fixture]
 
 
 def n_items(layout: LayoutSpec, fixture: str) -> int | None:
     if not layout.arrangements:
         return None
     lo, hi = layout.item_range
-    return {"min": lo, "typical": (lo + hi + 1) // 2, "max": hi}[fixture]
+    return {"min": lo, "typical": (lo + hi + 1) // 2, "max": hi, "real": (lo + hi + 1) // 2}[fixture]
+
+
+@lru_cache(maxsize=None)
+def real_texts() -> dict:
+    with (Path(__file__).resolve().parent / "real_texts.yaml").open(encoding="utf-8") as f:
+        return yaml.safe_load(f)
+
+
+def _pick(pool: str, seed: int, k: int = 0):
+    items = real_texts()[pool]
+    return items[(seed + k) % len(items)]
+
+
+def real_content(layout: LayoutSpec, seed: int) -> tuple[str, dict, int | None]:
+    """Содержание варианта из текстов реальных колод — без подгонки под вместимость."""
+    kind = layout.kind
+    n = n_items(layout, "real")
+    title = _pick("titles", seed)
+    if kind == "title":
+        return (_pick("cover_titles", seed), {"subtitle": _pick("subtitles", seed),
+                                              "author": "Иван Петров · группа Б-21"}, None)
+    if kind == "closing":
+        return "Спасибо за внимание", {"title": "Спасибо за внимание", "body": _pick("bodies", seed),
+                                        "author": "Иван Петров · группа Б-21"}, None
+    if kind == "statement":
+        return _pick("statements", seed), {"body": _pick("bodies", seed)}, None
+    if kind == "bullets":
+        icons = ["bulb", "target", "users", "chart-bar", "clock", "shield"]
+        return title, {"items": [{"heading": _pick("headings", seed, i), "text": _pick("texts", seed, i),
+                                  "icon": icons[i % len(icons)]} for i in range(n)]}, n
+    if kind == "conclusion":
+        return title, {"items": [{"text": _pick("texts", seed, i)} for i in range(n)]}, n
+    if kind == "process":
+        return title, {"steps": [dict(_pick("steps", seed, i)) for i in range(n)]}, n
+    if kind == "metrics":
+        items = [dict(_pick("metrics", seed, i), status="fact", tag=None) for i in range(n)]
+        return title, {"items": items, "body": _pick("bodies", seed)}, n
+    if kind == "comparison":
+        side = lambda k: {"header": _pick("side_headers", seed, k),  # noqa: E731
+                          "points": [_pick("points", seed, k * 3 + i) for i in range(3)]}
+        return title, {"left": side(0), "right": side(1),
+                       "polarity": "pros_cons" if layout.id.endswith("pros_cons") else "neutral"}, None
+    if kind in ("chart_series", "chart_share"):
+        return title, {"insight": _pick("insights", seed)}, None
+    raise ValueError(kind)
 
 
 def placeholder_image(seed: int, w: int = 1200, h: int = 1200) -> bytes:
@@ -81,7 +131,8 @@ def placeholder_image(seed: int, w: int = 1200, h: int = 1200) -> bytes:
 
 def chart_data(variant: str, fixture: str) -> dict | None:
     if variant.startswith("chart_share"):
-        values = {"min": [62, 38], "typical": [46, 27, 18, 9], "max": [31, 22, 17, 13, 11, 9]}[fixture]
+        values = {"min": [62, 38], "typical": [46, 27, 18, 9], "max": [31, 22, 17, 13, 11, 9],
+                  "real": [46, 27, 18, 9]}[fixture]
         if fixture == "max":
             values = [v + 0.5 for v in values[:-1]] + [values[-1]]   # сумма 103%
         labels = ["Онлайн", "Розница", "Партнёры", "Корпоративные клиенты", "Экспорт", "Прочее"]
@@ -91,11 +142,11 @@ def chart_data(variant: str, fixture: str) -> dict | None:
                 "share_sum": sum(values)}
     if variant.startswith("chart_series"):
         line = variant.endswith("line_chart")
-        n = {"min": 4 if line else 2, "typical": 6, "max": 12}[fixture]
+        n = {"min": 4 if line else 2, "typical": 6, "max": 12, "real": 6}[fixture]
         months = ["Янв", "Фев", "Мар", "Апр", "Май", "Июн", "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек"]
         cats = [{"row": f"r{i + 1}", "label": months[i] if line else ["Север", "Юг", "Запад", "Восток", "Центр",
                  "Урал", "Сибирь", "Дальний Восток", "Поволжье", "Кавказ", "Крым", "Калининград"][i]} for i in range(n)]
-        series_n = {"min": 1, "typical": 2, "max": 3}[fixture]
+        series_n = {"min": 1, "typical": 2, "max": 3, "real": 2}[fixture]
         rng = random.Random(n)
         series = [{"name": f"{2024 + s} г.", "unit": "млн руб.",
                    "values": [round(rng.uniform(-6 if fixture == "max" else 5, 60), 1) for _ in range(n)]}
@@ -118,6 +169,8 @@ def _applicable_title(layout: LayoutSpec, title: str) -> str:
 
 def content_for(layout: LayoutSpec, fixture: str, seed: int) -> tuple[str, dict, int | None]:
     """→ (заголовок слайда, content, число элементов) варианта в заполнении fixture."""
+    if fixture == "real":
+        return real_content(layout, seed)
     kind = layout.kind
     n = n_items(layout, fixture)
     f = share(fixture)

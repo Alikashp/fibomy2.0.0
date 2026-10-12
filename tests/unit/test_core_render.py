@@ -1,4 +1,4 @@
-"""FIT v0 (метрики, шаги кегля, обрезка) и RENDER/CONVERT: PPTX читается обратно, PDF собирается."""
+"""FIT (метрики, шаги кегля, без обрезки — D-071) и RENDER/CONVERT: PPTX читается обратно, PDF собирается."""
 import asyncio
 import io
 import re
@@ -9,7 +9,7 @@ import _helpers  # noqa: F401 — путь к src/ и фиктивные клю�
 from pptx import Presentation
 from pptx.oxml.ns import qn
 
-from core.fitting.fitter import fit_deck, fit_text, measure, truncate
+from core.fitting.fitter import fit_deck, fit_text, measure
 from core.models.deck import DeckSpec, Meta, Slide
 from core.models.ids import new_deck_id
 from core.models.layout import capacity, load_layouts
@@ -59,34 +59,37 @@ class Fitting(unittest.TestCase):
             longer = RU[:int(capacity(e) * 1.4)]
             self.assertFalse(measure(e, longer, e.style, THEME).fits, (variant, n, slot))
 
-    def test_style_steps_down_then_truncates(self):
+    def test_style_steps_down_then_overflow_without_truncation(self):
         e = L["bullets.cards_grid"].text_slots(4)["item.text"]
         mid = RU[:170]
         self.assertEqual(fit_text(e, mid, THEME).style, "small")
-        cut = truncate(e, RU, "small", THEME)
-        self.assertTrue(cut.endswith("."))
-        self.assertTrue(measure(e, cut, "small", THEME).fits)
-        self.assertLess(len(cut), len(RU))
+        self.assertFalse(fit_text(e, RU, THEME).fits)       # не влезло и на минимальном — решает resolve
 
-    def test_long_words_kk_and_de_wrap_by_chars(self):
+    def test_long_word_does_not_fit_by_char_wrap(self):
+        """«Непротиворечивост / ь»: слово шире слота не считается вписанным переносом по знакам."""
         e = L["bullets.cards_grid"].text_slots(6)["item.heading"]
-        for word in ("Qualitätssicherungsmaßnahmen", "Жауапкершіліктерініздің"):
+        for word in ("Qualitätssicherungsmaßnahmen", "Непротиворечивостьдоказательств"):
             result = fit_text(e, word, THEME)
-            self.assertTrue(result.fits, word)
-            self.assertGreaterEqual(len(result.lines), 1)
+            self.assertFalse(result.fits, word)
+            self.assertTrue(result.overlong, word)
+        wide = L["bullets.cards_grid"].text_slots(3)["item.text"]
+        self.assertTrue(fit_text(wide, "Qualitätssicherungsmaßnahmen", THEME).fits)
 
-    def test_deck_fit_keeps_topic_verbatim(self):
+    def test_deck_fit_keeps_topic_and_texts_verbatim(self):
         topic = ("Управление требованиями заинтересованных сторон в ИТ-стартапе: от интервью до приоритизации "
                  "бэклога и проверки гипотез на пользователях, " * 2)[:200]
         spec = make_spec(topic=topic, bullets_text=RU)
-        fit_deck(spec, THEME)
+        overflows = fit_deck(spec, THEME)
         self.assertEqual(spec.slides[0].title, topic)
         self.assertEqual(spec.meta.title, topic)
         self.assertIn(spec.slides[0].fit.styles["title"], ("h1", "h2"))
         bullets = spec.slides[2]
-        self.assertTrue(bullets.fit.truncated)
         self.assertEqual(bullets.fit.styles["item.text"], "small")
-        self.assertTrue(any(d.reason.startswith("truncated:") for d in spec.degradations))
+        # текст пунктов не тронут, невлезание — в списке для resolve
+        self.assertTrue(all(it["text"] == RU for it in bullets.content["items"]))
+        self.assertEqual({(o.slide_id, o.key) for o in overflows}, {("s03", "item.text")})
+        self.assertFalse(bullets.fit.truncated)
+        self.assertFalse(any("truncated" in d.reason for d in spec.degradations))
 
 
 class ThemeLook(unittest.TestCase):

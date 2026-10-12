@@ -55,11 +55,26 @@ class _Ctx:
         self.images = images
 
 
+def _run(p, ctx: _Ctx, text: str, style: str, color: str) -> None:
+    run = p.add_run()
+    run.text = text
+    font = run.font
+    font.name = ctx.theme.fonts["heading" if style in BOLD_STYLES else "body"]
+    font.size = Pt(ctx.theme.pt(style))
+    font.bold = style in BOLD_STYLES
+    font.italic = False
+    font.color.rgb = S.rgb(ctx.theme.color(color))
+    run._r.get_or_add_rPr().set("lang", ctx.lang)
+
+
 def _text(slide_obj, ctx: _Ctx, element: Element, text: str, style: str, color: str | None = None,
-          box: Box | None = None) -> None:
+          box: Box | None = None, name: str | None = None, suffix: str | None = None,
+          suffix_style: str | None = None) -> None:
+    """Текстовая рамка слота. suffix — второй фрагмент той же строки (единица у значения),
+    через неразрывный пробел: «92–98 %» не рвётся."""
     box = box or element.box
     shape = slide_obj.shapes.add_textbox(u(box.x), u(box.y), u(box.w), u(box.h))
-    shape.name = element.name
+    shape.name = name or element.name
     tf = shape.text_frame
     # Однострочное число, которое нельзя резать (never_truncate): без переноса — разница метрик
     # LibreOffice и PowerPoint не уносит последнюю цифру на невидимую вторую строку
@@ -68,19 +83,14 @@ def _text(slide_obj, ctx: _Ctx, element: Element, text: str, style: str, color: 
     tf.margin_left = tf.margin_right = tf.margin_top = tf.margin_bottom = 0
     tf.vertical_anchor = _ANCHOR.get(element.anchor, MSO_ANCHOR.TOP)
     pt = ctx.theme.pt(style)
-    for i, line in enumerate(str(text).split("\n")):
+    lines = str(text).split("\n")
+    for i, line in enumerate(lines):
         p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
         p.alignment = _ALIGN.get(element.align, PP_ALIGN.LEFT)
         p.line_spacing = Pt(pt * 1.2)  # та же высота строки, что у fitter'а
-        run = p.add_run()
-        run.text = line
-        font = run.font
-        font.name = ctx.theme.fonts["heading" if style in BOLD_STYLES else "body"]
-        font.size = Pt(pt)
-        font.bold = style in BOLD_STYLES
-        font.italic = False
-        font.color.rgb = S.rgb(ctx.theme.color(color or element.color))
-        run._r.get_or_add_rPr().set("lang", ctx.lang)
+        _run(p, ctx, line, style, color or element.color)
+        if suffix and i == len(lines) - 1:
+            _run(p, ctx, "\u00a0" + suffix, suffix_style or style, color or element.color)
 
 
 def _fill_token(element: Element, index: int | None):
@@ -256,7 +266,13 @@ def _draw(slide_obj, ctx: _Ctx, slide: Slide, element: Element, key: str,
     if value in (None, ""):
         return
     style = slide.fit.styles.get(key) or element.style
-    _text(slide_obj, ctx, element, str(value), style, color, box=box)
+    suffix = None
+    if element.suffix:
+        raw = B.read(replace(element, bind=element.suffix, fmt=None), slide, ctx.spec, item=item, index=index)
+        suffix = str(raw).strip() if raw not in (None, "") and str(raw).strip() else None
+    _text(slide_obj, ctx, element, str(value), style, color, box=box,
+          name=element.name if index is None else f"{element.name}#{index + 1}",
+          suffix=suffix, suffix_style=slide.fit.styles.get(f"{key}:suffix") or element.suffix_style)
 
 
 def _header(slide_obj, ctx: _Ctx, layout: LayoutSpec) -> str | None:

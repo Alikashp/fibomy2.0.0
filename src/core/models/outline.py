@@ -68,8 +68,10 @@ class OutlineResponse(BaseModel):
     deck: OutlineDeck
 
 
-def outline_schema(kinds: tuple[str, ...], min_slides: int, max_slides: int) -> dict:
-    """Строгая JSON Schema ответа OUTLINE: только kinds, доступные в этом запросе."""
+def outline_schema(kinds: tuple[str, ...], min_slides: int) -> dict:
+    """Строгая JSON Schema ответа OUTLINE: только kinds, доступные в этом запросе. Лишние слайды
+    отрезает код (normalize_plan), лишние колонки диаграммы — datasets.resolve: maxItems в схеме
+    нет (D-071)."""
     planned = S.obj({
         "kind": S.enum(list(kinds)),
         "role": S.enum(list(ROLES)),
@@ -80,7 +82,7 @@ def outline_schema(kinds: tuple[str, ...], min_slides: int, max_slides: int) -> 
         "dataset": S.nullable(S.obj({
             "id": S.string(),
             "label_column": S.string(),
-            "value_columns": S.array(S.string(), max_items=3),
+            "value_columns": S.array(S.string()),
             "rows": S.nullable(S.array(S.string())),
         })),
         "image_query": S.nullable(S.string(description="на английском; только если фото уместно")),
@@ -92,13 +94,13 @@ def outline_schema(kinds: tuple[str, ...], min_slides: int, max_slides: int) -> 
                 "text": S.string(),
                 "status": S.enum(list(STATUSES)),
                 "refs": S.array(S.string()),
-            }), max_items=20),
+            })),
             "asks": S.array(S.obj({"text": S.string(), "refs": S.array(S.string())})),
             "missing": S.array(S.string()),
         }),
         "deck": S.obj({
             "subtitle": S.string(description="подзаголовок титула — здесь допускается переформулировка темы"),
             "cover_image_query": S.nullable(S.string(description="картинка титула: сцена по теме, на английском")),
-            "slides": S.array(planned, min_items=min_slides, max_items=max_slides),
+            "slides": S.array(planned, min_items=min_slides),
         }),
     })
