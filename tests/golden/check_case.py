@@ -439,7 +439,9 @@ def check_topic(deck: dict, r: Report, case: str) -> None:
     missing = [s["index"] for s in slides if re.search(r"\d", slide_text(s)) and s.get("footnote") != ESTIMATE_FOOTNOTE]
     r.check(not missing, "у каждого слайда с числом — сноска «Оценочные данные — проверьте перед показом»",
             f"нет сноски: слайд {', '.join(map(str, missing))}")
-    refs = find(units, r"отчет\w*|по данным|данн\w+ компании|росстат|отдел\w* маркетинг|mckinsey|gartner|standish")
+    # «отчёт», «отчёта», «отчёты» — ссылка на документ; «отчётность», «отчётный период» — понятие темы,
+    # не ссылка (golden PR #84, G-03: «формат управленческой отчётности»)
+    refs = find(units, r"отчет(?!н)\w*|по данным|данн\w+ компании|росстат|отдел\w* маркетинг|mckinsey|gartner|standish")
     r.check(not refs, "нет ссылок на конкретные отчёты и организации", "; ".join(quote(u, 70) for u in refs))
     stats = find(units, SURVEY_STATS)
     r.check(not stats, "нет выдуманной статистики исследований и опросов", "; ".join(quote(u, 70) for u in stats))

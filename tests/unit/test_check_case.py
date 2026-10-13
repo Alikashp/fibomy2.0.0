@@ -107,5 +107,30 @@ class GoldenRunFalsePositives(unittest.TestCase):
             self.assertIn(name, joined)
 
 
+class TopicDecks(unittest.TestCase):
+    """Доклад по теме (G-03): ссылки на отчёты ловятся, понятие «отчётность» — нет (golden PR #84)."""
+
+    @staticmethod
+    def deck(text: str) -> dict:
+        slides = [{"index": 1, "layout": "title", "title": "Итоги продаж за квартал"},
+                  {"index": 2, "layout": "quote", "title": "Итоги квартала — сводка продаж", "body_text": text},
+                  {"index": 3, "layout": "closing", "title": "Спасибо за внимание"}]
+        return {"meta": {"title": "Итоги продаж за квартал"}, "slides": slides}
+
+    def refs_violation(self, text: str) -> bool:
+        violations = check_case.check(self.deck(text), "G-03").violations
+        return any(v.startswith("нет ссылок на конкретные отчёты") for v in violations)
+
+    def test_reporting_as_concept_is_not_a_reference(self):
+        for text in ("Это формат управленческой отчетности, а не методика с единственным автором.",
+                     "Итоги готовят по окончании отчётного периода."):
+            self.assertFalse(self.refs_violation(text), text)
+
+    def test_report_references_still_found(self):
+        for text in ("По данным квартального отчёта, выручка выросла.", "В отчете McKinsey это главный тренд.",
+                     "Отчёты отдела маркетинга это подтверждают."):
+            self.assertTrue(self.refs_violation(text), text)
+
+
 if __name__ == "__main__":
     unittest.main()
