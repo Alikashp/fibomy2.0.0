@@ -2,7 +2,7 @@
 id: process.chevrons
 kind: process
 family: columns
-version: 1
+version: 2
 fallback: false
 header: true
 applies_when: {image: forbidden, items: {min: 3, max: 4}, label_max_chars: 22}
@@ -15,7 +15,7 @@ items:
   bind: content.steps
   arrangements:
     3:
-      grid: {area: [80, 300, 1760, 600], cols: 3, rows: 1, gap: 8}
+      grid: {area: [80, 300, 1760, 600], cols: 3, rows: 1, gap: 8, compact: center, pad: 0}
       elements: &chev
         - {name: chevron, type: chevron, box: [0, 0, w, 150], fill: $brand}
         - {name: label, type: text, box: [60, 27, w-140, 96], style: h3, min_style: body, max_lines: 2,
@@ -23,5 +23,5 @@ items:
         - {name: text, type: text, box: [0, 190, w-48, 400], style: body, min_style: small, max_lines: 9,
            color: text_muted, bind: text}
     4:
-      grid: {area: [80, 300, 1760, 600], cols: 4, rows: 1, gap: 8}
+      grid: {area: [80, 300, 1760, 600], cols: 4, rows: 1, gap: 8, compact: center, pad: 0}
       elements: *chev

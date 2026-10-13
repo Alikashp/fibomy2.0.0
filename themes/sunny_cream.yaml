@@ -4,6 +4,9 @@
 # слайд-пауза с белыми карточками; декор — свои круги, полукруги и точки (сессия 4, D-063).
 id: sunny_cream
 name: {ru: "Молочная с жёлтым", en: "Sunny cream"}
+emoji: "🌼"
+# Настроение темы одной строкой — GET /v1/themes (description) и превью для второго бота (D-077)
+description: {ru: "Молочная с жёлтым: тёплый светлый фон и солнечные плашки — дружелюбно и креативно", en: "Cream and yellow: warm light background with sunny highlights — friendly and creative"}
 mode: light
 tags: [bright, education, creative]
 free: true

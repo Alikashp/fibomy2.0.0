@@ -44,6 +44,9 @@ MIME = {
 }
 
 
+G06_FILE = "ai_navigation_endoscopic_surgery.docx"
+
+
 @dataclass
 class Case:
     run_id: str
@@ -52,6 +55,9 @@ class Case:
     request: dict
     file: str | None = None
     repeat: int = 1
+
+
+G06_FILE = "ai_navigation_endoscopic_surgery.docx"
 
 
 @dataclass
@@ -79,9 +85,14 @@ CASES = [
          dict(input={"topic": "Итоги пилота «Навигатор»"}, audience="management", slides_count=9,
               source_mode="strict"),
          file="navigator_pilot.txt", repeat=3),
-    Case("G-05", "G-05", "G-05 требования стейкхолдеров по теме, студенты",
-         dict(input={"topic": "Управление требованиями стейкхолдеров в ИТ-стартапе"}, audience="students",
-              slides_count=9)),
+    Case("G-05", "G-05", "G-05 тема с пожеланиями, по теме, студенты",
+         dict(input={"topic": "Управление требованиями в ит-стартапах со статистикой аналитикой и тж"},
+              audience="students", slides_count=9)),
+    # G-06 — колода владельца с прода (замечания сессии 5, D-071…D-074): обрывы, «…», мусор, наложение
+    Case("G-06", "G-06", "G-06 AI-навигация для эндоскопической хирургии, docx, только мой материал",
+         dict(input={"topic": "AI-навигация для эндоскопической хирургии"}, audience="general", slides_count=12,
+              source_mode="strict"),
+         file=G06_FILE),
     Case("pitch", None, "Питч-дек по теме (старый движок до сессии 3)",
          dict(topic="Сервис доставки корма для собак по подписке", presentation_type="pitch_deck",
               audience="investors", language="ru"), engine="old"),
@@ -121,6 +132,10 @@ async def _run_new(case: Case, n: int, out: Path) -> dict:
     material = None
     if case.file:
         path = FIXTURES / case.file
+        if not path.is_file():
+            # Файл кейса ещё не положили в tests/fixtures/ — кейс пропускается, прогон не падает
+            result.update(status="skipped", error=f"нет файла tests/fixtures/{case.file}")
+            return result
         material = path.read_bytes()
         kind = "text" if path.suffix == ".txt" else "document"
         params["input"]["material"] = {"kind": kind, "ref": f"golden:{case.file}", "mime": MIME[path.suffix],
@@ -146,6 +161,8 @@ async def _run_new(case: Case, n: int, out: Path) -> dict:
         (out / f"{run_name}.pdf").write_bytes(res.pdf)
     _print_deck(run_name, check_case.from_deckspec(spec))
     file_problems = check_files(res.spec, res.pptx, res.pdf)
+    from core.checks.layout import check_pptx
+    file_problems += [f"вёрстка: {issue}" for issue in check_pptx(res.pptx)]   # финальная проверка (D-072)
     if case.case:
         report = check_case.check(spec, case.case)
         result.update(violations=report.violations + file_problems, warnings=report.warnings,
@@ -294,7 +311,8 @@ def _print_deck(run_name: str, spec: dict) -> None:
         print(f"  #{slide['index']} [{slide['layout']}] {slide.get('title')!r}")
         for unit in check_case.units_of(slide):
             if unit.kind != "title":
-                print(f"      {unit.kind}: {unit.text[:200]}")
+                # текст целиком: обрезка в логе выглядит как обрыв в колоде (сессия 5)
+                print(f"      {unit.kind}: {unit.text}")
 
 
 def _fmt_tokens(u: dict | None) -> str:
@@ -329,6 +347,9 @@ def summary_md(results: list[dict], meta: dict, preflight_error: str | None = No
               "Стоимость, ₽ | Деградаций | Жанр |",
               "|---|---|---|---|---|---|---|---|---|---|"]
     for r in results:
+        if r["status"] == "skipped":
+            lines.append(f"| {r['run']} | {r.get('engine', 'new')} | ⏭ пропущен: {r['error']} | — | — | — | — | — | — | — |")
+            continue
         if r["status"] != "ok":
             lines.append(f"| {r['run']} | {r.get('engine', 'new')} | ❌ ошибка | — | — | {r.get('seconds', '—')} | — | — | — | — |")
             continue
@@ -360,6 +381,9 @@ def summary_md(results: list[dict], meta: dict, preflight_error: str | None = No
               "для G-04 и G-05 базы нет.", ""]
 
     for r in results:
+        if r["status"] == "skipped":
+            lines += [f"**{r['run']} — пропущен:** {r['error']}", ""]
+            continue
         if r["status"] != "ok":
             lines += [f"**{r['run']} — ошибка:** `{r['error']}`", ""]
             continue
@@ -418,13 +442,13 @@ async def main(out: Path, only: set[str] | None, outline_effort: str | None) -> 
     (out / "results.json").write_text(json.dumps({"meta": meta, "results": results}, ensure_ascii=False, indent=2),
                                       encoding="utf-8")
     (out / "summary.md").write_text(summary_md(results, meta), encoding="utf-8")
-    return 1 if any(r["status"] != "ok" for r in results) else 0
+    return 1 if any(r["status"] not in ("ok", "skipped") for r in results) else 0
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", required=True, type=Path)
-    parser.add_argument("--only", help="через запятую: G-01,G-02,G-03,G-04,G-05,pitch")
+    parser.add_argument("--only", help="через запятую: G-01,G-02,G-03,G-04,G-05,G-06,pitch")
     parser.add_argument("--outline-effort", help="reasoning_effort для OUTLINE: low, medium… (вопрос 13)")
     args = parser.parse_args()
     sys.exit(asyncio.run(main(args.out, set(args.only.split(",")) if args.only else None, args.outline_effort)))

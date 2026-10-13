@@ -1,6 +1,7 @@
 """Контракты нового движка: модели, строгие схемы LLM, макеты, темы, миграция decks."""
 import itertools
 import re
+import json
 import unittest
 
 import _helpers  # noqa: F401 — путь к src/ и фиктивные ключи
@@ -64,7 +65,7 @@ class Ids(unittest.TestCase):
 class Schemas(unittest.TestCase):
 
     def test_outline_schema_strict_and_kinds(self):
-        schema = outline_schema(("statement", "bullets", "conclusion"), 1, 9)
+        schema = outline_schema(("statement", "bullets", "conclusion"), 1)
         self.assertTrue(S.is_strict(schema))
         kinds = schema["properties"]["deck"]["properties"]["slides"]["items"]["properties"]["kind"]["enum"]
         self.assertEqual(kinds, ["statement", "bullets", "conclusion"])
@@ -73,15 +74,27 @@ class Schemas(unittest.TestCase):
         resp = OutlineResponse.model_validate(_helpers.fake_outline(7))
         self.assertEqual(len(resp.deck.slides), 7)
 
-    def test_content_schemas_strict_with_limits(self):
+    def test_content_schemas_strict_without_length_limits(self):
+        """D-071: maxLength и maxItems при strict обрывают генерацию посреди слова — в схеме их нет,
+        пределы — в тексте задания (блок вместимости)."""
         layouts = load_layouts()
         schema, lines = content_schema("bullets", layouts["bullets.cards_grid"], 4)
         self.assertTrue(S.is_strict(schema))
         items = schema["properties"]["items"]
-        self.assertEqual((items["minItems"], items["maxItems"]), (3, 4))
-        # вместимость — минимум по раскладкам 3 и 4 (05_LAYOUTS.md, 3.3: 36 и 28 знаков)
-        self.assertEqual(items["items"]["properties"]["heading"]["maxLength"], 28)
-        self.assertEqual(items["items"]["properties"]["text"]["maxLength"], 122)
+        self.assertEqual(items["minItems"], 3)
+        self.assertNotIn("maxItems", items)
+        # вместимость — минимум по раскладкам 3 и 4 (05_LAYOUTS.md, 3.3: 36 и 28 знаков) — в тексте
+        self.assertIn("- заголовок пункта (heading): до 28 знаков", lines)
+        self.assertIn("- текст пункта (text): до 122 знаков — одно предложение", lines)
+        for kind, variant, n in (("bullets", "bullets.cards_grid", 4), ("metrics", "metrics.kpi_cards", 3),
+                                 ("comparison", "comparison.two_columns", None), ("process", "process.chevrons", 3),
+                                 ("chart_series", "chart_series.column_chart", None)):
+            text = json.dumps(content_schema(kind, layouts[variant], n)[0])
+            self.assertNotIn("maxLength", text, kind)
+            self.assertNotIn("maxItems", text, kind)
+        outline = json.dumps(outline_schema(("statement", "bullets", "chart_series"), 1))
+        self.assertNotIn("maxLength", outline)
+        self.assertNotIn("maxItems", outline)
         comparison, _ = content_schema("comparison", layouts["comparison.two_columns"], None)
         self.assertEqual(comparison["properties"]["polarity"]["enum"], ["neutral", "pros_cons", "before_after"])
         self.assertIn("- пунктов: от 3 до 4", lines)
@@ -91,7 +104,7 @@ class Schemas(unittest.TestCase):
             self.assertTrue(S.is_strict(schema), kind)
 
     def test_nullable(self):
-        self.assertEqual(S.nullable(S.string(10)), {"type": ["string", "null"], "maxLength": 10})
+        self.assertEqual(S.nullable(S.string()), {"type": ["string", "null"]})
         self.assertEqual(S.nullable(S.enum(["a"]))["enum"], ["a", None])
 
 

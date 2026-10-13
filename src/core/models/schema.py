@@ -1,9 +1,14 @@
 """Конструктор строгих JSON Schema для ответов LLM (04_CONTRACTS.md, 1).
 
 structured outputs strict: у каждого объекта additionalProperties = false и все
-поля в required; необязательное — через тип с null. Пределы (maxLength,
-maxItems) подставляет код из LayoutSpec. Если провайдер их не соблюдает,
-те же пределы стоят в тексте промпта и их проверяет fitter (вопрос 6).
+поля в required; необязательное — через тип с null.
+
+Пределов длины и числа элементов (maxLength, maxItems) в схеме нет (D-071). При strict
+провайдер ограничивает генерацию грамматикой: на пределе строка принудительно закрывается
+посреди слова, а последним токеном нередко встаёт чужой знак — golden PR #83: ровно 64 знака
+«…мобильные устройства не требу», «…до 子», «…люди и за다». Пределы стоят в тексте задания;
+после ответа длину проверяет код (повтор «сократи»), а вписывание — fitter и
+core.fitting.resolve по метрикам шрифта. minItems остаётся: он не обрывает текст.
 """
 
 from typing import Any
@@ -14,10 +19,8 @@ def obj(properties: dict[str, dict]) -> dict:
             "required": list(properties), "properties": properties}
 
 
-def string(max_length: int | None = None, description: str | None = None) -> dict:
+def string(description: str | None = None) -> dict:
     s: dict[str, Any] = {"type": "string"}
-    if max_length:
-        s["maxLength"] = int(max_length)
     if description:
         s["description"] = description
     return s
@@ -30,12 +33,10 @@ def enum(values: list[str], description: str | None = None) -> dict:
     return s
 
 
-def array(items: dict, min_items: int | None = None, max_items: int | None = None) -> dict:
+def array(items: dict, min_items: int | None = None) -> dict:
     s: dict[str, Any] = {"type": "array", "items": items}
     if min_items is not None:
         s["minItems"] = int(min_items)
-    if max_items is not None:
-        s["maxItems"] = int(max_items)
     return s
 
 

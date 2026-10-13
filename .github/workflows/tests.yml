@@ -117,6 +117,8 @@ jobs:
           set +e
           python tests/gallery/build_gallery.py gallery_out
           code=$?
+          # PNG-превью тем для GET /v1/themes — из той же галереи (D-077); в образ идут из assets/theme_previews
+          python scripts/build_theme_previews.py gallery_out/theme_previews || code=1
           set -e
           cat gallery_out/report.md >> "$GITHUB_STEP_SUMMARY" || true
           exit $code
@@ -131,4 +133,5 @@ jobs:
             gallery_out/sheet_*.png
             gallery_out/report.md
             gallery_out/results.json
+            gallery_out/theme_previews/*.png
           retention-days: 30

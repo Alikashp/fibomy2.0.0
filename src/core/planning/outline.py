@@ -239,7 +239,7 @@ async def plan_deck(request: DeckRequest, digest: SourceDigest, client: LLMClien
     system, user = build_prompts(request, digest, n, kinds)
     resp = await client.structured(
         stage="outline", system=system, user=user, schema_name="outline",
-        schema=outline_schema(kinds, min_slides=1, max_slides=n + 2),
+        schema=outline_schema(kinds, min_slides=1),
         model_cls=OutlineResponse, visible_tokens=OUTLINE_VISIBLE_TOKENS, timeout=OUTLINE_TIMEOUT,
         attempts=OUTLINE_ATTEMPTS, usage=usage, validate=lambda r: plan_errors(r, request, n),
         soft=lambda r: plan_remarks(r, request, digest),

@@ -507,8 +507,27 @@ class Misc(ApiCase):
         ids = [t["id"] for t in body["themes"]]
         self.assertEqual(ids, ["business_slate", "ember_dark", "sunny_cream", "mint_coral"])
         for theme in body["themes"]:
-            self.assertEqual(set(theme), {"id", "name", "mode", "tags"})
+            # id, name, mode, tags — как раньше; emoji, description, colors, preview_url — с 12.10.2026 (D-077)
+            self.assertEqual(set(theme), {"id", "name", "mode", "tags", "emoji", "description", "colors",
+                                          "preview_url"})
             self.assertIn("ru", theme["name"])
+            self.assertIn("ru", theme["description"])
+            self.assertTrue(theme["emoji"])
+            self.assertRegex(theme["colors"]["primary"], r"^#[0-9A-Fa-f]{6}$")
+            self.assertEqual(set(theme["colors"]), {"background", "text", "primary", "accent", "brand"})
+            self.assertRegex(theme["preview_url"], rf"^http://testserver/v1/themes/{theme['id']}/preview\.png\?v=\w+$")
+
+    def test_theme_preview_without_key(self):
+        """Превью отдаётся без ключа: Telegram скачивает картинку по URL сам (sendMediaGroup)."""
+        url = self.h.http.get("/v1/themes", headers=self.headers).json()["themes"][0]["preview_url"]
+        r = self.h.http.get(url)
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.headers["content-type"], "image/png")
+        self.assertTrue(r.content.startswith(b"\x89PNG"))
+        self.assertIn("public", r.headers["cache-control"])
+        again = self.h.http.get(url, headers={"If-None-Match": r.headers["etag"]})
+        self.assertEqual(again.status_code, 304)
+        self.assertError(self.h.http.get("/v1/themes/forest/preview.png"), 404, "NOT_FOUND")
 
     def test_disabled_theme_rejected(self):
         with mock.patch("api.app.enabled_theme_ids", return_value=["business_slate"]):

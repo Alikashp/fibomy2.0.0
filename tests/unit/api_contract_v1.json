@@ -345,6 +345,48 @@
     ]
    }
   },
+  "/v1/themes/{theme_id}/preview.png": {
+   "get": {
+    "description": "Превью темы без ключа: картинка не секретна, а Telegram скачивает её по URL сам (sendMediaGroup),\nключ API ему не передать (D-077). Файлы собраны из галереи при сборке, не на лету.",
+    "operationId": "theme_preview_v1_themes__theme_id__preview_png_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "theme_id",
+      "required": true,
+      "schema": {
+       "title": "Theme Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       },
+       "image/png": {}
+      },
+      "description": "PNG-превью темы"
+     },
+     "404": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ErrorResponse"
+        }
+       }
+      },
+      "description": "Not Found"
+     }
+    },
+    "summary": "Theme Preview",
+    "tags": [
+     "decks"
+    ]
+   }
+  },
   "/v1/usage": {
    "get": {
     "operationId": "usage_v1_usage_get",
@@ -856,6 +898,31 @@
   },
   "Theme": {
    "properties": {
+    "colors": {
+     "anyOf": [
+      {
+       "$ref": "#/components/schemas/ThemeColors"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "description": "Основные цвета темы"
+    },
+    "description": {
+     "additionalProperties": {
+      "type": "string"
+     },
+     "description": "Настроение темы одной строкой по языкам",
+     "title": "Description",
+     "type": "object"
+    },
+    "emoji": {
+     "default": "🎨",
+     "description": "Эмодзи темы для кнопки: «💼 Деловая серо-синяя»",
+     "title": "Emoji",
+     "type": "string"
+    },
     "id": {
      "title": "Id",
      "type": "string"
@@ -876,6 +943,18 @@
      "title": "Name",
      "type": "object"
     },
+    "preview_url": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "description": "PNG-превью: титул и содержательный слайд (960×1096). Без ключа — URL можно отдать Telegram в sendMediaGroup",
+     "title": "Preview Url"
+    },
     "tags": {
      "items": {
       "type": "string"
@@ -891,6 +970,44 @@
     "tags"
    ],
    "title": "Theme",
+   "type": "object"
+  },
+  "ThemeColors": {
+   "properties": {
+    "accent": {
+     "description": "Второй акцент: декор, плашки, #RRGGBB",
+     "title": "Accent",
+     "type": "string"
+    },
+    "background": {
+     "description": "Фон слайда, #RRGGBB",
+     "title": "Background",
+     "type": "string"
+    },
+    "brand": {
+     "description": "Заливка титула и финала, #RRGGBB",
+     "title": "Brand",
+     "type": "string"
+    },
+    "primary": {
+     "description": "Главный акцент: числа, номера, заголовки пунктов, #RRGGBB",
+     "title": "Primary",
+     "type": "string"
+    },
+    "text": {
+     "description": "Основной текст, #RRGGBB",
+     "title": "Text",
+     "type": "string"
+    }
+   },
+   "required": [
+    "background",
+    "text",
+    "primary",
+    "accent",
+    "brand"
+   ],
+   "title": "ThemeColors",
    "type": "object"
   },
   "Themes": {

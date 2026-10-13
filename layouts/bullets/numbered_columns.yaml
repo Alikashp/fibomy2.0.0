@@ -2,7 +2,7 @@
 id: bullets.numbered_columns
 kind: bullets
 family: columns
-version: 1
+version: 2
 fallback: false
 header: true
 applies_when: {image: forbidden, items: {min: 3, max: 4}}
@@ -15,7 +15,7 @@ items:
   bind: content.items
   arrangements:
     3:
-      grid: {area: [80, 280, 1760, 640], cols: 3, rows: 1, gap: 40}
+      grid: {area: [80, 280, 1760, 640], cols: 3, rows: 1, gap: 40, compact: center, pad: 0}
       elements: &column
         - {name: number, type: text, box: [0, 0, w, 144], style: display, min_style: h1, max_lines: 1,
            color: primary, bind: $index, format: "{:02d}", anchor: middle}
@@ -25,5 +25,5 @@ items:
         - {name: text, type: text, box: [0, 288, w, 352], style: body, min_style: small, max_lines: 8,
            color: text_muted, bind: text}
     4:
-      grid: {area: [80, 280, 1760, 640], cols: 4, rows: 1, gap: 40}
+      grid: {area: [80, 280, 1760, 640], cols: 4, rows: 1, gap: 40, compact: center, pad: 0}
       elements: *column

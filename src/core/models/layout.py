@@ -25,7 +25,8 @@
 скругление по теме), chart (нативная диаграмма: chart = column | line | donut, данные — Slide.data).
 fill: токен темы; $chart — цвет серии chart_N по номеру элемента; $brand — градиент brand → brand_2.
 У text: style, min_style, max_lines, color, bind, align (left|center|right),
-anchor (top|middle|bottom), optional, never_truncate. when: <bind> — элемент рисуется, только
+anchor (top|middle|bottom), optional, never_truncate (текст не сокращается через LLM: тема пользователя,
+число), suffix + suffix_style (второй фрагмент той же строки: единица у значения). when: <bind> — элемент рисуется, только
 если по bind есть значение (карточка пояснения). «@имя» в fill и color — значение из style темы.
 
 Вместимость (max_chars) в YAML не хранится — её считает код по геометрии и
@@ -99,6 +100,8 @@ class Element:
     tone: str | None = None
     when: str | None = None        # рисовать, только если по этому bind есть значение
     skip_last: bool = False        # у последнего из повторяющихся элементов не рисовать (соединитель)
+    suffix: str | None = None      # bind второго фрагмента той же строки (единица у значения: «92–98 %»)
+    suffix_style: str | None = None
 
     @property
     def is_text(self) -> bool:
@@ -116,6 +119,7 @@ def _element(raw: dict, w: float = 0, h: float = 0, dx: float = 0, dy: float = 0
         fmt=raw.get("format"), radius=raw.get("radius", False), chart=raw.get("chart"),
         alpha=raw.get("alpha"), line=raw.get("line"), plate=bool(raw.get("plate", False)), tone=raw.get("tone"),
         when=raw.get("when"), skip_last=bool(raw.get("skip_last", False)),
+        suffix=raw.get("suffix"), suffix_style=raw.get("suffix_style"),
     )
 
 
@@ -195,11 +199,14 @@ def capacity(element: Element, style: str | None = None, typescale: dict | None 
 
 
 def max_lines_at(element: Element, style: str, typescale: dict | None = None) -> int:
-    """Сколько строк слот вмещает стилем style. max_lines ограничивает базовый стиль;
-    на шагах кегля вниз строк столько, сколько помещается по высоте бокса."""
+    """Сколько строк слот вмещает стилем style. max_lines ограничивает базовый стиль и стили крупнее
+    (их ставит core.fitting.fill при малом тексте); на шагах кегля вниз строк столько, сколько
+    помещается по высоте бокса."""
     pt = (typescale or DEFAULT_TYPESCALE)[style]
     by_height = math.floor(element.box.h / (pt * UNITS_PER_PT * LINE_HEIGHT) + 1e-9)
-    return min(element.max_lines, by_height) if style == element.style else max(element.max_lines, by_height)
+    if element.style in STYLE_STEPS and STYLE_STEPS.index(style) <= STYLE_STEPS.index(element.style):
+        return min(element.max_lines, by_height)       # базовый стиль и крупнее (мало текста, D-073)
+    return max(element.max_lines, by_height)
 
 
 def style_chain(base: str, minimum: str | None) -> list[str]:

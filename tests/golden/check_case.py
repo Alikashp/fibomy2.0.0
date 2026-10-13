@@ -1,6 +1,6 @@
 """Проверка колоды по ожиданиям golden-кейса (ТЗ 7.4).
 
-    python tests/golden/check_case.py <deck.json> <G-01|…|G-05> [--md] [--no-fail]
+    python tests/golden/check_case.py <deck.json> <G-01|…|G-06> [--md] [--no-fail]
 
 Читает и DeckSpec нового движка (есть schema_version и meta.versions), и JSON
 старого движка (tests/fixtures/specs/). DeckSpec приводится к «единицам текста»
@@ -35,8 +35,11 @@ CASES = {
     "G-02": {"title": "ТЗ хакатона VK (pdf)", "material": True},
     "G-03": {"title": "Отчёт о продажах по теме, без файла", "material": False, "topic": "Итоги продаж за квартал"},
     "G-04": {"title": "Итоги пилота «Навигатор» (текст)", "material": True},
-    "G-05": {"title": "Требования стейкхолдеров по теме, студенты", "material": False,
-             "topic": "Управление требованиями стейкхолдеров в ИТ-стартапе"},
+    "G-05": {"title": "Тема с пожеланиями, по теме, студенты", "material": False,
+             "topic": "Управление требованиями в ит-стартапах со статистикой аналитикой и тж",
+             "title_expected": "Управление требованиями в ИТ-стартапах",
+             "wishes": r"статистик|аналитик|\bтж\b|и т\.?\s?д"},
+    "G-06": {"title": "AI-навигация для эндоскопической хирургии (docx)", "material": True},
 }
 
 
@@ -103,7 +106,8 @@ def from_deckspec(spec: dict) -> dict:
 def norm(text: str | None) -> str:
     if not text:
         return ""
-    text = text.lower().replace("ё", "е").replace(" ", " ")
+    # неразрывные пробелы и word joiner типографики (D-071) — как обычный текст
+    text = text.lower().replace("ё", "е").replace("\u00a0", " ").replace("\u202f", " ").replace("\u2060", "")
     return re.sub(r"[−–]", "-", text)
 
 
@@ -178,8 +182,10 @@ def where(units: list[Unit]) -> str:
     return ", ".join(sorted({f"слайд {u.slide}" for u in units}))
 
 
-def quote(u: Unit, limit: int = 90) -> str:
-    return f"слайд {u.slide}: «{u.text[:limit]}»"
+def quote(u: Unit, limit: int | None = None) -> str:
+    """Текст целиком (limit не используется): обрезанная цитата в отчёте выглядит как обрыв в колоде
+    (golden PR #84, G-03 «…с единственным авт»)."""
+    return f"слайд {u.slide}: «{u.text}»"
 
 
 # ── Общие проверки ───────────────────────────────────────────────────────────
@@ -209,11 +215,38 @@ def check_common(deck: dict, case: str, r: Report) -> None:
                 bad_sources.append(f"слайд {s['index']}: «{src}»")
     r.check(not bad_sources, "metrics[].source не выдуман моделью (его ставит код)", "; ".join(bad_sources))
 
+    check_text_integrity(deck, r)
+
     for s in slides:
         items = s.get("timeline_items") or []
         dates = [norm(t.get("date")) for t in items if t.get("date")]
         if s.get("layout") == "timeline" and len(dates) > 1 and len(set(dates)) == 1:
             r.warnings.append(f"слайд {s['index']}: у всех этапов таймлайна одна дата «{dates[0]}» — это не timeline")
+
+
+# Текст никогда не режется (сессия 5, D-071…D-074) — во всех кейсах
+ELLIPSIS_END = r"(…|\.\.\.)\s*$"
+BROKEN_ENDINGS = r"(?<![\w-])(интегра|паралл+|требу|параллл)\s*$"
+
+
+def check_text_integrity(deck: dict, r: Report) -> None:
+    """Нет многоточия-обрезки, обрывов посреди слова, чужих письменностей, «�» и смешанных слов;
+    титул и подзаголовок — тоже."""
+    units = all_units(deck)
+    title_slide = (deck.get("slides") or [{}])[0]
+    units += [Unit(1, "title", title_slide.get("title") or ""), Unit(1, "subtitle", title_slide.get("subtitle") or "")]
+    cut = [u for u in units if u.text and re.search(ELLIPSIS_END, u.text.strip())]
+    r.check(not cut, "нет обрезки с многоточием (в том числе в заголовках и подзаголовке титула)",
+            "; ".join(quote(u, 70) for u in cut))
+    broken = [u for u in units if u.text and re.search(BROKEN_ENDINGS, norm(u.text))]
+    r.check(not broken, "нет обрывов посреди слова", "; ".join(quote(u, 70) for u in broken))
+    try:
+        from core.checks.text import Known, problems
+    except ImportError:            # check_case без src/ в пути: проверка знаков — только регуляркой
+        bad = [u for u in units if re.search(r"[\u3000-\u9fff\uac00-\ud7af\ufffd]", u.text or "")]
+    else:
+        bad = [u for u in units if any(p.code in ("script", "mixed") for p in problems(u.text or "", "ru", Known()))]
+    r.check(not bad, "нет чужих письменностей, «�» и слов из двух алфавитов", "; ".join(quote(u, 70) for u in bad))
 
 
 # ── G-01 ─────────────────────────────────────────────────────────────────────
@@ -408,7 +441,12 @@ def check_topic(deck: dict, r: Report, case: str) -> None:
     missing = [s["index"] for s in slides if re.search(r"\d", slide_text(s)) and s.get("footnote") != ESTIMATE_FOOTNOTE]
     r.check(not missing, "у каждого слайда с числом — сноска «Оценочные данные — проверьте перед показом»",
             f"нет сноски: слайд {', '.join(map(str, missing))}")
-    refs = find(units, r"отчет\w*|по данным|данн\w+ компании|росстат|отдел\w* маркетинг|mckinsey|gartner|standish")
+    # «отчёт», «отчёта», «отчёты» — ссылка на документ; «отчётность», «отчётный период» — понятие темы,
+    # не ссылка (golden PR #84, G-03: «формат управленческой отчётности»)
+    # «по данным» — только перед источником («по данным опроса», «по данным Gartner»), а не «уточняется по данным
+    # и обратной связи» (golden PR #84, G-05)
+    refs = find(units, r"отчет(?!н)\w*|по данным (опрос|исследован|отчет|компани|аналитик|агентств|министерств|минздрав|"
+                       r"росстат|[a-z])|данн\w+ компании|росстат|отдел\w* маркетинг|mckinsey|gartner|standish")
     r.check(not refs, "нет ссылок на конкретные отчёты и организации", "; ".join(quote(u, 70) for u in refs))
     stats = find(units, SURVEY_STATS)
     r.check(not stats, "нет выдуманной статистики исследований и опросов", "; ".join(quote(u, 70) for u in stats))
@@ -419,7 +457,16 @@ def check_topic(deck: dict, r: Report, case: str) -> None:
     topic = CASES[case].get("topic")
     title = deck["slides"][0].get("title") or ""
     norm_q = lambda t: re.sub(r"\s+", " ", re.sub(r"[«»\"'„“”]", "", t or "")).strip().lower()  # noqa: E731
-    r.check(norm_q(title) == norm_q(topic), "заголовок титула — тема пользователя дословно (G-05)", f"«{title}»")
+    expected = CASES[case].get("title_expected")
+    if expected:
+        # D-076: тема без пожеланий, регистр исправлен («ИТ»), пожелания — в плане, а не на титуле
+        r.check(norm_q(title) == norm_q(expected), f"заголовок титула — «{expected}» (тема без пожеланий)",
+                f"«{title}»")
+        r.check("ИТ" in title, "сокращение на титуле капсом («ИТ»)", f"«{title}»")
+        r.check(not re.search(CASES[case]["wishes"], title.lower()), "пожеланий на титуле нет", f"«{title}»")
+    else:
+        r.check(norm_q(title) == norm_q(topic), "заголовок титула — тема пользователя (без пожеланий — дословно)",
+                f"«{title}»")
     first = slides[0] if slides else {}
     if case == "G-05":
         r.check(first.get("role") == "definition", "второй слайд — определение темы и её происхождение",
@@ -500,7 +547,23 @@ def check_g04(deck: dict, r: Report) -> None:
         r.check(has_ask or not team, "нет слайда о команде при отсутствующем запросе", f"слайды {team}")
 
 
-CHECKS = {"G-01": check_g01, "G-02": check_g02, "G-03": check_g03, "G-04": check_g04, "G-05": check_g05}
+def check_g06(deck: dict, r: Report) -> None:
+    """G-06 — колода «AI-навигация для эндоскопической хирургии» (ТЗ 7.4): замечания владельца сессии 5."""
+    units = all_units(deck)
+    glued = [u for u in units if re.search(r"bostonscientific|johnsonjohnson|karlstorz", u.text or "")]
+    r.check(not glued, "названия компаний не склеены («Boston Scientific»)", "; ".join(quote(u, 70) for u in glued))
+    english = [u for u in units if re.search(r"(?<![A-Za-z])(liver|earnings|surgery|navigation)(?![A-Za-z])", u.text or "")]
+    r.check(not english, "нет английских слов в русском тексте", "; ".join(quote(u, 70) for u in english))
+    ranges = [u for u in units if re.search(r"\d\s*[–-]\s*$", norm(u.text)) or re.search(r"^\s*\d+\s*(%|секунд)", norm(u.text))]
+    r.check(not ranges, "диапазоны и проценты не разорваны", "; ".join(quote(u, 70) for u in ranges))
+    dot_decimal = [u for u in units if re.search(r"(?<![\w.])\d+\.\d+\s?%", u.text or "")]
+    r.check(not dot_decimal, "числа по-русски: десятичная запятая («98,79 %»)", "; ".join(quote(u, 70) for u in dot_decimal))
+    title = (deck.get("slides") or [{}])[0].get("title") or ""
+    r.check("эндоскопическ" in title.lower() and not title.endswith("…"), "тема на титуле целиком", f"«{title}»")
+
+
+CHECKS = {"G-01": check_g01, "G-02": check_g02, "G-03": check_g03, "G-04": check_g04, "G-05": check_g05,
+          "G-06": check_g06}
 
 
 def check(deck: dict, case: str) -> Report:

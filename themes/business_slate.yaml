@@ -6,6 +6,9 @@
 # (Сессия 4, D-063; переделка по замечанию владельца «как PowerPoint 2010» — D-070.)
 id: business_slate
 name: {ru: "Деловая серо-синяя", en: "Business slate"}
+emoji: "💼"
+# Настроение темы одной строкой — GET /v1/themes (description) и превью для второго бота (D-077)
+description: {ru: "Спокойная деловая: белый фон, тёмно-синий текст и один яркий синий акцент — для отчётов и защиты", en: "Calm business look: white background, dark navy text and one bright blue accent — for reports and defences"}
 mode: light
 tags: [business, academic]
 free: true                  # фаза 1: все темы всем (вопрос 12)

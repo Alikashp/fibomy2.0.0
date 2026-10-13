@@ -1,7 +1,8 @@
 """OutlineResponse — анализ источника и план содержательных слайдов (04_CONTRACTS.md, 4.1).
 
-Титул и финальный слайд модель не планирует (D-033): заголовок титула — тема
-пользователя дословно, модель пишет только подзаголовок deck.subtitle.
+Титул и финальный слайд модель не планирует (D-033): заголовок титула — тема пользователя
+без пожеланий (deck.title_topic, проверяет core.planning.title, D-076), модель пишет подзаголовок
+deck.subtitle; пожелания к презентации из темы — deck.user_wishes, они идут в план.
 """
 
 from typing import Literal, Optional
@@ -58,6 +59,8 @@ class PlannedSlide(BaseModel):
 
 
 class OutlineDeck(BaseModel):
+    title_topic: Optional[str] = None
+    user_wishes: list[str] = Field(default_factory=list)
     subtitle: str
     cover_image_query: Optional[str] = None
     slides: list[PlannedSlide]
@@ -68,8 +71,10 @@ class OutlineResponse(BaseModel):
     deck: OutlineDeck
 
 
-def outline_schema(kinds: tuple[str, ...], min_slides: int, max_slides: int) -> dict:
-    """Строгая JSON Schema ответа OUTLINE: только kinds, доступные в этом запросе."""
+def outline_schema(kinds: tuple[str, ...], min_slides: int) -> dict:
+    """Строгая JSON Schema ответа OUTLINE: только kinds, доступные в этом запросе. Лишние слайды
+    отрезает код (normalize_plan), лишние колонки диаграммы — datasets.resolve: maxItems в схеме
+    нет (D-071)."""
     planned = S.obj({
         "kind": S.enum(list(kinds)),
         "role": S.enum(list(ROLES)),
@@ -80,7 +85,7 @@ def outline_schema(kinds: tuple[str, ...], min_slides: int, max_slides: int) -> 
         "dataset": S.nullable(S.obj({
             "id": S.string(),
             "label_column": S.string(),
-            "value_columns": S.array(S.string(), max_items=3),
+            "value_columns": S.array(S.string()),
             "rows": S.nullable(S.array(S.string())),
         })),
         "image_query": S.nullable(S.string(description="на английском; только если фото уместно")),
@@ -92,13 +97,17 @@ def outline_schema(kinds: tuple[str, ...], min_slides: int, max_slides: int) -> 
                 "text": S.string(),
                 "status": S.enum(list(STATUSES)),
                 "refs": S.array(S.string()),
-            }), max_items=20),
+            })),
             "asks": S.array(S.obj({"text": S.string(), "refs": S.array(S.string())})),
             "missing": S.array(S.string()),
         }),
         "deck": S.obj({
+            "title_topic": S.string(description="тема для титула словами пользователя, без пожеланий; "
+                                                "исправлены только регистр и опечатки"),
+            "user_wishes": S.array(S.string(description="пожелание к презентации из темы: «со статистикой», "
+                                                        "«подробно», «для защиты»")),
             "subtitle": S.string(description="подзаголовок титула — здесь допускается переформулировка темы"),
             "cover_image_query": S.nullable(S.string(description="картинка титула: сцена по теме, на английском")),
-            "slides": S.array(planned, min_items=min_slides, max_items=max_slides),
+            "slides": S.array(planned, min_items=min_slides),
         }),
     })

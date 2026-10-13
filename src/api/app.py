@@ -21,7 +21,7 @@ from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from api import API_VERSION, limit_alerts, limits, store
+from api import API_VERSION, limit_alerts, limits, previews, store
 from api.auth import parse_authorization
 from api.errors import ApiError
 from api.schemas import DeckCreate, DeckStatus, ErrorResponse, Health, Themes, Usage
@@ -166,12 +166,35 @@ def create_app(*, arq_pool=None, manage_resources: bool = True) -> FastAPI:
         return JSONResponse(body, status_code=200 if body["status"] == "ok" else 503)
 
     @app.get("/v1/themes", response_model=Themes, tags=["decks"], responses=_error_responses(401, 429))
-    async def themes(client: ApiClient = Depends(authenticate)):
+    async def themes(request: Request, client: ApiClient = Depends(authenticate)):
         out = []
         for theme_id in enabled_theme_ids():
             theme = load_theme(theme_id)
-            out.append({"id": theme.id, "name": theme.name, "mode": theme.mode, "tags": theme.tags})
+            c = theme.colors
+            preview = previews.preview(theme_id)
+            out.append({
+                "id": theme.id, "name": theme.name, "mode": theme.mode, "tags": theme.tags,
+                "emoji": theme.emoji, "description": theme.description,
+                "colors": {"background": c["bg"], "text": c["text"], "primary": c["primary"],
+                           "accent": c["accent"], "brand": c["brand"]},
+                "preview_url": (str(request.url_for("theme_preview", theme_id=theme_id)) + f"?v={preview.etag}")
+                if preview else None,
+            })
         return {"themes": out}
+
+    @app.get("/v1/themes/{theme_id}/preview.png", name="theme_preview", tags=["decks"],
+             responses={200: {"content": {"image/png": {}}, "description": "PNG-превью темы"},
+                        404: {"model": ErrorResponse}})
+    async def theme_preview(theme_id: str, request: Request):
+        """Превью темы без ключа: картинка не секретна, а Telegram скачивает её по URL сам (sendMediaGroup),
+        ключ API ему не передать (D-077). Файлы собраны из галереи при сборке, не на лету."""
+        preview = previews.preview(theme_id)
+        if preview is None:
+            raise ApiError(404, "NOT_FOUND", f"Темы {theme_id} нет. Список — GET /v1/themes.")
+        headers = {"Cache-Control": "public, max-age=86400", "ETag": f'"{preview.etag}"'}
+        if request.headers.get("if-none-match", "").strip('"') == preview.etag:
+            return Response(status_code=304, headers=headers)
+        return Response(preview.data, media_type="image/png", headers=headers)
 
     @app.get("/v1/usage", response_model=Usage, tags=["service"], responses=_error_responses(401, 429))
     async def usage(client: ApiClient = Depends(authenticate)):

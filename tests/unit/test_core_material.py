@@ -16,6 +16,7 @@ from core.checks.facts import slide_errors, strip_unknown
 from core.ingest import IngestError, ingest, parse
 from core.ingest.numbers import find_numbers, format_number, parse_cell
 from core.ingest.render import digest_text
+from core.text.typography import plain
 from core.ingest.tables import build_dataset, text_series
 from core.llm import client as llm_client
 from core.llm.client import LLMClient
@@ -350,7 +351,7 @@ class NavigatorDeck(unittest.TestCase):
         self.assertEqual(kinds[-1], "closing")
         ask = spec.slides[-2]
         self.assertEqual((ask.role, ask.kind), ("ask", "statement"))
-        self.assertIn("4,5 млн", ask.title)
+        self.assertIn("4,5 млн", plain(ask.title))
         series = [s for s in spec.slides if s.kind == "chart_series"]
         shares = [s for s in spec.slides if s.kind == "chart_share"]
         self.assertEqual(len(series), 1)
@@ -363,7 +364,7 @@ class NavigatorDeck(unittest.TestCase):
         self.assertIsNone(series[0].footnote, "сноски «по данным: …» по материалу нет (сессия 4)")
         # «в 6,6 раза» не из источника → перегенерация с ошибками → исправлено
         metrics = next(s for s in spec.slides if s.kind == "metrics")
-        self.assertEqual([i["value"] for i in metrics.content["items"]], ["2 400", "8 000"])
+        self.assertEqual([plain(i["value"]) for i in metrics.content["items"]], ["2 400", "8 000"])
         self.assertEqual(metrics.content["items"][1]["tag"], "цель")
         self.assertTrue(any(d.reason == "facts_fixed" for d in spec.degradations))
         self.assertIn("fit", res.usage.by_stage)

@@ -2,7 +2,7 @@
 id: metrics.big_number
 kind: metrics
 family: hero
-version: 1
+version: 2
 fallback: false
 header: true
 applies_when: {image: forbidden, items: {min: 1, max: 1}, value_max_chars: 13}
@@ -23,9 +23,8 @@ items:
       elements:
         - {name: tag, type: text, box: [56, 56, w-112, 40], style: body, min_style: small, max_lines: 1,
            color: on_brand, bind: tag, optional: true}
+        # Значение и единица — одна строка (сессия 5, D-071)
         - {name: value, type: text, box: [56, 150, w-112, 250], style: hero, min_style: display, max_lines: 1,
-           color: on_brand, bind: value, anchor: bottom, never_truncate: true}
-        - {name: unit, type: text, box: [56, 408, w-112, 56], style: h2, min_style: h3, max_lines: 1,
-           color: on_brand, bind: unit, optional: true}
-        - {name: label, type: text, box: [56, 472, w-112, 130], style: h3, min_style: body, max_lines: 2,
+           color: on_brand, bind: value, suffix: unit, suffix_style: h2, anchor: bottom, never_truncate: true}
+        - {name: label, type: text, box: [56, 424, w-112, 178], style: h3, min_style: body, max_lines: 3,
            color: on_brand, bind: label}

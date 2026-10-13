@@ -21,6 +21,8 @@ DEFAULT_THEME = "business_slate"
 class Theme(BaseModel):
     id: str
     name: dict[str, str]
+    emoji: str = "🎨"
+    description: dict[str, str] = {}     # настроение темы одной строкой по языкам (API, D-077)
     mode: str
     tags: list[str] = []
     free: bool = True

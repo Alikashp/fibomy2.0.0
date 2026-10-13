@@ -94,11 +94,26 @@ class ErrorResponse(BaseModel):
     error: Notice
 
 
+class ThemeColors(BaseModel):
+    background: str = Field(description="Фон слайда, #RRGGBB")
+    text: str = Field(description="Основной текст, #RRGGBB")
+    primary: str = Field(description="Главный акцент: числа, номера, заголовки пунктов, #RRGGBB")
+    accent: str = Field(description="Второй акцент: декор, плашки, #RRGGBB")
+    brand: str = Field(description="Заливка титула и финала, #RRGGBB")
+
+
 class Theme(BaseModel):
     id: str
     name: dict[str, str] = Field(description="Название по языкам: {\"ru\": …, \"en\": …}")
     mode: Literal["light", "dark"]
     tags: list[str]
+    # С 12.10.2026 (D-077): чем показать дизайн пользователю второго бота
+    emoji: str = Field("🎨", description="Эмодзи темы для кнопки: «💼 Деловая серо-синяя»")
+    description: dict[str, str] = Field(default_factory=dict,
+                                        description="Настроение темы одной строкой по языкам")
+    colors: Optional[ThemeColors] = Field(None, description="Основные цвета темы")
+    preview_url: Optional[str] = Field(None, description="PNG-превью: титул и содержательный слайд (960×1096). "
+                                                         "Без ключа — URL можно отдать Telegram в sendMediaGroup")
 
 
 class Themes(BaseModel):

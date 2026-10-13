@@ -1,5 +1,11 @@
 """Стресс-галерея макетов (07_TESTING.md, 2; ТЗ 7.3): каждый вариант × каждая тема ×
-3 заполнения (min, typical, max) → PPTX → проверки → PDF → PNG.
+4 заполнения (min, typical, max, real) → PPTX → проверки → PDF → PNG.
+
+Путь — как в проде (core.pipeline, сессия 5): типографика → fitter → невлезание по порядку
+D-071 (вариант → сокращение → два слайда; вместо LLM — детерминированное сокращение по словам)
+→ рендер → финальная проверка готового PPTX (core.checks.layout, D-072). В min и typical
+невлезание — ошибка (тексты в пределах вместимости), в max и real — штатная работа resolve
+(в отчёте). Ошибка финальной проверки — нарушение в любом заполнении.
 
     python tests/gallery/build_gallery.py OUT_DIR [--themes a,b] [--fixtures typical] [--variants x,y]
 
@@ -30,7 +36,10 @@ from pptx.util import Pt  # noqa: E402
 
 import checks as C  # noqa: E402
 import fixtures as F  # noqa: E402
+from core.checks.layout import check_pptx  # noqa: E402
 from core.fitting.fitter import fit_deck  # noqa: E402
+from core.fitting.resolve import resolve_deck  # noqa: E402
+from core.text.typography import typeset, typeset_value  # noqa: E402
 from core.models.deck import DeckSpec, Meta, Slide  # noqa: E402
 from core.models.ids import slide_id  # noqa: E402
 from core.models.layout import load_layouts  # noqa: E402
@@ -40,7 +49,7 @@ from core.render.pptx.renderer import render_pptx  # noqa: E402
 
 DECK_ID = "dk_01J00000000000000000000000"
 CHUNK = 20
-FIXTURE_ORDER = ("typical", "min", "max")
+FIXTURE_ORDER = ("typical", "min", "max", "real")
 
 
 def build_slides(variants: list[str], fixture: str) -> tuple[list[Slide], dict[str, bytes]]:
@@ -70,6 +79,44 @@ def deck(theme_id: str, slides: list[Slide], title: str) -> DeckSpec:
         s.index, s.id = i, slide_id(i)
     return DeckSpec(id=DECK_ID, meta=Meta(title=title, language="ru", presentation_type="doklad", audience="general",
                                           mode="topic", theme_id=theme_id, seed=1), slides=slides)
+
+
+async def stub_shorten(slide, targets) -> dict[str, str]:
+    """Вместо LLM в галерее: сокращение по целым словам до предела, законченной фразой без «…»."""
+    out = {}
+    for t in targets:
+        kept = ""
+        for word in t.text.split():
+            candidate = f"{kept} {word}".strip()
+            if len(candidate) > t.limit:
+                break
+            kept = candidate
+        words_ = kept.rstrip(" ,;:—–-").split()
+        while len(words_) > 1 and len(words_[-1]) <= 2:      # без висящего предлога: «…структуры за»
+            words_.pop()
+        kept = " ".join(words_).rstrip(" ,;:—–-") or t.text.split()[0]
+        out[t.id] = kept + ("." if t.text.rstrip().endswith(".") and not kept.endswith(".") else "")
+    return out
+
+
+async def prepare(spec: DeckSpec, theme, fixture: str) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
+    """Как в проде: типографика, кегль, невлезание. → (ошибки по id слайда, заметки resolve по id слайда)."""
+    for sl in spec.slides:
+        if sl.kind not in ("title", "closing"):
+            sl.title = typeset(sl.title, spec.meta.language)
+        sl.content = typeset_value(sl.content, spec.meta.language)
+    overflows = fit_deck(spec, theme)
+    errors: dict[str, list[str]] = {}
+    notes: dict[str, list[str]] = {}
+    if fixture in ("min", "typical"):
+        for o in overflows:
+            errors.setdefault(o.slide_id, []).append(f"fit: не влезло {o.key} ({o.reason})")
+        return errors, notes
+    before = len(spec.degradations)
+    await resolve_deck(spec, theme, overflows, shorten=stub_shorten)
+    for d in spec.degradations[before:]:
+        notes.setdefault(d.slide_id or "", []).append(d.reason)
+    return errors, notes
 
 
 def label(pptx: bytes, labels: list[str]) -> bytes:
@@ -110,29 +157,28 @@ async def run(out: Path, themes: list[str], fixtures: list[str], variants: list[
             for start, part in enumerate(chunks):
                 chunk = [s.model_copy(deep=True) for s in part]
                 spec = deck(theme_id, chunk, chunk[0].title if chunk[0].kind == "title" else "Галерея")
-                fit_deck(spec, theme)
-                for d in spec.degradations:
-                    if d.reason.startswith(("truncated", "overflow")):
-                        sl = next(s for s in spec.slides if s.id == d.slide_id)
-                        fit_errors_by_variant.setdefault(sl.variant, []).append(d.reason)
-                labels = [f"{s.variant} · {theme_id} · {fixture}" for s in spec.slides]
+                fit_errors, notes = await prepare(spec, theme, fixture)
+                labels = [f"{s.variant}{' ← ' + s.fit.variant_from if s.fit.variant_from else ''} · {theme_id} · "
+                          f"{fixture}" for s in spec.slides]
                 pptx = label(render_pptx(spec, images=images), labels)
+                layout_errors: dict[int, list[str]] = {}
+                for issue in check_pptx(pptx):
+                    layout_errors.setdefault(issue.slide, []).append(f"вёрстка: {issue.shape} — {issue.code}"
+                                                                     + (f" ({issue.detail})" if issue.detail else ""))
                 pdf_bytes = await pptx_to_pdf(pptx, timeout=180)
                 (out / "pptx").mkdir(exist_ok=True)
                 (out / "pptx" / f"{theme_id}_{fixture}_{start + 1}.pptx").write_bytes(pptx)
                 pdf = pdfium.PdfDocument(pdf_bytes)
                 prs = Presentation(io.BytesIO(pptx))
+                real = len(spec.slides) if len(chunk) >= 4 else len(chunk)
                 for page_no, (slide, slide_obj) in enumerate(zip(spec.slides, prs.slides)):
-                    if page_no >= len(chunk):
+                    if page_no >= real:
                         break
                     png = pdf[page_no].render(scale=640 / pdf[page_no].get_width()).to_pil()
                     layout = layouts[slide.variant]
                     pictures = [C.box_of(sh) for sh in slide_obj.shapes if sh.name.startswith("image:")]
                     errors = C.geometry_errors(slide_obj, theme) + C.chart_errors(slide_obj)
-                    if fixture in ("min", "typical"):
-                        errors += [f"fit: {r}" for r in fit_errors_by_variant.get(slide.variant, [])]
-                    elif any(r.startswith("overflow") for r in fit_errors_by_variant.get(slide.variant, [])):
-                        errors += [f"fit: {r}" for r in fit_errors_by_variant[slide.variant] if r.startswith("overflow")]
+                    errors += fit_errors.get(slide.id, []) + layout_errors.get(page_no + 1, [])
                     share = C.color_share(png, theme_id, pictures)
                     threshold = C.color_threshold(slide.kind, slide.variant, theme)
                     if share < threshold and fixture != "min":   # min — короткие тексты: только в отчёте
@@ -140,13 +186,15 @@ async def run(out: Path, themes: list[str], fixtures: list[str], variants: list[
                     fill = C.fill_share(slide_obj) if slide.kind in C.FILL_KINDS and slide.variant not in C.FILL_EXEMPT else None
                     if fill is not None and fixture == "typical" and not C.FILL_RANGE[0] <= fill <= C.FILL_RANGE[1]:
                         errors.append(f"заполненность {fill:.0f}% вне {C.FILL_RANGE[0]:.0f}–{C.FILL_RANGE[1]:.0f}%")
+                    elif fill is not None and fixture in ("max", "real") and fill < C.FILL_RANGE[0]:
+                        errors.append(f"заполненность {fill:.0f}% < {C.FILL_RANGE[0]:.0f}%")
                     results.append({"theme": theme_id, "fixture": fixture, "variant": slide.variant,
                                     "color_share": round(share, 1), "fill": None if fill is None else round(fill, 1),
-                                    "errors": errors})
+                                    "resolve": notes.get(slide.id, []), "errors": errors})
                     failures += bool(errors)
                     if fixture == "typical":
                         sheets.setdefault(theme_id, []).append(png)
-                book.import_pages(pdf, list(range(len(chunk))))
+                book.import_pages(pdf, list(range(real)))
     # Медиана доли цвета по «колоде» темы (заполнение typical) — ≥ 8%
     for theme_id in themes:
         shares = [r["color_share"] for r in results if r["theme"] == theme_id and r["fixture"] == "typical"]
