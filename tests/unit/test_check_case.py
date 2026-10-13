@@ -123,12 +123,14 @@ class TopicDecks(unittest.TestCase):
 
     def test_reporting_as_concept_is_not_a_reference(self):
         for text in ("Это формат управленческой отчетности, а не методика с единственным автором.",
-                     "Итоги готовят по окончании отчётного периода."):
+                     "Итоги готовят по окончании отчётного периода.",
+                     "Требование уточняется по данным и обратной связи пользователей."):
             self.assertFalse(self.refs_violation(text), text)
 
     def test_report_references_still_found(self):
         for text in ("По данным квартального отчёта, выручка выросла.", "В отчете McKinsey это главный тренд.",
-                     "Отчёты отдела маркетинга это подтверждают."):
+                     "Отчёты отдела маркетинга это подтверждают.", "По данным опроса, 68% команд так делают.",
+                     "По данным Gartner, рынок растёт."):
             self.assertTrue(self.refs_violation(text), text)
 
 

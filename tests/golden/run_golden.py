@@ -311,7 +311,8 @@ def _print_deck(run_name: str, spec: dict) -> None:
         print(f"  #{slide['index']} [{slide['layout']}] {slide.get('title')!r}")
         for unit in check_case.units_of(slide):
             if unit.kind != "title":
-                print(f"      {unit.kind}: {unit.text[:200]}")
+                # текст целиком: обрезка в логе выглядит как обрыв в колоде (сессия 5)
+                print(f"      {unit.kind}: {unit.text}")
 
 
 def _fmt_tokens(u: dict | None) -> str:

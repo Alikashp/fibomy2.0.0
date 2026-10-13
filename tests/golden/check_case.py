@@ -182,8 +182,10 @@ def where(units: list[Unit]) -> str:
     return ", ".join(sorted({f"слайд {u.slide}" for u in units}))
 
 
-def quote(u: Unit, limit: int = 90) -> str:
-    return f"слайд {u.slide}: «{u.text[:limit]}»"
+def quote(u: Unit, limit: int | None = None) -> str:
+    """Текст целиком (limit не используется): обрезанная цитата в отчёте выглядит как обрыв в колоде
+    (golden PR #84, G-03 «…с единственным авт»)."""
+    return f"слайд {u.slide}: «{u.text}»"
 
 
 # ── Общие проверки ───────────────────────────────────────────────────────────
@@ -441,7 +443,10 @@ def check_topic(deck: dict, r: Report, case: str) -> None:
             f"нет сноски: слайд {', '.join(map(str, missing))}")
     # «отчёт», «отчёта», «отчёты» — ссылка на документ; «отчётность», «отчётный период» — понятие темы,
     # не ссылка (golden PR #84, G-03: «формат управленческой отчётности»)
-    refs = find(units, r"отчет(?!н)\w*|по данным|данн\w+ компании|росстат|отдел\w* маркетинг|mckinsey|gartner|standish")
+    # «по данным» — только перед источником («по данным опроса», «по данным Gartner»), а не «уточняется по данным
+    # и обратной связи» (golden PR #84, G-05)
+    refs = find(units, r"отчет(?!н)\w*|по данным (опрос|исследован|отчет|компани|аналитик|агентств|министерств|минздрав|"
+                       r"росстат|[a-z])|данн\w+ компании|росстат|отдел\w* маркетинг|mckinsey|gartner|standish")
     r.check(not refs, "нет ссылок на конкретные отчёты и организации", "; ".join(quote(u, 70) for u in refs))
     stats = find(units, SURVEY_STATS)
     r.check(not stats, "нет выдуманной статистики исследований и опросов", "; ".join(quote(u, 70) for u in stats))
