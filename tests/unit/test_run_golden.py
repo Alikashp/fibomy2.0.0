@@ -44,6 +44,21 @@ class Summary(unittest.TestCase):
         expensive = run_golden.summary_md([{**results[0], "usage": {**USAGE, "cost_rub": 4.6}}], META)
         self.assertIn("выше 4 ₽", expensive)
 
+    def test_images_reported_separately_only_for_image_cases(self):
+        flags = {c.case: c.images for c in run_golden.CASES if c.case}
+        self.assertEqual(sorted(k for k, v in flags.items() if v), ["G-05", "G-06"])
+        with_img = {"run": "G-05-1", "case": "G-05", "title": "t", "status": "ok", "engine": "new", "seconds": 50.0,
+                    "slides": 9, "usage": {**USAGE, "cost_rub": 1.56},
+                    "images": {"requested": 3, "placed": 3, "missed": 0, "timeouts": 0, "ms": 4200,
+                               "max_ms": 9800, "cost_rub": 0.15}}
+        no_img = {"run": "G-01-1", "case": "G-01", "title": "t", "status": "ok", "engine": "new", "seconds": 40.0,
+                  "slides": 9, "usage": USAGE, "images": {"requested": 0, "placed": 0, "missed": 0, "timeouts": 0,
+                                                          "ms": None, "max_ms": None, "cost_rub": 0.0}}
+        md = "\n".join(run_golden.images_md([with_img, no_img]))
+        self.assertIn("| G-05-1 | 3 / 3 | 4,2 | 9,8 | 0,15 | 1,41 | **1,56** |", md)
+        self.assertNotIn("G-01-1", md)
+        self.assertIn("не заказывались", "\n".join(run_golden.images_md([no_img])))
+
     def test_preflight_error(self):
         md = run_golden.summary_md([], META, "api.proxyapi.ru недоступен: ConnectError")
         self.assertIn("API недоступен — генерации не запускались", md)

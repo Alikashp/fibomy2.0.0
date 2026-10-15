@@ -25,7 +25,13 @@ client = AsyncOpenAI(
     api_key=settings.openai_api_key,
     base_url=settings.openai_base_url,
     timeout=settings.openai_timeout_seconds,
-)
+)  # SDK сам повторяет 429 по retry-after (max_retries=2 по умолчанию)
+
+
+def llm_slot():
+    """Место в общем семафоре вызовов LLM процесса (LLM_MAX_CONCURRENCY, D-078) — один на оба движка."""
+    from core.llm.client import _get_semaphore
+    return _get_semaphore()
 
 # Все тексты промптов — в prompts/ (см. generation/prompts.py). Здесь только
 # сборка: какой блок подставить в зависимости от запроса. Блоки, верные только
@@ -355,10 +361,11 @@ def _other_titles(presentation: PresentationSchema, exclude_index: int) -> str:
 async def _ask_json(system_prompt: str, max_tokens: int) -> dict:
     """Дозапрос. max_tokens — бюджет видимого ответа; параметры под модель
     (max_completion_tokens, запас на рассуждения, temperature) — completion_params."""
-    response = await client.chat.completions.create(
-        **completion_params(max_tokens),
-        messages=[{"role": "system", "content": system_prompt}],
-    )
+    async with llm_slot():
+        response = await client.chat.completions.create(
+            **completion_params(max_tokens),
+            messages=[{"role": "system", "content": system_prompt}],
+        )
     record_usage(response)
     return json.loads(_response_text(response))
 
@@ -559,22 +566,23 @@ async def generate_presentation_structure(request: UserRequest) -> PresentationS
         "token_limit": params.get("max_tokens") or params.get("extra_body", {}).get("max_completion_tokens"),
     })
 
-    response = await client.chat.completions.create(
-        **params,
-        # 4500 хватало на старую структуру, но DOKLAD теперь пишет subtitle+icon
-        # на КАЖДЫЙ bullet и лимиты полей выросли (bullets/metrics.source и
-        # т.д.) — в json_object-режиме модель при нехватке бюджета не ломает
-        # синтаксис, а тихо обрезает слайды/поля в конце, чтобы закрыть JSON
-        # корректно. Из-за этого "строго 9 слайдов" превращалось в 8 без
-        # ошибки парсинга — см. лог с slide_count=8. Для 12–15 слайдов
-        # бюджет растёт — см. _max_tokens_for. Для моделей с рассуждениями это
-        # бюджет видимого JSON: completion_params добавляет запас на рассуждения
-        # и передаёт его как max_completion_tokens.
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-    )
+    async with llm_slot():
+        response = await client.chat.completions.create(
+            **params,
+            # 4500 хватало на старую структуру, но DOKLAD теперь пишет subtitle+icon
+            # на КАЖДЫЙ bullet и лимиты полей выросли (bullets/metrics.source и
+            # т.д.) — в json_object-режиме модель при нехватке бюджета не ломает
+            # синтаксис, а тихо обрезает слайды/поля в конце, чтобы закрыть JSON
+            # корректно. Из-за этого "строго 9 слайдов" превращалось в 8 без
+            # ошибки парсинга — см. лог с slide_count=8. Для 12–15 слайдов
+            # бюджет растёт — см. _max_tokens_for. Для моделей с рассуждениями это
+            # бюджет видимого JSON: completion_params добавляет запас на рассуждения
+            # и передаёт его как max_completion_tokens.
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+        )
 
     record_usage(response)
     if response.choices[0].finish_reason == "length":

@@ -13,7 +13,17 @@
 #                   принимается только при reasoning_effort=none, иначе 400.
 # json_mode       — передавать response_format={"type": "json_object"}.
 # max_output_tokens — потолок max_completion_tokens (лимит модели).
-# price_rub_per_1m — ₽ за 1 млн токенов с НДС (ProxyAPI): input, cached_input, output.
+# prices          — цены за 1 млн токенов по провайдеру (D-078): currency (USD | RUB), input,
+#                   cached_input, output; long_context — другие цены, если вход запроса ≥ min_input_tokens.
+#                   USD пересчитываются в ₽ по курсу USD_RUB_RATE (по умолчанию 90): decks.cost_rub,
+#                   /apikey list и сигналы бюджета (D-041) — в рублях, как раньше.
+#
+# Провайдер — по хосту OPENAI_BASE_URL (providers); незнакомый хост — default_provider.
+
+providers:
+  api.openai.com: openai
+  api.proxyapi.ru: proxyapi
+default_provider: openai
 
 defaults:
   token_param: max_tokens
@@ -22,7 +32,7 @@ defaults:
   temperature: always
   json_mode: true
   max_output_tokens: 16384
-  price_rub_per_1m: null
+  prices: null
 
 models:
   gpt-6-luna:
@@ -32,7 +42,13 @@ models:
     temperature: effort_none
     json_mode: true
     max_output_tokens: 128000
-    price_rub_per_1m: {input: 30, cached_input: 3, output: 150}
+    prices:
+      # OpenAI напрямую (с 15.10.2026): $0.10 / $0.50, кэшированный вход — 10% входа; вход от 272K токенов —
+      # дороже весь запрос. Сверено по агрегаторам цен (страница openai.com недоступна из среды разработки)
+      openai: {currency: USD, input: 0.10, cached_input: 0.01, output: 0.50,
+               long_context: {min_input_tokens: 272000, input: 0.20, cached_input: 0.02, output: 0.75}}
+      # ProxyAPI (до 15.10.2026), ₽ с НДС — для отката на прокси
+      proxyapi: {currency: RUB, input: 30, cached_input: 3, output: 150}
   # Остальные семейства с рассуждениями: max_tokens и temperature у них не
   # принимаются. Значения reasoning_effort не проверяем — у моделей они разные.
   gpt-6:

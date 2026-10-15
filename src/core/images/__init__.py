@@ -4,8 +4,10 @@
 (prompts/v2/images/appearance.yaml) + стиль темы и общие правила (style.yaml): хвост
 одинаков у всех картинок колоды. Картинки генерируются параллельно с CONTENT, у каждой
 свой таймаут; не успела или ошибка — слайд получает вариант без картинки, колода не ждёт.
-Файл обрезается под пропорции слота (cover-crop), сжимается (JPEG) и встраивается в PPTX.
-Стоимость — этап «images» в DeckUsage (decks.cost_rub, расход клиента API).
+SiliconFlow ставит на картинки маркировку «AI 生成» (правый нижний угол): картинка генерируется с запасом
+по высоте, полоса с маркировкой срезается (strip_marking, правило — marking в config.yaml, D-079), затем
+файл обрезается под пропорции слота (cover-crop), сжимается (JPEG) и встраивается в PPTX.
+Стоимость — этап «images» в DeckUsage (decks.cost_rub, расход клиента API): price_usd × USD_RUB_RATE.
 
 Pexels не используется (D-006 обновлено в сессии 4).
 """
@@ -67,10 +69,31 @@ def build_prompt(query: str, theme_id: str, language: str) -> str:
     return f"{subject}. {people}. Style: {theme}. {style['rules']}"
 
 
-def cover_crop(data: bytes, aspect: float) -> bytes:
-    """Обрезка по центру под пропорции слота (ширина / высота), длинная сторона ≤ max_side, JPEG."""
+def strip_marking(img: Image.Image) -> Image.Image:
+    """Срезает полосы по краям, где SiliconFlow ставит маркировку «AI 生成» (config.yaml, marking.crop_px).
+    Пиксели — исходной картинки: размер надписи от разрешения не зависит."""
+    crop = (config().get("marking") or {}).get("crop_px") or {}
+    w, h = img.size
+    left, top = int(crop.get("left", 0)), int(crop.get("top", 0))
+    right, bottom = w - int(crop.get("right", 0)), h - int(crop.get("bottom", 0))
+    if right - left < w // 2 or bottom - top < h // 2:
+        return img                               # правило не для такого маленького файла — не портим кадр
+    return img.crop((left, top, right, bottom))
+
+
+def price_rub() -> float:
+    """Цена картинки в ₽: price_usd × USD_RUB_RATE (или price_rub из конфига, если задан)."""
     cfg = config()
-    img = Image.open(io.BytesIO(data)).convert("RGB")
+    if cfg.get("price_rub") is not None:
+        return float(cfg["price_rub"])
+    return float(cfg.get("price_usd", 0)) * float(settings.usd_rub_rate)
+
+
+def cover_crop(data: bytes, aspect: float) -> bytes:
+    """Срез маркировки, затем обрезка по центру под пропорции слота (ширина / высота), длинная сторона
+    ≤ max_side, JPEG. Кадрирование идёт по уже обрезанной картинке — полоса с маркировкой не возвращается."""
+    cfg = config()
+    img = strip_marking(Image.open(io.BytesIO(data)).convert("RGB"))
     w, h = img.size
     if w / h > aspect:
         nw = int(round(h * aspect))
@@ -154,7 +177,7 @@ async def generate_one(job: ImageJob, theme_id: str, language: str, seed: int,
         raw = await asyncio.wait_for((client or get_client()).generate(prompt, seed, timeout), timeout=timeout)
         result.data = await asyncio.to_thread(cover_crop, raw, job.aspect)
         result.asset_id = asset_id(prompt, seed)
-        result.cost_rub = float(config()["price_rub"])
+        result.cost_rub = price_rub()
     except asyncio.TimeoutError:
         result.error = "timeout"
     except Exception as e:  # noqa: BLE001 — любая ошибка провайдера: слайд без картинки
