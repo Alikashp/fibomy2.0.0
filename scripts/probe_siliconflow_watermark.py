@@ -7,6 +7,11 @@ SiliconFlow ставит на картинки Z-Image-Turbo надпись «AI
 core.images.strip_marking (правило — prompts/v2/images/config.yaml, marking).
 
     SILICONFLOW_API_KEY=… python scripts/probe_siliconflow_watermark.py [--sizes 1024x1024,1024x1120] [--out DIR]
+    SILICONFLOW_API_KEY=… python scripts/probe_siliconflow_watermark.py --before-after [--out DIR]
+
+--before-after: 5 картинок продового размера (image_size из config.yaml) разных сюжетов, каждая проходит
+core.images.cover_crop под пропорции одного из слотов layouts/ — в лог уходят «до» (как пришла от SiliconFlow),
+«после» (как встанет в слайд) и правый нижний угол обеих в полном разрешении. Для PR и docs/design/review/.
 
 Запускается в CI (workflow «siliconflow-probe», ключ — секрет репозитория); локально — если есть сеть до
 api.siliconflow.com. Каждая картинка ≈ $0.005.
@@ -34,6 +39,16 @@ PROMPTS = [
 SIZES = ["1024x1024", "1024x1120", "1024x1152", "960x1280", "768x1024", "1280x1440", "1328x1328"]
 CORNER = (0.30, 0.16)        # доля ширины и высоты угла, который печатается в полном разрешении
 LINE = 8000
+# Сюжеты «до/после»: светлый, тёмный, пёстрый, с текстурой в нижнем углу и с логотипом на технике
+BEFORE_AFTER = [
+    "bright minimalist office with white walls and a laptop on a light wooden desk, soft daylight",
+    "night city skyline with dark blue sky and warm windows, cinematic",
+    "busy farmers market with colorful fruit stalls and people, natural light",
+    "surgeons in an operating room looking at an endoscopy monitor, clinical blue light",
+    "close-up of a coffee cup on a dark slate table next to a smartphone with a brand logo",
+]
+# Слоты картинок в layouts/ (ширина / высота): cover_split_image, text_image_split, image_numbered
+SLOTS = {"cover_split_image": 864 / 936, "text_image_split": 856 / 936, "image_numbered": 800 / 936}
 
 
 def emit(tag: str, img: Image.Image, fmt: str = "PNG") -> None:
@@ -80,6 +95,55 @@ async def one(http: httpx.AsyncClient, key: str, base: str, model: str, size: st
     return info
 
 
+async def fetch(http: httpx.AsyncClient, key: str, base: str, model: str, size: str, prompt: str,
+                seed: int) -> bytes:
+    body = {"model": model, "prompt": prompt, "image_size": size, "batch_size": 1, "seed": seed}
+    r = await http.post(base.rstrip("/") + "/images/generations", json=body,
+                        headers={"Authorization": f"Bearer {key}"}, timeout=60)
+    r.raise_for_status()
+    items = (r.json().get("images") or r.json().get("data") or [])
+    url = items[0].get("url") if items else None
+    return (await http.get(url, timeout=60)).content if url else base64.b64decode(items[0]["b64_json"])
+
+
+async def before_after(out: Path | None) -> int:
+    from config import settings
+    from core import images as IMG
+    key = settings.siliconflow_api_key
+    if not key:
+        print("SILICONFLOW_API_KEY не задан")
+        return 2
+    model = settings.siliconflow_model or "Tongyi-MAI/Z-Image-Turbo"
+    size = IMG.config()["image_size"]
+    slots = list(SLOTS.items())
+    results = []
+    async with httpx.AsyncClient() as http:
+        for i, prompt in enumerate(BEFORE_AFTER, 1):
+            slot, aspect = slots[(i - 1) % len(slots)]
+            info = {"n": i, "size": size, "slot": slot, "prompt": prompt[:50]}
+            try:
+                raw = await fetch(http, key, settings.siliconflow_base_url, model, size, prompt, 2000 + i)
+                before = Image.open(io.BytesIO(raw)).convert("RGB")
+                after = Image.open(io.BytesIO(IMG.cover_crop(raw, aspect))).convert("RGB")
+                info.update(before=f"{before.size[0]}x{before.size[1]}", after=f"{after.size[0]}x{after.size[1]}",
+                            after_aspect=round(after.size[0] / after.size[1], 3), slot_aspect=round(aspect, 3))
+                if out:
+                    out.mkdir(parents=True, exist_ok=True)
+                    before.save(out / f"{i}_before.png")
+                    after.save(out / f"{i}_after.jpg", quality=92)
+                for name, img in (("before", before), ("after", after)):
+                    small = img.copy()
+                    small.thumbnail((640, 640))
+                    emit(f"{i}_{name}", small, "JPEG")
+                    emit(f"{i}_{name}_br", corners(img)["br"], "PNG")
+            except Exception as e:  # noqa: BLE001
+                info["error"] = f"{type(e).__name__}: {e}"[:300]
+            results.append(info)
+            print("@@RESULT " + json.dumps(info, ensure_ascii=False), flush=True)
+    print("@@SUMMARY " + json.dumps(results, ensure_ascii=False))
+    return 0
+
+
 async def main(sizes: list[str], out: Path | None) -> int:
     from config import settings
     key = settings.siliconflow_api_key
@@ -104,5 +168,8 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--sizes", default=",".join(SIZES))
     ap.add_argument("--out", type=Path)
+    ap.add_argument("--before-after", action="store_true")
     args = ap.parse_args()
+    if args.before_after:
+        sys.exit(asyncio.run(before_after(args.out)))
     sys.exit(asyncio.run(main(args.sizes.split(","), args.out)))
