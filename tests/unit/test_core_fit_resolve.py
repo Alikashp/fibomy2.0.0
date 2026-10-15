@@ -137,6 +137,8 @@ class TextGarbage(unittest.TestCase):
                    "AI-навигация для IT-компаний, e-mail",
                    "Boston Scientific и Medtronic", "оценка α и β", "₽, №, °C, ×"):
             self.assertEqual(self.codes(ok), [], ok)
+        # «_» в имени продукта — не чужой знак (golden PR #85, G-06: «sechenov.ai_nephro»)
+        self.assertNotIn("script", [c for c, _ in self.codes("прецедент Sechenov.AI_Nephro получил РУ")])
 
     def test_english_deck_flags_cyrillic(self):
         self.assertEqual([p.code for p in problems("growth of выручка", "en", Known())], ["foreign"])

@@ -9,12 +9,21 @@
 
 Повтор (attempts): невалидный JSON, ответ не по схеме или не прошёл проверку
 validate() — следующий запрос содержит прошлый ответ и список ошибок.
+
+Лимиты частоты (D-078, OpenAI напрямую): 429 — не попытка модели, а ожидание по заголовкам
+retry-after-ms / retry-after / x-ratelimit-reset-* (их нет — экспоненциально 1, 2, 4, 8… с) и повтор,
+до RATE_LIMIT_RETRIES раз и не дольше RATE_LIMIT_MAX_WAIT секунд на вызов; колода не падает. 429 с
+кодом insufficient_quota (кончились деньги на счёте) не повторяется. Все вызовы процесса проходят
+через общий семафор LLM_MAX_CONCURRENCY (по умолчанию 8); на время ожидания место освобождается.
 """
 
 import asyncio
 import json
 import logging
+import random
+import re
 import time
+from email.utils import parsedate_to_datetime
 from dataclasses import dataclass, field
 from typing import Callable, TypeVar
 
@@ -27,6 +36,11 @@ from core.llm.models import UsageTotals, add_usage, completion_params
 logger = logging.getLogger(__name__)
 
 M = TypeVar("M", bound=BaseModel)
+
+RATE_LIMIT_RETRIES = 5
+RATE_LIMIT_MAX_WAIT = 60.0       # секунд ожидания на один вызов, в сумме
+RATE_LIMIT_MAX_SLEEP = 30.0      # одно ожидание не дольше
+_DURATION_RE = re.compile(r"(\d+(?:\.\d+)?)(ms|s|m|h)")
 
 # Модели, для которых провайдер отказал в json_schema (на время жизни процесса)
 _SCHEMA_REJECTED: set[str] = set()
@@ -82,6 +96,54 @@ def _is_response_format_rejection(error: APIStatusError) -> bool:
     return any(word in text for word in ("response_format", "json_schema", "schema", "strict"))
 
 
+def _duration(value: str) -> float | None:
+    """«1s», «6m0s», «20ms», «1.5» → секунды."""
+    value = value.strip()
+    try:
+        return float(value)
+    except ValueError:
+        pass
+    parts = _DURATION_RE.findall(value)
+    if not parts:
+        return None
+    scale = {"ms": 0.001, "s": 1, "m": 60, "h": 3600}
+    return sum(float(n) * scale[u] for n, u in parts)
+
+
+def is_quota_exhausted(error: APIStatusError) -> bool:
+    """429 из-за счёта (insufficient_quota) — ждать бесполезно."""
+    body = getattr(error, "body", None)
+    code = (body.get("code") or (body.get("error") or {}).get("code")) if isinstance(body, dict) else None
+    return code == "insufficient_quota" or "insufficient_quota" in str(error)
+
+
+def retry_after_seconds(error: APIStatusError, retry: int) -> float:
+    """Сколько ждать перед повтором после 429: по заголовкам ответа, иначе 2^retry с джиттером."""
+    headers = getattr(getattr(error, "response", None), "headers", None) or {}
+    wait = None
+    if headers.get("retry-after-ms"):
+        try:
+            wait = float(headers["retry-after-ms"]) / 1000
+        except ValueError:
+            wait = None
+    if wait is None and headers.get("retry-after"):
+        raw = headers["retry-after"]
+        wait = _duration(raw)
+        if wait is None:
+            try:
+                wait = max(0.0, parsedate_to_datetime(raw).timestamp() - time.time())
+            except (TypeError, ValueError):
+                wait = None
+    if wait is None:
+        resets = [_duration(headers[k]) for k in ("x-ratelimit-reset-requests", "x-ratelimit-reset-tokens")
+                  if headers.get(k)]
+        resets = [r for r in resets if r is not None]
+        wait = max(resets) if resets else None
+    if wait is None:
+        wait = 2 ** retry + random.uniform(0, 0.5)
+    return min(RATE_LIMIT_MAX_SLEEP, max(0.2, wait))
+
+
 class LLMClient:
     def __init__(self, client: AsyncOpenAI | None = None):
         self._client = client or AsyncOpenAI(
@@ -112,6 +174,7 @@ class LLMClient:
         messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
         last_error = "no attempts"
         attempt = 0
+        rate_retries, rate_waited = 0, 0.0
         while attempt < attempts:
             attempt += 1
             mode = schema_mode(model)
@@ -131,6 +194,16 @@ class LLMClient:
                     response = await asyncio.wait_for(
                         self._client.chat.completions.create(messages=sent, **params), timeout=timeout)
             except APIStatusError as e:
+                if e.status_code == 429 and not is_quota_exhausted(e) and rate_retries < RATE_LIMIT_RETRIES:
+                    wait = retry_after_seconds(e, rate_retries)
+                    if rate_waited + wait <= RATE_LIMIT_MAX_WAIT:
+                        rate_retries += 1
+                        rate_waited += wait
+                        logger.warning("LLM rate limited — waiting before retry", extra={
+                            "stage": stage, "wait_s": round(wait, 2), "retry": rate_retries, **(log_fields or {})})
+                        await asyncio.sleep(wait)          # место в семафоре на время ожидания свободно
+                        attempt -= 1                        # 429 — не попытка модели
+                        continue
                 if mode == "json_schema" and _is_response_format_rejection(e) \
                         and (settings.llm_structured_outputs or "auto") == "auto":
                     _SCHEMA_REJECTED.add(model)

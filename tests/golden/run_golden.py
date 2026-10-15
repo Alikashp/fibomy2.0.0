@@ -55,20 +55,8 @@ class Case:
     request: dict
     file: str | None = None
     repeat: int = 1
-
-
-G06_FILE = "ai_navigation_endoscopic_surgery.docx"
-
-
-@dataclass
-class Case:
-    run_id: str
-    case: str | None          # id кейса ТЗ 7.4 для check_case; None — только генерация
-    title: str
-    request: dict
-    file: str | None = None
-    repeat: int = 1
     engine: str = "new"
+    images: bool = False      # ИИ-картинки — только в G-05 и G-06, чтобы не платить за них в каждом кейсе (сессия 6)
 
 
 CASES = [
@@ -87,12 +75,12 @@ CASES = [
          file="navigator_pilot.txt", repeat=3),
     Case("G-05", "G-05", "G-05 тема с пожеланиями, по теме, студенты",
          dict(input={"topic": "Управление требованиями в ит-стартапах со статистикой аналитикой и тж"},
-              audience="students", slides_count=9)),
+              audience="students", slides_count=9), images=True),
     # G-06 — колода владельца с прода (замечания сессии 5, D-071…D-074): обрывы, «…», мусор, наложение
     Case("G-06", "G-06", "G-06 AI-навигация для эндоскопической хирургии, docx, только мой материал",
          dict(input={"topic": "AI-навигация для эндоскопической хирургии"}, audience="general", slides_count=12,
               source_mode="strict"),
-         file=G06_FILE),
+         file=G06_FILE, images=True),
     Case("pitch", None, "Питч-дек по теме (старый движок до сессии 3)",
          dict(topic="Сервис доставки корма для собак по подписке", presentation_type="pitch_deck",
               audience="investors", language="ru"), engine="old"),
@@ -129,6 +117,7 @@ async def _run_new(case: Case, n: int, out: Path) -> dict:
     run_name = f"{case.run_id}-{n}" if case.repeat > 1 else case.run_id
     result = {"run": run_name, "case": case.case, "title": case.title, "status": "ok", "engine": "new"}
     params = json.loads(json.dumps(case.request))
+    params.setdefault("image_mode", "ai" if case.images else "none")
     material = None
     if case.file:
         path = FIXTURES / case.file
@@ -183,21 +172,26 @@ def image_stats(spec: dict, usage: dict, stages: dict) -> dict:
 
 
 def images_md(results: list[dict]) -> list[str]:
-    """Строка отчёта о картинках по всем колодам нового движка."""
-    stats = [r["images"] for r in results if r.get("status") == "ok" and r.get("images")]
-    requested = sum(s["requested"] for s in stats)
-    if not requested:
-        return ["Картинки: не заказывались (нет SILICONFLOW_API_KEY в секретах или image_mode = none).", ""]
-    placed = sum(s["placed"] for s in stats)
-    missed = sum(s["missed"] for s in stats)
-    timeouts = sum(s["timeouts"] for s in stats)
-    cost = sum(s["cost_rub"] for s in stats)
-    waits = sorted(s["max_ms"] for s in stats if s.get("max_ms"))
-    wait = f", самая долгая картинка — p50 {waits[len(waits) // 2] / 1000:.1f} с, макс {waits[-1] / 1000:.1f} с" \
-        if waits else ""
-    return [f"Картинки: заказано {requested}, встало {placed}, не успели или ошибка — {missed} "
-            f"(**{100 * missed / requested:.0f}%**, из них таймаут {timeouts}){wait}; стоимость картинок "
-            f"{cost:.2f} ₽, в среднем {cost / len(stats):.2f} ₽ на колоду.", ""]
+    """Картинки — отдельно по колодам (заказываются только в G-05 и G-06): сколько встало, время, стоимость
+    картинок, LLM и итог колоды с картинками в ₽."""
+    rows = [r for r in results if r.get("status") == "ok" and (r.get("images") or {}).get("requested")]
+    if not rows:
+        return ["Картинки: не заказывались (нет SILICONFLOW_API_KEY в секретах; в корпусе их заказывают только "
+                "G-05 и G-06).", ""]
+    lines = ["**ИИ-картинки** (SiliconFlow, только G-05 и G-06; маркировка «AI 生成» срезается, D-079):", "",
+             "| Колода | Заказано / встало | Ожидание после CONTENT, с | Самая долгая картинка, с | Картинки, ₽ | "
+             "LLM, ₽ | Итого колода с картинками, ₽ |",
+             "|---|---|---|---|---|---|---|"]
+    for r in rows:
+        s_ = r["images"]
+        total = (r.get("usage") or {}).get("cost_rub")
+        img = s_["cost_rub"] or 0.0
+        llm = None if total is None else total - img
+        miss = f" (не встало {s_['missed']}, таймаут {s_['timeouts']})" if s_["missed"] else ""
+        lines.append(f"| {r['run']} | {s_['requested']} / {s_['placed']}{miss} | {_sec(s_.get('ms'))} | "
+                     f"{_sec(s_.get('max_ms'))} | {img:.2f} | {'—' if llm is None else f'{llm:.2f}'} | "
+                     f"**{'—' if total is None else f'{total:.2f}'}** |".replace(".", ","))
+    return lines + [""]
 
 
 def _total_usage(deck_usage) -> dict:
@@ -344,7 +338,7 @@ def summary_md(results: list[dict], meta: dict, preflight_error: str | None = No
         return "\n".join(lines)
 
     lines += ["| Прогон | Движок | Статус | Слайдов | Нарушений: до → сейчас | Время, с | OUTLINE / CONTENT / FIT, с | "
-              "Стоимость, ₽ | Деградаций | Жанр |",
+              "Стоимость (LLM + картинки), ₽ | Деградаций | Жанр |",
               "|---|---|---|---|---|---|---|---|---|---|"]
     for r in results:
         if r["status"] == "skipped":

@@ -1,5 +1,5 @@
-"""ИИ-картинки (core.images, сессия 4): промпт, обрезка, генерация параллельно с CONTENT,
-вариант без картинки при ошибке и таймауте, стоимость, заметка «сгенерированы ИИ»."""
+"""ИИ-картинки (core.images, сессия 4): промпт, срез маркировки SiliconFlow и обрезка под слот (D-079),
+генерация параллельно с CONTENT, вариант без картинки при ошибке и таймауте, стоимость в ₽ по курсу."""
 import asyncio
 import io
 import unittest
@@ -76,6 +76,32 @@ class Prompt(unittest.TestCase):
         big = Image.open(io.BytesIO(IMG.cover_crop(jpeg(3000, 2000), 1.0)))
         self.assertLessEqual(max(big.size), 1600)
 
+    def test_marking_band_is_cut_and_slot_aspect_kept(self):
+        """Надпись «AI 生成» — 37–67 px от низа, 39–142 px от правого края при любом разрешении (зонд
+        15.10.2026): после среза и cover-crop под слот её пикселей нет, пропорции — как у слота."""
+        for (w, h), aspect in (((1024, 1120), 864 / 936), ((1024, 1120), 800 / 936), ((1328, 1328), 856 / 936),
+                               ((768, 1024), 1.0), ((1024, 1120), 16 / 9)):
+            img = Image.new("RGB", (w, h), (90, 140, 200))
+            img.paste((255, 0, 0), (w - 142, h - 67, w - 39, h - 37))            # «надпись» красным
+            buf = io.BytesIO()
+            img.save(buf, format="PNG")
+            out = Image.open(io.BytesIO(IMG.cover_crop(buf.getvalue(), aspect))).convert("RGB")
+            self.assertAlmostEqual(out.width / out.height, aspect, places=2)
+            reds = sum(1 for r, g, b in out.getdata() if r > 180 and g < 90 and b < 90)
+            self.assertEqual(reds, 0, ((w, h), aspect))
+
+    def test_strip_marking_cuts_bottom_band_from_config(self):
+        img = Image.new("RGB", (1024, 1120))
+        out = IMG.strip_marking(img)
+        self.assertEqual(out.size, (1024, 1120 - IMG.config()["marking"]["crop_px"]["bottom"]))
+        self.assertEqual(IMG.config()["marking"]["crop_px"]["bottom"], 80)
+        self.assertEqual(IMG.config()["image_size"], "1024x1120")
+        self.assertEqual(IMG.strip_marking(Image.new("RGB", (100, 100))).size, (100, 100))   # слишком мал
+
+    def test_price_in_rub_by_rate(self):
+        with mock.patch.object(settings, "usd_rub_rate", 100.0):
+            self.assertAlmostEqual(IMG.price_rub(), 0.5)
+
     def test_response_shapes(self):
         self.assertEqual(IMG._image_ref({"images": [{"url": "https://x/1.png"}], "seed": 1}), ("https://x/1.png", None))
         self.assertEqual(IMG._image_ref({"data": [{"b64_json": "QUJD"}]}), (None, "QUJD"))
@@ -101,7 +127,7 @@ class Prompt(unittest.TestCase):
             data = asyncio.run(go())
         self.assertTrue(data.startswith(b"\xff\xd8"))
         self.assertEqual(seen["body"]["model"], "Tongyi-MAI/Z-Image-Turbo")
-        self.assertEqual(seen["body"]["image_size"], "1024x1024")
+        self.assertEqual(seen["body"]["image_size"], "1024x1120")
         self.assertEqual(seen["auth"], "Bearer sk-test")
 
 
@@ -147,9 +173,9 @@ class DeckWithImages(unittest.TestCase):
         self.assertEqual(spec.slides[0].variant, "title.cover_split_image")
         self.assertEqual(len(spec.assets), 3)
         self.assertEqual(spec.meta.image_mode, "ai")
-        self.assertEqual(spec.slides[-1].notes, "Изображения сгенерированы ИИ")
+        self.assertEqual(spec.slides[-1].notes, "")                         # пометки «сгенерированы ИИ» нет (D-079)
         self.assertEqual(res.usage.by_stage["images"].calls, 3)
-        self.assertAlmostEqual(res.usage.by_stage["images"].cost_rub, 1.5)
+        self.assertAlmostEqual(res.usage.by_stage["images"].cost_rub, 3 * 0.005 * settings.usd_rub_rate)
         self.assertIn("images", res.durations_ms)
         pics = [sh for slide in Presentation(io.BytesIO(res.pptx)).slides for sh in slide.shapes
                 if sh.name.startswith("image:")]

@@ -1,5 +1,6 @@
 # Реальные генерации golden-корпуса (ТЗ 4.8.7, 7.4) на новом движке: G-01 docx ×2,
-# G-02 pdf ×2, G-03 по теме, G-04 «Навигатор» ×3, G-05 по теме; питч-дек — старый
+# G-02 pdf ×2, G-03 по теме, G-04 «Навигатор» ×3, G-05 по теме, G-06 docx (ИИ-картинки — только в G-05 и
+# G-06, сессия 6); питч-дек — старый
 # движок до сессии 3. Каждая колода проверяется check_case.py по DeckSpec и по PPTX;
 # итог — комментарий в PR, DeckSpec, PPTX и PDF — артефакт. Плюс одна генерация через
 # REST API end-to-end (tests/golden/run_api_e2e.py): процессы api и воркера, Postgres и
@@ -84,8 +85,10 @@ jobs:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       # ИИ-картинки (сессия 4): без секрета колоды golden собираются без картинок — так и пишется в отчёте
       SILICONFLOW_API_KEY: ${{ secrets.SILICONFLOW_API_KEY }}
-      # Дефолты — как в проде; переопределяются переменными репозитория
-      OPENAI_BASE_URL: ${{ vars.OPENAI_BASE_URL || 'https://api.proxyapi.ru/openai/v1' }}
+      # Дефолты — как в проде; переопределяются переменными репозитория. С 15.10.2026 — OpenAI напрямую (D-078);
+      # откат на прокси — переменная OPENAI_BASE_URL=https://api.proxyapi.ru/openai/v1 и ключ ProxyAPI в секрете
+      OPENAI_BASE_URL: ${{ vars.OPENAI_BASE_URL || 'https://api.openai.com/v1' }}
+      USD_RUB_RATE: ${{ vars.USD_RUB_RATE || '90' }}
       OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'gpt-6-luna' }}
       OPENAI_REASONING_EFFORT: ${{ vars.OPENAI_REASONING_EFFORT || 'low' }}
       OPENAI_TIMEOUT_SECONDS: ${{ vars.OPENAI_TIMEOUT_SECONDS || '45' }}
@@ -124,8 +127,8 @@ jobs:
             cat >> golden_out/summary.md <<'EOF'
 
           **Что можно сделать:**
-          1. Переменная репозитория `OPENAI_BASE_URL=https://api.openai.com/v1` и в секрет — ключ OpenAI напрямую (цены в `prompts/models.yaml` — в ₽ ProxyAPI, стоимость будет оценочной).
-          2. Self-hosted runner в РФ (любой VPS): `runs-on: self-hosted` в `.github/workflows/golden.yml`.
+          1. Проверить секрет `OPENAI_API_KEY` (ключ OpenAI) и переменную `OPENAI_BASE_URL` (пусто — https://api.openai.com/v1; прокси — https://api.proxyapi.ru/openai/v1 и ключ ProxyAPI).
+          2. Self-hosted runner: `runs-on: self-hosted` в `.github/workflows/golden.yml`.
           3. Запускать `tests/golden/run_golden.py` вручную на машине, откуда API доступен, и прикладывать `summary.md` к PR.
           EOF
           fi
