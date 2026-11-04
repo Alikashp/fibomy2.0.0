@@ -21,13 +21,19 @@ Telegram-бот и REST API, которые по теме, тексту или �
 | Нужно | Где |
 |---|---|
 | Что строим и зачем, требования | `docs/TZ.md` — главный документ, при расхождениях прав он; `docs/PRODUCT.md` |
-| Как задуман новый движок | `docs/design/01…10` (архитектура — `03_ARCHITECTURE.md`, макеты — `05_LAYOUTS.md`, промпты — `06_PROMPTS.md`, тесты — `07_TESTING.md`) |
+| Как задуман новый движок | `docs/design/` — проект, написанный до кода; что из него сделано и где он расходится с кодом — `docs/design/README.md`. Архитектура — `docs/design/03_ARCHITECTURE.md`, макеты — `docs/design/05_LAYOUTS.md`, промпты — `docs/design/06_PROMPTS.md`, тесты — `docs/design/07_TESTING.md` |
 | Почему сделано так, а не иначе | `docs/DECISIONS.md`. В коде ссылки вида `D-071` ведут на запись там |
 | Что сделано и что дальше | `docs/PROGRESS.md`, новые записи сверху |
 | Контракт REST API | `docs/API.md` |
 | Правила работы с репозиторием | `CLAUDE.md`, разделы «Правила» (написан для ИИ-ассистента, но правила общие) |
 
 `docs/CURRENT_STATE.md` — снимок кода на 26.09.2026, до нового движка. Он исторический, текущее устройство описывает этот файл.
+
+**Как ведём документацию** (D-080):
+- **Код — источник истины.** Документ, разошедшийся с кодом, правится в той же задаче, где это найдено. Требования к тому, каким код должен быть, задаёт `docs/TZ.md`.
+- **Документы хранят решения и объяснения, а не перечисления.** Число вариантов, список тем, переменные окружения, роуты — смотрим в источнике (`layouts/`, `themes/`, `.env.example`, `tests/unit/api_contract_v1.json`) или генерируем скриптом, а не переписываем руками.
+- **Не подтверждено кодом — так и пишем** («не сделано», «не сверялось»), а не держим в голове.
+- **Проверка в CI:** `python scripts/check_docs.py` — пути в README, CLAUDE.md и `docs/API.md` существуют, каждый роут API описан в `docs/API.md`, каждый документ есть в своей карте. Запускается юнит-тестом `tests/unit/test_docs.py`.
 
 ---
 
@@ -197,6 +203,44 @@ python -m arq worker.WorkerSettings  # воркер (нужны OPENAI_API_KEY �
 uvicorn api.app:app --port 8000      # REST API; ключ клиента: python -m api.keys --help
 ```
 
+**Служебные команды:**
+
+| Команда | Что делает |
+|---|---|
+| `python tests/golden/check_case.py <deck.json> <G-01…G-06>` | Проверить колоду по ожиданиям golden-кейса (ТЗ 7.4) |
+| `python tests/golden/prompt_snapshot.py <папка>` | Снимок собранных промптов — сравнить до и после правки `prompts/` |
+| `python scripts/layout_tables.py --write` | Пересобрать таблицы вместимости слотов в `docs/design/05_LAYOUTS.md` из YAML |
+| `python scripts/build_theme_previews.py <папка>` | PNG-превью тем для `GET /v1/themes` (`assets/theme_previews/`) |
+| `python scripts/check_docs.py` | Проверка документации (то же делает юнит-тест) |
+| `python -m api.keys create\|list\|set\|rotate\|revoke\|usage` (из `src/`) | Клиенты и ключи REST API. Владелец делает то же командой бота `/apikey` (`bot/admin.py`, доступ — `ADMIN_TELEGRAM_IDS`) |
+
+---
+
+## Внешние сервисы
+
+| Сервис | Для чего | Где в коде и настройки |
+|---|---|---|
+| **OpenAI API** (напрямую, D-078) | OUTLINE, CONTENT, сокращение и исправление текста | `core/llm/`; модель — `OPENAI_MODEL`, уровень рассуждений — `OPENAI_REASONING_EFFORT`, адрес — `OPENAI_BASE_URL`. Параметры запроса и цены по провайдеру — `prompts/models.yaml`: доллары переводятся в рубли по `USD_RUB_RATE`, `decks.cost_rub` и лимиты API — в рублях. На 429 вызов ждёт по `retry-after` и повторяется; одновременных вызовов на процесс — не больше `LLM_MAX_CONCURRENCY`. Откат на ProxyAPI — сменой `OPENAI_BASE_URL` и ключа, цены переключатся сами |
+| **SiliconFlow**, Z-Image-Turbo (D-067) | ИИ-картинки: титул и 2 слайда | `core/images/`, параметры — `prompts/v2/images/`, ключ — `SILICONFLOW_API_KEY` (без ключа колоды без картинок). Надпись провайдера «AI 生成» срезается по правилу `marking` в `prompts/v2/images/config.yaml` (D-079) |
+| **LibreOffice** | PPTX → PDF | `core/render/pdf/convert.py`; в образе и в CI ставится пакетом |
+| **PostgreSQL** | пользователи, колоды (`decks`), клиенты API | `db/models.py`, миграции — `db/migrations/` (только добавляющие) |
+| **Redis** | очередь ARQ, состояние диалога бота, временные файлы, прогресс; файлы колод API без S3 — на 1 ч | `REDIS_URL` |
+| **S3-совместимое хранилище** (необязательно) | файлы колод API на 24 ч (D-058) | `core/storage/files.py`, переменные `S3_*` |
+
+Все переменные окружения — в `.env.example`, читаются только через `src/config.py`.
+
+## Деплой и CI
+
+**Railway:** бот, воркер и API — три сервиса из одного Docker-образа (`Dockerfile`). Процесс выбирает переменная сервиса `SERVICE_ROLE` — `bot`, `worker` или `api` (`src/start.py`, D-062). Файлы `railway*.toml` (Config as Code) Railway отключает, на них не полагаться. **Порядок выкатки: воркер раньше бота и API.**
+
+**GitHub Actions:**
+
+| Workflow | Когда | Что делает |
+|---|---|---|
+| `tests` | каждый PR | Юнит-тесты, отдельный шаг «API-тесты (контракт второго бота)», снимок промптов относительно базы, `check_case.py` на колодах старого движка; job `gallery` — стресс-галерея и артефакт `gallery-pdf`, по которому владелец утверждает дизайн |
+| `golden` | PR, меняющий промпты, ядро, API, воркер, макеты или темы (пути — `on.pull_request.paths` в `.github/workflows/golden.yml`); вручную | Реальные генерации G-01…G-06 и питч-дека, одна колода через REST API end-to-end; комментарий с таблицей в PR, артефакт `golden-decks`. Нужен секрет `OPENAI_API_KEY` (картинки — `SILICONFLOW_API_KEY`) |
+| `siliconflow-probe` | вручную или при правке зонда | Картинки SiliconFlow: замер надписи провайдера или «до / после» обрезки (`scripts/probe_siliconflow_watermark.py`) |
+
 ---
 
 ## Правила, которые нельзя нарушать
@@ -205,7 +249,7 @@ uvicorn api.app:app --port 8000      # REST API; ключ клиента: python
 - **Миграции — только добавляющие:** новые таблицы, nullable-колонки, индексы.
 - **Промпты и параметры моделей — файлами в `prompts/`, не в коде.** Любая правка промпта — новая строка в `prompts/v2/VERSION` и прогон golden.
 - **Вид слайдов — в `layouts/` и `themes/`, не в рендерере.** Рендерер рисует `DeckSpec` как есть и ничего не решает.
-- **Текст на слайде не обрезается и не заканчивается «…».** Невлезание решает `core/fitting/resolve.py`.
+- **Текст на слайде не обрезается и не заканчивается «…».** Невлезание решает `core/fitting/resolve.py`; в схемах ответа LLM нет `maxLength`/`maxItems` — длину проверяет код (D-071).
 - **Секреты — только в переменных окружения.** Настройки читаются только через `src/config.py`.
 - **В `main` не пушить.** Работа идёт в ветке и PR, мёржит владелец. Подробно — `CLAUDE.md`.
 - **Архитектурное решение — запись в `docs/DECISIONS.md`**, итог работы — запись в `docs/PROGRESS.md`.
