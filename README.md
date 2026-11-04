@@ -22,7 +22,9 @@ Telegram-бот и REST API, которые по теме, тексту или �
 |---|---|
 | Что строим и зачем, требования | `docs/TZ.md` — главный документ, при расхождениях прав он; `docs/PRODUCT.md` |
 | Как задуман новый движок | `docs/design/` — проект, написанный до кода; что из него сделано и где он расходится с кодом — `docs/design/README.md`. Архитектура — `docs/design/03_ARCHITECTURE.md`, макеты — `docs/design/05_LAYOUTS.md`, промпты — `docs/design/06_PROMPTS.md`, тесты — `docs/design/07_TESTING.md` |
-| Почему сделано так, а не иначе | `docs/DECISIONS.md`. В коде ссылки вида `D-071` ведут на запись там |
+| Как устроена конкретная фича и где её подводные камни | `docs/features/` — по файлу на фичу: диалог бота, материал, план, текст, подгонка, рендер, картинки, REST API, тарифы, golden и галерея |
+| Почему сделано так, а не иначе | `docs/DECISIONS.md`: индекс в начале, в коде ссылки вида `D-071` ведут на запись там |
+| Что проверить перед PR и на ревью | `docs/REVIEW.md` — блокеры B1–B14 |
 | Что сделано и что дальше | `docs/PROGRESS.md`, новые записи сверху |
 | Контракт REST API | `docs/API.md` |
 | Правила работы с репозиторием | `CLAUDE.md`, разделы «Правила» (написан для ИИ-ассистента, но правила общие) |
@@ -33,7 +35,7 @@ Telegram-бот и REST API, которые по теме, тексту или �
 - **Код — источник истины.** Документ, разошедшийся с кодом, правится в той же задаче, где это найдено. Требования к тому, каким код должен быть, задаёт `docs/TZ.md`.
 - **Документы хранят решения и объяснения, а не перечисления.** Число вариантов, список тем, переменные окружения, роуты — смотрим в источнике (`layouts/`, `themes/`, `.env.example`, `tests/unit/api_contract_v1.json`) или генерируем скриптом, а не переписываем руками.
 - **Не подтверждено кодом — так и пишем** («не сделано», «не сверялось»), а не держим в голове.
-- **Проверка в CI:** `python scripts/check_docs.py` — пути в README, CLAUDE.md и `docs/API.md` существуют, каждый роут API описан в `docs/API.md`, каждый документ есть в своей карте. Запускается юнит-тестом `tests/unit/test_docs.py`.
+- **Проверка в CI:** `python scripts/check_docs.py` — пути в README, CLAUDE.md, `docs/API.md`, `docs/REVIEW.md` и `docs/features/` существуют; каждый роут API описан в `docs/API.md`; каждый документ есть в своей карте; индекс `docs/DECISIONS.md` актуален. Запускается юнит-тестом `tests/unit/test_docs.py`.
 
 ---
 
@@ -212,6 +214,7 @@ uvicorn api.app:app --port 8000      # REST API; ключ клиента: python
 | `python scripts/layout_tables.py --write` | Пересобрать таблицы вместимости слотов в `docs/design/05_LAYOUTS.md` из YAML |
 | `python scripts/build_theme_previews.py <папка>` | PNG-превью тем для `GET /v1/themes` (`assets/theme_previews/`) |
 | `python scripts/check_docs.py` | Проверка документации (то же делает юнит-тест) |
+| `python scripts/decisions_index.py` | Пересобрать индекс в начале `docs/DECISIONS.md` после новой записи |
 | `python -m api.keys create\|list\|set\|rotate\|revoke\|usage` (из `src/`) | Клиенты и ключи REST API. Владелец делает то же командой бота `/apikey` (`bot/admin.py`, доступ — `ADMIN_TELEGRAM_IDS`) |
 
 ---

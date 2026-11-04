@@ -5,9 +5,10 @@
    ищется от корня репозитория, от src/ и от src/core/. Шаблоны (<kind>, {id}, *, …) и адреса
    API (/v1/…) не проверяются. «модуль.функция» (`bot/delivery.send_files`) — проверяется модуль.
 2. Каждый роут REST API из снимка контракта (tests/unit/api_contract_v1.json) упомянут в docs/API.md.
-3. Каждый документ docs/*.md и docs/design/*.md есть в своей карте: в карте документации CLAUDE.md
-   и в таблице docs/design/README.md.
-4. Документы читаются как UTF-8.
+3. Каждый документ есть в своей карте: docs/*.md — в карте документации CLAUDE.md, docs/design/*.md —
+   в docs/design/README.md, docs/features/*.md — в docs/features/README.md.
+4. Индекс решений в начале docs/DECISIONS.md совпадает с заголовками (scripts/decisions_index.py).
+5. Документы читаются как UTF-8.
 
     python scripts/check_docs.py        # код 1 — есть ошибки, список в выводе
 
@@ -22,9 +23,11 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "scripts"))
 # Документы «как есть»: каждый путь в них обязан существовать
 # (docs/design/README.md не входит: в нём намеренно названы задуманные, но не созданные файлы)
-CHECKED_DOCS = ["README.md", "CLAUDE.md", "docs/API.md"]
+CHECKED_DOCS = ["README.md", "CLAUDE.md", "docs/API.md", "docs/REVIEW.md",
+                *sorted(str(p.relative_to(ROOT)) for p in (ROOT / "docs/features").glob("*.md"))]
 SEARCH_ROOTS = [ROOT, ROOT / "src", ROOT / "src" / "core"]
 EXTENSIONS = (".py", ".md", ".yaml", ".yml", ".json", ".txt", ".toml", ".ini", ".png", ".docx", ".pdf")
 # Каталоги кода и данных: путь без расширения (`core/ingest/`, `bot/delivery.send_files`) проверяется,
@@ -94,10 +97,17 @@ def check_maps(errors: list[str]) -> None:
     for doc in sorted((ROOT / "docs").glob("*.md")):
         if f"docs/{doc.name}" not in claude:
             errors.append(f"CLAUDE.md: docs/{doc.name} нет в карте документации")
-    design_map = (ROOT / "docs/design/README.md").read_text(encoding="utf-8")
-    for doc in sorted((ROOT / "docs/design").glob("*.md")):
-        if doc.name != "README.md" and f"{doc.name}" not in design_map:
-            errors.append(f"docs/design/README.md: {doc.name} нет в таблице документов")
+    for folder, what in (("docs/design", "таблице документов"), ("docs/features", "карте фич")):
+        index = (ROOT / folder / "README.md").read_text(encoding="utf-8")
+        for doc in sorted((ROOT / folder).glob("*.md")):
+            if doc.name != "README.md" and doc.name not in index:
+                errors.append(f"{folder}/README.md: {doc.name} нет в {what}")
+
+
+def check_decisions_index(errors: list[str]) -> None:
+    import decisions_index
+    if not decisions_index.is_fresh():
+        errors.append("docs/DECISIONS.md: индекс решений устарел — python scripts/decisions_index.py")
 
 
 def check_encoding(errors: list[str]) -> None:
@@ -115,6 +125,7 @@ def run() -> list[str]:
     check_paths(errors)
     check_api_routes(errors)
     check_maps(errors)
+    check_decisions_index(errors)
     return errors
 
 
