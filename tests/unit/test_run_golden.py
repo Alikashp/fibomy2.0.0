@@ -59,6 +59,15 @@ class Summary(unittest.TestCase):
         self.assertNotIn("G-01-1", md)
         self.assertIn("не заказывались", "\n".join(run_golden.images_md([no_img])))
 
+    def test_key_hint_does_not_reveal_key(self):
+        key = "sk-proj-" + "A1b2C3d4" * 20
+        hint = run_golden.key_hint(key)
+        self.assertIn("длина 168, префикс sk-proj-, лишних знаков по краям нет", hint)
+        self.assertNotIn(key[8:20], hint)                                    # сам ключ в подсказку не попадает
+        self.assertIn("пробел или перевод строки", run_golden.key_hint(key + "\n"))
+        self.assertIn("кавычки", run_golden.key_hint('"' + key + '"'))
+        self.assertNotEqual(run_golden.key_hint(key)[-8:], run_golden.key_hint(key + "\n")[-8:])
+
     def test_preflight_error(self):
         md = run_golden.summary_md([], META, "api.proxyapi.ru недоступен: ConnectError")
         self.assertIn("API недоступен — генерации не запускались", md)

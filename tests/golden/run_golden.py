@@ -91,6 +91,21 @@ def _baseline() -> dict:
     return json.loads((ROOT / "tests/golden/baseline.json").read_text(encoding="utf-8"))["violations"]
 
 
+def key_hint(key: str) -> str:
+    """Приметы ключа для сверки без раскрытия: длина, префикс, лишние знаки по краям, отпечаток SHA-256.
+    Владелец сверяет отпечаток со своим ключом: printf %s "$KEY" | sha256sum | cut -c1-8."""
+    import hashlib
+    issues = [name for name, bad in (
+        ("пробел или перевод строки по краям", key != key.strip()),
+        ("кавычки по краям", key.strip()[:1] in "\"'" and key.strip()[-1:] in "\"'" if key.strip() else False),
+        ("пробел внутри", " " in key.strip()),
+    ) if bad]
+    prefix = next((p for p in ("sk-proj-", "sk-svcacct-", "sk-admin-", "sk-") if key.strip().startswith(p)), "нет sk-")
+    fingerprint = hashlib.sha256(key.encode()).hexdigest()[:8]
+    return (f"ключ: длина {len(key)}, префикс {prefix}, "
+            f"{'; '.join(issues) if issues else 'лишних знаков по краям нет'}, отпечаток sha256 {fingerprint}")
+
+
 async def _preflight() -> str | None:
     """Доступен ли API с этой машины. None — да, иначе текст ошибки."""
     import httpx
@@ -102,7 +117,9 @@ async def _preflight() -> str | None:
     except Exception as e:  # сеть, DNS, TLS
         return f"{urlparse(url).netloc} недоступен: {type(e).__name__}: {e}"
     if resp.status_code in (401, 403):
-        return f"{urlparse(url).netloc} ответил {resp.status_code}: ключ не принят или доступ с этого IP закрыт — {resp.text[:200]}"
+        return (f"{urlparse(url).netloc} ответил {resp.status_code}: ключ не принят или доступ с этого IP закрыт — "
+                f"{resp.text[:200]}\n\nСверка секрета ({key_hint(settings.openai_api_key)}). Отпечаток своего ключа: "
+                f"`printf %s \"$KEY\" | sha256sum | cut -c1-8` — не совпал, значит в секрете другой ключ.")
     # 404 и прочее: /models у прокси может не быть — это не повод не пробовать генерацию
     print(f"preflight: GET {url} → {resp.status_code}")
     return None
