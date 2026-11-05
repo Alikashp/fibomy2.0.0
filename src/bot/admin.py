@@ -29,6 +29,7 @@ from aiogram.filters import BaseFilter, Command, CommandObject
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from api import admin, store
+from bot.access import parse_ids
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -53,14 +54,7 @@ _background: set[asyncio.Task] = set()
 
 
 def admin_ids() -> frozenset[int]:
-    ids = set()
-    for part in settings.admin_telegram_ids.replace(";", ",").replace(" ", ",").split(","):
-        part = part.strip()
-        if part.lstrip("-").isdigit():
-            ids.add(int(part))
-        elif part:
-            logger.warning("ADMIN_TELEGRAM_IDS: not a number, ignored", extra={"value": part[:20]})
-    return frozenset(ids)
+    return parse_ids(settings.admin_telegram_ids, "ADMIN_TELEGRAM_IDS")
 
 
 class IsAdmin(BaseFilter):

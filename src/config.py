@@ -80,6 +80,12 @@ class Settings(BaseSettings):
     # нет ни у кого; остальным пользователям бот отвечает как на неизвестную команду.
     admin_telegram_ids: str = ""
 
+    # ── Закрытый бот (bot/access.py, D-081) ────────────────────────────────
+    # Telegram ID через запятую, кому можно пользоваться ботом (админы проходят всегда). Пусто — бот
+    # открыт всем. Остальным бот отвечает ссылкой на основной бот MAIN_BOT_URL (https://t.me/…).
+    bot_allowed_telegram_ids: str = ""
+    main_bot_url: str = ""
+
     # ── REST API (src/api, отдельный сервис Railway «api», docs/API.md) ───────
     # Публичный адрес API (https://api-….up.railway.app) — для ссылок на файлы в
     # webhook. Пусто — в ответах API адрес из запроса, в webhook — относительные пути.

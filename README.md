@@ -69,6 +69,7 @@ Telegram-бот и REST API, которые по теме, тексту или �
 
 | Шаг | Что происходит | Где |
 |---|---|---|
+| 0 | Доступ: если задан `BOT_ALLOWED_TELEGRAM_IDS`, остальным — ссылка на основной бот (D-081) | `src/bot/access.py` |
 | 1 | Диалог: тип, тема, материал, сводка с кнопками «Сменить…» | `src/main.py` (обработчики), `src/dialog.py` (тексты и клавиатуры сводки) |
 | 2 | «Сгенерировать»: материал кладётся во временное хранилище, создаётся строка `decks` (status `queued`), ставится задача | `main.generate_deck`, `src/generation/uploads.py`, `src/core/storage/decks.py` |
 | 3 | Воркер берёт задачу, читает `DeckRequest` из `decks`, правит статусное сообщение в чате по этапам | `worker.generate_deck_job`, `src/bot/delivery.py` (`StatusMessage`) |
@@ -108,7 +109,8 @@ src/
   core/            новый движок (PPTX + PDF): этапы выше; не зависит от бота, API и БД (кроме core/storage)
   main.py          Telegram-бот: обработчики диалога, профиль, тарифы, оплата (aiogram 3)
   dialog.py        тексты и клавиатуры сводки перед генерацией
-  bot/             delivery.py — выдача файлов и статус; admin.py — /apikey для владельца; text_join.py — склейка длинного текста
+  bot/             access.py — закрытый бот (только разрешённые Telegram ID); delivery.py — выдача файлов и статус;
+                   admin.py — /apikey для владельца; text_join.py — склейка длинного текста
   api/             REST API v1: app.py — эндпоинты; store.py — клиенты и их колоды; limits, webhook, keys (CLI ключей)
   worker.py        задачи ARQ: generate_deck_job (новый движок), webhook, уведомления, старый движок
   db/              SQLAlchemy-модели (models.py), подключение и функции пользователей (session.py), миграции Alembic
