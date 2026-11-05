@@ -301,7 +301,6 @@ async def generate_deck(deck_id: str, request: DeckRequest, progress: Progress |
         id=slide_id(total), index=total, kind="closing", variant=choices[-1].variant,
         title=i18n.text(i18n.THANKS, request.language),
         content={"title": i18n.text(i18n.THANKS, request.language), "body": None, "author": author},
-        notes=i18n.text(i18n.IMAGES_AI, request.language) if assets else "",
     ))
 
     # Сноска у слайдов с числами «по теме» — оценка (ТЗ 3.3.3). По материалу сноски нет:

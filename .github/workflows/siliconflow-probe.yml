@@ -1,0 +1,58 @@
+# Зонд маркировки «AI 生成» на картинках SiliconFlow (сессия 6, D-079): генерирует картинки нескольких
+# размеров и печатает в лог углы в полном разрешении (base64) — по ним измеряется полоса, которую срезает
+# core.images (правило — prompts/v2/images/config.yaml, marking). Запуск вручную (Actions → siliconflow-probe)
+# или пушем, меняющим сам зонд. Режим before-after (по умолчанию) — 5 картинок продового размера до и после
+# core.images.cover_crop; marking — замер углов на списке размеров. Нужен секрет SILICONFLOW_API_KEY; ≈ $0.005 за картинку.
+name: siliconflow-probe
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "before-after | marking"
+        required: false
+        default: "before-after"
+      sizes:
+        description: "размеры через запятую (пусто — список зонда)"
+        required: false
+        default: ""
+  push:
+    paths:
+      - "scripts/probe_siliconflow_watermark.py"
+      - ".github/workflows/siliconflow-probe.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SILICONFLOW_API_KEY: ${{ secrets.SILICONFLOW_API_KEY }}
+      TELEGRAM_BOT_TOKEN: "123456:ci-dummy"
+      OPENAI_API_KEY: ci-dummy
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - run: pip install -r requirements.txt
+      - name: Зонд
+        env:
+          SIZES: ${{ inputs.sizes }}
+          MODE: ${{ inputs.mode || 'before-after' }}
+        run: |
+          if [ "$MODE" = "marking" ]; then
+            python scripts/probe_siliconflow_watermark.py --out probe_out ${SIZES:+--sizes "$SIZES"}
+          else
+            python scripts/probe_siliconflow_watermark.py --before-after --out probe_out
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: siliconflow-probe
+          path: probe_out/
+          retention-days: 14

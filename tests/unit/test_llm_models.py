@@ -105,8 +105,8 @@ class RequestBody(unittest.TestCase):
         self.assertNotIn("temperature", body)
         self.assertEqual(usage.output_tokens, 3000)      # рассуждения уже внутри completion_tokens
         self.assertEqual(usage.reasoning_tokens, 1200)
-        # (4000 × 30 + 1000 × 3 + 3000 × 150) / 1 000 000
-        self.assertAlmostEqual(usage.cost_rub, 0.573)
+        # OpenAI напрямую (D-078): ($0.10 × 4000 свежих + $0.01 × 1000 кэш + $0.50 × 3000) / 1 млн × 90 ₽
+        self.assertAlmostEqual(usage.cost_rub, (4000 * 0.10 + 1000 * 0.01 + 3000 * 0.50) / 1e6 * 90)
 
     def test_mini_body_without_price(self):
         usage = self._generate("gpt-4o-mini")
@@ -115,6 +115,41 @@ class RequestBody(unittest.TestCase):
         self.assertEqual(body["temperature"], 0.7)
         self.assertNotIn("reasoning_effort", body)
         self.assertIsNone(usage.cost_rub)
+
+
+from core.llm import models as core_models  # noqa: E402
+
+
+class Prices(unittest.TestCase):
+    """Цены по провайдеру (D-078): провайдер — по хосту OPENAI_BASE_URL, доллары × USD_RUB_RATE."""
+
+    def test_provider_by_base_url(self):
+        self.assertEqual(core_models.provider("https://api.openai.com/v1"), "openai")
+        self.assertEqual(core_models.provider("https://api.proxyapi.ru/openai/v1"), "proxyapi")
+        self.assertEqual(core_models.provider("https://llm.example.test/v1"), "openai")    # default_provider
+
+    def test_openai_usd_by_rate_and_proxy_rub(self):
+        from unittest import mock
+        with mock.patch.object(settings, "usd_rub_rate", 100.0):
+            rub = llm_models.cost_rub("gpt-6-luna", 100_000, 0, 100_000, provider_name="openai")
+            self.assertAlmostEqual(rub, (0.10 + 0.50) * 100 / 10)
+            cached = llm_models.cost_rub("gpt-6-luna", 100_000, 100_000, 0, provider_name="openai")
+            self.assertAlmostEqual(cached, 0.01 * 100 / 10)
+        self.assertAlmostEqual(llm_models.cost_rub("gpt-6-luna", 100_000, 0, 100_000, provider_name="proxyapi"),
+                               (30 + 150) / 10)                           # рубли прокси — без курса
+        self.assertIsNone(llm_models.cost_rub("gpt-4o-mini", 1000, 0, 1000))
+
+    def test_long_context_price(self):
+        from unittest import mock
+        with mock.patch.object(settings, "usd_rub_rate", 1.0):
+            self.assertAlmostEqual(llm_models.cost_rub("gpt-6-luna", 300_000, 0, 0, provider_name="openai"),
+                                   300_000 * 0.20 / 1e6)
+
+    def test_default_base_url_is_openai(self):
+        from config import Settings
+        self.assertEqual(Settings.model_fields["openai_base_url"].default, "https://api.openai.com/v1")
+        self.assertEqual(Settings.model_fields["llm_max_concurrency"].default, 8)
+        self.assertEqual(Settings.model_fields["usd_rub_rate"].default, 90.0)
 
 
 class EmptyResponse(unittest.TestCase):

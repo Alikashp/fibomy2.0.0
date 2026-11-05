@@ -131,7 +131,8 @@ def run(out: Path, port: int) -> int:
         check(len(themes) == 4, f"GET /v1/themes — {len(themes)} темы")
 
         params = {"input": {"topic": TOPIC}, "slides_count": 9, "audience": "general", "source_mode": "strict",
-                  "theme_id": "azure_coral", "webhook_url": hook_url}
+                  "theme_id": "azure_coral", "webhook_url": hook_url,
+                  "image_mode": "none"}     # картинки в golden — только G-05 и G-06 (сессия 6)
         files = {"file": (FIXTURE.name, FIXTURE.read_bytes(),
                           "application/vnd.openxmlformats-officedocument.wordprocessingml.document")}
         started = time.monotonic()

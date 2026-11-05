@@ -26,7 +26,7 @@ ALLOWED_LATIN = {"e-mail", "email", "online", "offline", "web", "wi-fi", "wifi",
                  "pptx", "docx", "xlsx", "csv", "html", "url", "http", "https", "www"}
 _WORD_RE = re.compile(r"[^\W\d_](?:[^\W\d_]|['’ʻ\-])*", re.UNICODE)
 _CAMEL_RE = re.compile(r"\b(?:[A-Z][a-z]{2,}){2,}\b")
-_ALLOWED_PUNCT = set("%‰₽$€£¥₸№°×·•–—-‐‑«»„“”‘’'\"()[]{}/\\+=<>≈≤≥~^*&@#!?.,;:…|±§©®™")
+_ALLOWED_PUNCT = set("%‰₽$€£¥₸№°×·•–—-‐‑«»„“”‘’'\"()[]{}/\\+=<>≈≤≥~^*&@#!?.,;:…|±§©®™_")  # «_» — в именах продуктов и файлов (sechenov.ai_nephro)
 
 
 def _script(ch: str) -> str:

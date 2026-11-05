@@ -25,14 +25,6 @@ def text(table: dict[str, str], language: str) -> str:
 def lang_tag(language: str) -> str:
     return LANG_TAGS.get(language, "ru-RU")
 
-# Заметки последнего слайда, если в колоде есть ИИ-картинки (сессия 4)
-IMAGES_AI = {
-    "ru": "Изображения сгенерированы ИИ",
-    "en": "Images are AI-generated",
-    "uz": "Rasmlar sun'iy intellekt tomonidan yaratilgan",
-    "kk": "Суреттерді жасанды интеллект жасаған",
-}
-
 # Вторая половина слайда, который пришлось разбить на два: текст не влез (сессия 5, D-071)
 CONTINUED = {
     "ru": "продолжение",

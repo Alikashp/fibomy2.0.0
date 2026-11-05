@@ -44,17 +44,38 @@ def _close(a: str, b: str) -> bool:
     return prev[-1] <= limit
 
 
-def words_from_topic(title: str, topic: str) -> bool:
-    """Все слова title — из topic, в том же порядке (пропускать слова темы можно)."""
-    t_words = [_key(w) for w in _WORD_RE.findall(topic)]
-    pos = 0
+def _match(title: str, topic: str) -> list[str] | None:
+    """Слово темы для каждого слова title (по порядку, пропускать слова темы можно); None — не из темы."""
+    t_words = _WORD_RE.findall(topic)
+    pos, matched = 0, []
     for w in (_key(x) for x in _WORD_RE.findall(title)):
-        while pos < len(t_words) and not _close(w, t_words[pos]):
+        while pos < len(t_words) and not _close(w, _key(t_words[pos])):
             pos += 1
         if pos == len(t_words):
-            return False
+            return None
+        matched.append(t_words[pos])
         pos += 1
-    return True
+    return matched
+
+
+def words_from_topic(title: str, topic: str) -> bool:
+    """Все слова title — из topic, в том же порядке (пропускать слова темы можно)."""
+    return _match(title, topic) is not None
+
+
+def _alphabets(word: str) -> set[bool]:
+    return {"a" <= ch.lower() <= "z" for ch in word if ch.isalpha()}
+
+
+def _user_alphabet(title: str, topic: str) -> str:
+    """Слово, которое модель написала другим алфавитом («IT» при «ит» в теме), — как у пользователя:
+    допуск на опечатку не должен пропускать латиницу вместо кириллицы (golden PR #85, G-05)."""
+    matched = iter(_match(title, topic) or [])
+
+    def one(m: re.Match) -> str:
+        user = next(matched, m.group(0))
+        return user if _alphabets(user) != _alphabets(m.group(0)) else m.group(0)
+    return _WORD_RE.sub(one, title)
 
 
 def _case_hints(*texts: str) -> dict[str, str]:
@@ -90,7 +111,7 @@ def deck_title(topic: str, title_topic: str | None = None, subtitle: str | None 
     topic = re.sub(r"\s+", " ", topic.strip())
     candidate = re.sub(r"\s+", " ", (title_topic or "").strip()).strip(" .,;:")
     if candidate and len(candidate) >= 3 and words_from_topic(candidate, topic):
-        title = fix_case(candidate, candidate)
+        title = fix_case(_user_alphabet(candidate, topic), candidate)
         return title, None if _key(title) == _key(topic) else "title_topic"
     reason = "title_topic_rejected" if candidate else None
     return fix_case(topic, candidate, subtitle or ""), reason

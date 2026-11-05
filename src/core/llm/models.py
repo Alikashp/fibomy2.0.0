@@ -13,6 +13,7 @@ openai==1.35.0 не знает аргументов max_completion_tokens и rea
 
 import logging
 from contextlib import contextmanager
+from urllib.parse import urlparse
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 
@@ -39,7 +40,7 @@ class ModelProfile:
     temperature: str = "always"          # always | effort_none | never
     json_mode: bool = True
     max_output_tokens: int = 16384
-    price_rub_per_1m: dict | None = None
+    prices: dict | None = None          # провайдер → цены за 1 млн токенов (prompts/models.yaml, D-078)
 
 
 def profile_for(model: str) -> ModelProfile:
@@ -57,7 +58,7 @@ def profile_for(model: str) -> ModelProfile:
         temperature=data["temperature"],
         json_mode=bool(data["json_mode"]),
         max_output_tokens=int(data["max_output_tokens"]),
-        price_rub_per_1m=data.get("price_rub_per_1m"),
+        prices=data.get("prices"),
     )
 
 
@@ -148,9 +149,31 @@ class UsageTotals:
         }
 
 
-def cost_rub(model: str, input_tokens: int, cached_input_tokens: int, output_tokens: int) -> float | None:
-    """Стоимость в ₽ по prompts/models.yaml; None — цены модели нет в конфиге."""
-    price = profile_for(model).price_rub_per_1m
+def provider(base_url: str | None = None) -> str:
+    """Провайдер LLM по хосту OPENAI_BASE_URL: api.openai.com → openai, api.proxyapi.ru → proxyapi."""
+    host = (urlparse(base_url if base_url is not None else settings.openai_base_url).hostname or "").lower()
+    known: dict = _CONFIG.get("providers") or {}
+    return known.get(host) or next((p for h, p in known.items() if host.endswith("." + h)), None) \
+        or _CONFIG.get("default_provider", "openai")
+
+
+def price_per_1m(model: str, input_tokens: int = 0, provider_name: str | None = None) -> dict | None:
+    """Цены модели у провайдера за 1 млн токенов в ₽ (USD × USD_RUB_RATE); None — цены нет в конфиге."""
+    prices = profile_for(model).prices or {}
+    price = prices.get(provider_name or provider())
+    if not price:
+        return None
+    long = price.get("long_context")
+    if long and input_tokens >= int(long.get("min_input_tokens", 10 ** 12)):
+        price = {**price, **long}
+    rate = float(settings.usd_rub_rate) if str(price.get("currency", "RUB")).upper() == "USD" else 1.0
+    return {k: float(price[k]) * rate for k in ("input", "cached_input", "output") if k in price}
+
+
+def cost_rub(model: str, input_tokens: int, cached_input_tokens: int, output_tokens: int,
+             provider_name: str | None = None) -> float | None:
+    """Стоимость вызова в ₽ по ценам провайдера (prompts/models.yaml); None — цены модели нет в конфиге."""
+    price = price_per_1m(model, input_tokens, provider_name)
     if not price:
         return None
     fresh = max(0, input_tokens - cached_input_tokens)

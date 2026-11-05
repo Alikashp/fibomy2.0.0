@@ -14,7 +14,11 @@ class Settings(BaseSettings):
     # без ключа LLM (worker.startup).
     telegram_bot_token: str = ""
     openai_api_key: str = ""
-    openai_base_url: str = "https://api.proxyapi.ru/openai/v1"
+    # OpenAI напрямую с 15.10.2026 (D-078); откат на прокси — https://api.proxyapi.ru/openai/v1. По хосту
+    # выбираются цены провайдера (prompts/models.yaml, providers)
+    openai_base_url: str = "https://api.openai.com/v1"
+    # Курс для пересчёта цен в долларах (OpenAI, SiliconFlow) в рубли: decks.cost_rub, /apikey list, бюджет
+    usd_rub_rate: float = 90.0
     openai_model: str = "gpt-4o"
     # Уровень рассуждений для моделей с рассуждениями (gpt-6-luna: none, low,
     # medium, high, xhigh, max). Без параметра модель работает на своём уровне
@@ -36,8 +40,9 @@ class Settings(BaseSettings):
     # structured outputs: auto — json_schema strict, при отказе провайдера
     # json_object + проверка pydantic; json_schema / json_object — принудительно.
     llm_structured_outputs: str = "auto"
-    # Одновременных запросов к LLM на процесс воркера (429 у провайдера — уменьшить)
-    llm_max_concurrency: int = 16
+    # Одновременных запросов к LLM на процесс воркера — общий семафор всех колод и этапов (D-078);
+    # 429 у провайдера — повтор по retry-after, частые 429 — уменьшить
+    llm_max_concurrency: int = 8
     # Одновременных вызовов CONTENT на колоду
     content_concurrency: int = 8
     # Одновременных конвертаций LibreOffice на процесс
