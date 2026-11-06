@@ -34,6 +34,7 @@ from core.models.ids import new_deck_id
 from core.models.request import DeckRequest
 from core.models.theme import enabled_theme_ids
 from core.storage import decks as deck_store
+from bot import access as bot_access
 from bot import admin as bot_admin
 from bot.text_join import joiner as text_joiner
 
@@ -55,6 +56,10 @@ FSM_TTL_SECONDS = 7 * 24 * 60 * 60
 dp = Dispatcher(storage=RedisStorage.from_url(
     settings.redis_url, state_ttl=FSM_TTL_SECONDS, data_ttl=FSM_TTL_SECONDS,
 ))
+
+# Закрытый бот (D-081): кроме BOT_ALLOWED_TELEGRAM_IDS и админов — ссылка на основной бот, дальше
+# апдейт не идёт. Outer-middleware срабатывает раньше любых обработчиков, включая /apikey.
+bot_access.register(dp)
 
 # Админ-команды (/apikey) — первыми: не-админу фильтр не срабатывает, и сообщение идёт
 # дальше, как незнакомая команда; админу «/apikey» не перехватит обработчик состояния
