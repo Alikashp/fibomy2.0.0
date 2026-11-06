@@ -1,4 +1,4 @@
-"""Перенесено в core/llm/models.py (docs/design/03_ARCHITECTURE.md, 2.1).
+"""Перенесено в core/llm/models.py (docs/ARCHITECTURE.md).
 
 Модуль оставлен для старого движка (generation/llm.py, worker.py) до его
 удаления в сессии 6 — один код параметров и учёта стоимости на оба движка.

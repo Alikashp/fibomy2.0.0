@@ -1,4 +1,4 @@
-"""Строка decks → DeckStatus (04_CONTRACTS.md, 7.2). Общий для ответа API и тела webhook."""
+"""Строка decks → DeckStatus (docs/API.md, 4). Общий для ответа API и тела webhook."""
 
 from datetime import datetime, timedelta, timezone
 

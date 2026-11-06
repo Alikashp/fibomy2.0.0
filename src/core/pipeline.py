@@ -1,4 +1,4 @@
-"""generate_deck: порядок этапов, дедлайн, деградация (03_ARCHITECTURE.md, 3, 4, 6).
+"""generate_deck: порядок этапов, дедлайн, деградация (docs/ARCHITECTURE.md, 3–5).
 
 INGEST → OUTLINE → SELECT → CONTENT ∥ IMAGES → FIT → RENDER → CONVERT.
 DELIVER (отправка файлов) делает адаптер: бот / API. Здесь же — запись
@@ -55,13 +55,13 @@ from logging_setup import stage as log_stage
 logger = logging.getLogger(__name__)
 
 ENGINE_VERSION = "core-2026-10-08"
-RESERVE_SECONDS = 25        # RENDER + CONVERT + DELIVER после CONTENT (03_ARCHITECTURE.md, 4.2)
+RESERVE_SECONDS = 25        # RENDER + CONVERT + DELIVER после CONTENT (docs/ARCHITECTURE.md, 4)
 
 Progress = Callable[..., Awaitable[None]]
 
 
 class DeckError(RuntimeError):
-    """Колода не собралась; code — из справочника 04_CONTRACTS.md, 7.3."""
+    """Колода не собралась; code — коды для клиента API описаны в docs/API.md, 6."""
 
     def __init__(self, code: str, message: str = ""):
         super().__init__(message or code)
@@ -552,7 +552,7 @@ async def _collect_images(tasks: dict, started: float, slides: list[Slide], need
 async def _check_facts(slides: list[Slide], digest: SourceDigest, request: DeckRequest, client: LLMClient,
                        usage: DeckUsage, system: str, total: int, choices, degradations: list, deadline: float) -> None:
     """Числа не из источника: 1 перегенерация слайда с перечнем ошибок, затем — числа убираются,
-    metrics без чисел становятся утверждением из плана (03_ARCHITECTURE.md, 6)."""
+    metrics без чисел становятся утверждением из плана (docs/ARCHITECTURE.md, 5)."""
     known = source_numbers(digest)
     targets = [(s, slide_errors(s, digest, known)) for s in slides if s.kind not in ("closing",) and s.plan]
     targets = [(s, e) for s, e in targets if e]

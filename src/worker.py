@@ -10,7 +10,7 @@ aiogram-хендлера в main.py и блокировала бота на 60-9
 
 Запуск: arq worker.WorkerSettings
 
-Задачи (docs/design/08_MIGRATION.md, 2):
+Задачи (docs/ARCHITECTURE.md, 2):
 - generate_deck_job(deck_id) — новый движок (src/core): PPTX + PDF, доклад по теме
   и по материалу; колоды бота (файлы — в Telegram) и REST API (файлы — в хранилище
   core.storage.files, статус и скачивание — через API); питч-дек идёт в старый
@@ -70,7 +70,7 @@ logger = logging.getLogger(__name__)
 
 JOB_TIMEOUT_SECONDS = 180  # LLM + картинки + PDF с запасом; см. WorkerSettings.job_timeout
 # Новый движок: дедлайн колоды 110 с (DECK_DEADLINE_SECONDS), job_timeout — страховка
-# от зависания кода (03_ARCHITECTURE.md, 4.2); ARQ берёт общий job_timeout воркера.
+# от зависания кода (docs/ARCHITECTURE.md, 4); ARQ берёт общий job_timeout воркера.
 MAX_CONCURRENT_JOBS = 5    # нагрузочный критерий Sprint 1: 5 параллельных не блокируют бота
 
 # Layout'ы, которые реально умеет рисовать templates/doklad/template.html
@@ -515,7 +515,7 @@ async def shutdown(ctx: dict) -> None:
 
 class WorkerSettings:
     # generate_presentation_job (старый движок) — для питч-дека до сессии 5
-    # и для задач, поставленных до деплоя (08_MIGRATION.md, 2)
+    # и для задач, поставленных до деплоя (docs/ROADMAP.md, «Дальше», 5)
     functions = [generate_deck_job, deliver_webhook_job, delete_message_job, notify_admins_job,
                  generate_presentation_job]
     on_startup = startup

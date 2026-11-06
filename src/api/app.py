@@ -1,6 +1,6 @@
-"""REST API v1 (docs/API.md, 04_CONTRACTS.md, 7; D-055).
+"""REST API v1 (docs/API.md; D-055).
 
-Запуск (сервис Railway «api», railway.api.toml):
+Запуск — src/start.py при SERVICE_ROLE=api (сервис Railway «api», D-062); локально:
     cd src && uvicorn api.app:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips '*'
 
 POST /v1/decks кладёт материал во временное хранилище (как бот), создаёт строку decks

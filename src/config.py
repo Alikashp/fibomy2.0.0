@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     openai_timeout_seconds: float = 45.0
     watermark_free_tier: bool = True
 
-    # ── Новый движок (src/core, docs/design/03_ARCHITECTURE.md, 9) ─────────
+    # ── Новый движок (src/core, docs/ARCHITECTURE.md) ─────────
     # Модель и уровень рассуждений по этапам; пусто — OPENAI_MODEL и
     # OPENAI_REASONING_EFFORT (06_PROMPTS.md, 1).
     llm_model_outline: str = ""
@@ -47,7 +47,7 @@ class Settings(BaseSettings):
     content_concurrency: int = 8
     # Одновременных конвертаций LibreOffice на процесс
     libreoffice_max_parallel: int = 2
-    # Дедлайн колоды от старта задачи, с (03_ARCHITECTURE.md, 4.2)
+    # Дедлайн колоды от старта задачи, с (docs/ARCHITECTURE.md, 4)
     deck_deadline_seconds: int = 110
 
     # ── БД ───────────────────────────────────────────────────────────────────

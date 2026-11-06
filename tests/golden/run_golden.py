@@ -222,7 +222,7 @@ def _total_usage(deck_usage) -> dict:
 
 
 def check_files(spec, pptx: bytes, pdf: bytes | None) -> list[str]:
-    """Проверки готового файла (07_TESTING.md, 3.2): PPTX читается, диаграммы нативные и равны
+    """Проверки готового файла (docs/features/quality.md, «Golden-корпус»): PPTX читается, диаграммы нативные и равны
     DeckSpec.data, шрифт Arial, автоподбор выключен, нет слайдов-картинок, PDF собран."""
     from pptx import Presentation
     from pptx.oxml.ns import qn

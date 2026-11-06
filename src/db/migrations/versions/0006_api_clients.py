@@ -1,4 +1,4 @@
-"""api_clients, decks.warnings: REST API для второго бота (docs/design/04_CONTRACTS.md, 7, 8.3; D-055)
+"""api_clients, decks.warnings: REST API для второго бота (docs/API.md; docs/design/04_CONTRACTS.md, 8.3; D-055)
 
 Клиент API — внешний бот или сервис с ключом. Ключ хранится хэшем SHA-256, сам
 ключ показывается один раз при создании (python -m api.keys create). У клиента —

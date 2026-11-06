@@ -4,8 +4,8 @@ WORKDIR /app
 
 # LibreOffice (PPTX → PDF нового движка, D-001) и шрифты: Liberation Sans —
 # метрический клон Arial (D-027); DejaVu и Noto — подстановка недостающих глифов
-# (₽, ₸ и т.п., docs/SPIKE_PPTX.md, 3.2). Playwright остаётся до удаления старого
-# движка (docs/design/08_MIGRATION.md, сессия 5).
+# (₽, ₸ и т.п.). Playwright остаётся до удаления старого движка
+# (docs/ROADMAP.md, «Дальше», 5).
 RUN apt-get update \
     && apt-get install -y --no-install-recommends libreoffice-impress \
        fonts-liberation fonts-crosextra-carlito fonts-dejavu-core fonts-noto-core \

@@ -1,4 +1,4 @@
-"""INGEST: материал пользователя → SourceDigest (03_ARCHITECTURE.md, 3; ТЗ 3.1).
+"""INGEST: материал пользователя → SourceDigest (docs/ARCHITECTURE.md, 3.2; ТЗ 3.1).
 
 - текст сообщения, .txt (chardet), .docx (абзацы, заголовки, таблицы), .pdf
   (текст и таблицы через pdfplumber.find_tables, до 50 страниц), .pptx (текст,
