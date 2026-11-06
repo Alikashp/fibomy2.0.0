@@ -1,11 +1,12 @@
 """Проверка документации: то, что можно проверить кодом, не должно устаревать молча (D-080).
 
 1. Пути к файлам репозитория в документах, которые описывают код как он есть (CHECKED_DOCS), существуют.
+   В ROADMAP — тоже: план называет только существующие файлы, задуманные — словами.
    Путь — текст в `обратных кавычках` или ссылка [текст](путь) с «/»;
    ищется от корня репозитория, от src/ и от src/core/. Шаблоны (<kind>, {id}, *, …) и адреса
    API (/v1/…) не проверяются. «модуль.функция» (`bot/delivery.send_files`) — проверяется модуль.
 2. Каждый роут REST API из снимка контракта (tests/unit/api_contract_v1.json) упомянут в docs/API.md.
-3. Каждый документ есть в своей карте: docs/*.md — в карте документации CLAUDE.md, docs/design/*.md —
+3. Каждый документ есть в своей карте: docs/*.md — в карте документации README.md (D-082), docs/design/*.md —
    в docs/design/README.md, docs/features/*.md — в docs/features/README.md.
 4. Индекс решений в начале docs/DECISIONS.md совпадает с заголовками (scripts/decisions_index.py).
 5. Документы читаются как UTF-8.
@@ -26,14 +27,14 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 # Документы «как есть»: каждый путь в них обязан существовать
 # (docs/design/README.md не входит: в нём намеренно названы задуманные, но не созданные файлы)
-CHECKED_DOCS = ["README.md", "CLAUDE.md", "docs/API.md", "docs/REVIEW.md",
+CHECKED_DOCS = ["README.md", "CLAUDE.md", "docs/API.md", "docs/REVIEW.md", "docs/ARCHITECTURE.md", "docs/ROADMAP.md",
                 *sorted(str(p.relative_to(ROOT)) for p in (ROOT / "docs/features").glob("*.md"))]
 SEARCH_ROOTS = [ROOT, ROOT / "src", ROOT / "src" / "core"]
 EXTENSIONS = (".py", ".md", ".yaml", ".yml", ".json", ".txt", ".toml", ".ini", ".png", ".docx", ".pdf")
 # Каталоги кода и данных: путь без расширения (`core/ingest/`, `bot/delivery.send_files`) проверяется,
 # только если начинается с одного из них
 CODE_DIRS = {"src", "core", "api", "bot", "db", "generation", "schemas", "tests", "scripts", "prompts", "layouts",
-             "themes", "fonts", "assets", "spikes", ".github", "ingest", "planning", "selection", "content",
+             "themes", "fonts", "assets", ".github", "ingest", "planning", "selection", "content",
              "images", "fitting", "checks", "render", "llm", "models", "storage"}
 # Пути, которые создаются при запуске и в репозитории не лежат
 GENERATED = {".env", "out/gallery", "out/golden", "gallery_out", "probe_out"}
@@ -93,10 +94,10 @@ def check_api_routes(errors: list[str]) -> None:
 
 
 def check_maps(errors: list[str]) -> None:
-    claude = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
     for doc in sorted((ROOT / "docs").glob("*.md")):
-        if f"docs/{doc.name}" not in claude:
-            errors.append(f"CLAUDE.md: docs/{doc.name} нет в карте документации")
+        if f"docs/{doc.name}" not in readme:
+            errors.append(f"README.md: docs/{doc.name} нет в карте документации")
     for folder, what in (("docs/design", "таблице документов"), ("docs/features", "карте фич")):
         index = (ROOT / folder / "README.md").read_text(encoding="utf-8")
         for doc in sorted((ROOT / folder).glob("*.md")):

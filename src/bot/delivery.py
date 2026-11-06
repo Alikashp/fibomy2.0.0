@@ -1,7 +1,7 @@
 """Прогресс генерации и выдача PPTX + PDF в Telegram (02_CJM.md, 1.2, шаги 7–8).
 
 Вызывается из воркера: бот и воркер — разные процессы, файлы отправляет воркер
-через Bot API (03_ARCHITECTURE.md, 3.2).
+через Bot API (docs/ARCHITECTURE.md, 3).
 """
 
 import asyncio
@@ -49,7 +49,7 @@ def error_text(code: str | None, deck_id: str) -> str:
 
 
 def kb_after_delivery() -> InlineKeyboardMarkup:
-    # «🔁 Повторить с другими параметрами» — сессия 4 (docs/design/09_PLAN.md)
+    # «🔁 Повторить с другими параметрами» — не сделано (docs/ROADMAP.md, «Отложено»)
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🆕 Новая презентация", callback_data="action:new")],
     ])

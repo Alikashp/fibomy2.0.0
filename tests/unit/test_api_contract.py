@@ -1,5 +1,5 @@
 """Обратная совместимость API v1: текущая схема OpenAPI сверяется со снимком
-api_contract_v1.json (CLAUDE.md: изменения API — только обратно совместимые).
+api_contract_v1.json (README, «Правила»: изменения API — только обратно совместимые).
 
 Ломает второй бот и запрещено:
 - удалить путь, метод или успешный код ответа;
@@ -112,7 +112,7 @@ class Contract(unittest.TestCase):
     def test_no_breaking_changes(self):
         old = json.loads(SNAPSHOT.read_text(encoding="utf-8"))
         problems = breaking_changes(old, current_schema())
-        self.assertEqual(problems, [], "Изменение API ломает обратную совместимость (CLAUDE.md). Если правка "
+        self.assertEqual(problems, [], "Изменение API ломает обратную совместимость (README, «Правила»). Если правка "
                                        "совместима и тест ошибается — обновите снимок: "
                                        "python tests/unit/test_api_contract.py --update")
 

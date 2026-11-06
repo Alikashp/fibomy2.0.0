@@ -1,5 +1,5 @@
 """
-Ядро нового движка генерации (фаза 1, docs/design/03_ARCHITECTURE.md).
+Ядро нового движка генерации (docs/ARCHITECTURE.md).
 
 Единственная точка входа для адаптеров (бот, воркер, API фазы 3) —
 core.pipeline.generate_deck. Ядро не знает про Telegram и HTTP.

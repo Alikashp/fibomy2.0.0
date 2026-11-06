@@ -2,7 +2,7 @@
 Собирает PNG-иконки фазы 1 в assets/icons/ из шрифта Tabler Icons (MIT).
 
 Шрифт берётся из шаблона старого движка (src/templates/doklad/template.html,
-base64 woff2) — тот же источник, что в спайке (spikes/common.py). После удаления
+base64 woff2). После удаления
 старого движка (сессия 5) PNG уже лежат в репозитории; для новых иконок шрифт
 Tabler Icons нужно будет положить рядом и поправить FONT_SOURCE.
 

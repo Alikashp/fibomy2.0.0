@@ -1,4 +1,4 @@
-"""Webhook по готовности колоды API (04_CONTRACTS.md, 7.3; docs/API.md).
+"""Webhook по готовности колоды API (docs/API.md, 5).
 
 POST на webhook_url из запроса: тело — DeckStatus (как GET /v1/decks/{id}),
 заголовок X-Fibonacci-Signature: sha256=<HMAC-SHA256 тела секретом клиента>.

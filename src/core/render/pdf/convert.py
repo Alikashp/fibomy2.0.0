@@ -2,7 +2,7 @@
 
 Каждая конвертация — со своим профилем LibreOffice (-env:UserInstallation),
 иначе параллельные вызовы мешают друг другу. Не больше
-LIBREOFFICE_MAX_PARALLEL конвертаций на процесс одновременно (03_ARCHITECTURE.md, 4.3).
+LIBREOFFICE_MAX_PARALLEL конвертаций на процесс одновременно (docs/ARCHITECTURE.md, 4).
 """
 
 import asyncio

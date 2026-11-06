@@ -1,4 +1,4 @@
-"""REST API для внешних клиентов (второй бот): docs/API.md, 04_CONTRACTS.md, 7; D-055.
+"""REST API для внешних клиентов (второй бот): docs/API.md; D-055.
 
 Отдельный сервис Railway «api» из того же образа: uvicorn api.app:app. Колоду
 строит тот же воркер (generate_deck_job), что и для бота: API создаёт строку decks
