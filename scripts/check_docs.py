@@ -5,7 +5,7 @@
    ищется от корня репозитория, от src/ и от src/core/. Шаблоны (<kind>, {id}, *, …) и адреса
    API (/v1/…) не проверяются. «модуль.функция» (`bot/delivery.send_files`) — проверяется модуль.
 2. Каждый роут REST API из снимка контракта (tests/unit/api_contract_v1.json) упомянут в docs/API.md.
-3. Каждый документ есть в своей карте: docs/*.md — в карте документации CLAUDE.md, docs/design/*.md —
+3. Каждый документ есть в своей карте: docs/*.md — в карте документации README.md (D-082), docs/design/*.md —
    в docs/design/README.md, docs/features/*.md — в docs/features/README.md.
 4. Индекс решений в начале docs/DECISIONS.md совпадает с заголовками (scripts/decisions_index.py).
 5. Документы читаются как UTF-8.
@@ -93,10 +93,10 @@ def check_api_routes(errors: list[str]) -> None:
 
 
 def check_maps(errors: list[str]) -> None:
-    claude = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
     for doc in sorted((ROOT / "docs").glob("*.md")):
-        if f"docs/{doc.name}" not in claude:
-            errors.append(f"CLAUDE.md: docs/{doc.name} нет в карте документации")
+        if f"docs/{doc.name}" not in readme:
+            errors.append(f"README.md: docs/{doc.name} нет в карте документации")
     for folder, what in (("docs/design", "таблице документов"), ("docs/features", "карте фич")):
         index = (ROOT / folder / "README.md").read_text(encoding="utf-8")
         for doc in sorted((ROOT / folder).glob("*.md")):
